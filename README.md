@@ -281,21 +281,17 @@ In order of value per unit of work:
    as the console, so this is two device tree nodes. Worth doing first because
    UART1 is the probable link to the AT89S52, and listening to it would tell
    us how the front panel and IR remote actually work.
-2. **SD/MMC** at `0x10020000`, SPI 35. The vendor's controller is Synopsys
-   DesignWare — its register map matches mainline `dw_mmc.h` offset for
-   offset — so this should be `snps,dw-mshc` plus a clock and reset step, not
-   a new driver.
-3. **Read-only SPI NOR and NAND.** Mainline has `hisi-sfc` and `hisi504_nand`;
+2. **Read-only SPI NOR and NAND.** Mainline has `hisi-sfc` and `hisi504_nand`;
    whether they match this SoC's `hisfc350` and `hinfc300` is the first
    question. Read-only only: this flash holds the only factory system.
-4. **L2 cache** at `0x20700000`. Diagnosed: it is a HiSilicon proprietary
+3. **L2 cache** at `0x20700000`. Diagnosed: it is a HiSilicon proprietary
    controller, not a PL310, and mainline has no driver for it. Enabling it
    means porting the vendor's 385-line `cache-hil2v200.c`. The vendor does use
    it (`CONFIG_CACHE_HIL2V200=y`). Riskier than anything else remaining,
    because cache maintenance bugs corrupt data silently rather than failing
    visibly, and the size of the win has never been measured. Notes in
    `kernel-port/README.md`.
-5. **DMA engine** at `0x100d0000`, SPI 29. Real and heavily used by the
+4. **DMA engine** at `0x100d0000`, SPI 29. Real and heavily used by the
    vendor, but clock-gated, unidentifiable by ID probe, and with no vendor
    source — only a binary module. Low value: Ethernet, SATA and USB all have
    their own DMA.
