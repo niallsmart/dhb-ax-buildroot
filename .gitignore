@@ -23,7 +23,19 @@ pcb/
 vm-assets/
 
 # Content extracted from vendor firmware. Kept locally for analysis, not
-# redistributed: it is the manufacturer's copyrighted material, the same
-# reason backups/ and rootfs/ are excluded.
+# redistributed: it is third-party copyrighted material, the same reason
+# backups/ and rootfs/ are excluded.
+#
+# boot.jpg / logo.jpeg are the same asset -- the boot splash at offset
+# 0xC0000 in SPI NOR. It is a reseller's logo, not the manufacturer's, so
+# it belongs to a third party twice over.
 logo.jpeg
+boot.jpg
 *.bin
+
+# Personal images used as framebuffer test material, and the raw ARGB1555
+# buffers built from them. This repository is public.
+IMG_*.png
+IMG_*.jpg
+IMG_*.jpeg
+*.raw

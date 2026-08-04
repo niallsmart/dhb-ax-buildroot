@@ -37,11 +37,13 @@ computer, not a working DVR.**
 | `kernel-port/README.md` | the authority on anything port-related |
 | `kernel-port/reference/` | evidence: vendor runtime probe, chip survey, hardware write-up |
 | `docs/investigation.md` | the reverse-engineering phase and backup procedures |
+| `docs/memory-map.md` | address space, the two DRAM banks, what the vendor reserves |
+| `docs/video.md` | display path, framebuffer format, putting an image on HDMI |
 | `backups/` | verified flash images, one copy each + `MANIFEST.md`. **The irreplaceable content here.** |
 | `rootfs/` | extracted vendor root filesystem, used constantly as reference |
 | `vendor/`, `kernel/` | source trees; regenerable, not worth backing up |
 | `pcb/` | photographs of the board and individual chips |
-| `tools/` | the RAM-only raw NAND reader and its validator |
+| `tools/` | raw NAND reader and validator, USB benchmark, framebuffer converter |
 
 ## Building and booting
 
