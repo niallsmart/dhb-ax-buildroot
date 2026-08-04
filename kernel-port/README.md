@@ -741,9 +741,9 @@ front socket = port 1    usb 1-1: new high-speed device using ehci-platform
 rear socket  = port 2    usb 2-2: new full-speed device using ohci-platform
 ```
 
-A microSD card reader on the front socket enumerated at 480 Mbit/s, attached
-as a 512 GB removable disk with two partitions, and moved 128 MiB with no
-errors while EHCI interrupts rose from 2 to 5044.
+Both sockets have been exercised at both speeds: a microSD card reader and a
+Corsair Flash Voyager at high speed on EHCI, in each socket, and an FTDI
+serial adapter at full speed on OHCI.
 
 ### On USB throughput
 
@@ -773,9 +773,28 @@ Confirmed by moving the same device to the Raspberry Pi:
 
 Within noise of each other, with the same positional variation on both hosts.
 The Pi also names the device: a *Super Top microSD card reader*, so this is a
-microSD card behind a cheap bulk-only bridge (`ANSI: 0`), which serialises
-every 120 KB transfer. What this board can really do over USB is still
-unmeasured; it needs a faster device.
+microSD card behind a cheap bulk-only bridge.
+
+A Corsair Flash Voyager then settled what the board can actually do:
+
+| Device | 32 MiB at offset 0 | 256 MiB from 1 GiB |
+|---|---|---|
+| microSD card reader | 17.89 s — 1.79 MB/s | — |
+| Flash Voyager, rear port | 0.96 s — 35 MB/s | 7.68 s — **33.3 MB/s** |
+| Flash Voyager, front port | 0.96 s — 35 MB/s | 7.71 s — **33.2 MB/s** |
+
+**Roughly 33 MB/s sustained**, with 22350 EHCI interrupts and no USB errors.
+USB 2.0 tops out at 60 MB/s in theory and real hosts typically reach 30-40, so
+this controller is performing normally and the card reader was 18x slower
+entirely on its own account.
+
+The two sockets are equivalent to within 0.4%, which is expected — they are
+both EHCI root-hub ports — but it is now measured rather than assumed.
+
+One caution for anyone reading the earlier evidence: `ANSI: 0` appears for the
+Flash Voyager too. It is what bulk-only mass storage reports, not a sign of a
+poor bridge, and should not have been cited as supporting evidence that the
+card reader was cheap.
 
 ## Next milestones
 

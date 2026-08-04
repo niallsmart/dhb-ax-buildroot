@@ -19,7 +19,7 @@ still boots.
 | Both CPU cores | dual Cortex-A9; device tree only, no new code |
 | Gigabit Ethernet | 20000 packets at 0% loss |
 | SATA and FAT32 | 1 TB disk behind a port multiplier, read-only |
-| USB 2.0 and 1.1 | both sockets; storage and serial adapters |
+| USB 2.0 and 1.1 | both sockets, both speeds; ~33 MB/s sustained |
 | GPIO | all 19 banks |
 | Real-time clock | external DS1307 over a bit-banged I2C bus |
 | Software reset | back to U-Boot with no power cycle |
@@ -302,9 +302,6 @@ Cheap and worthwhile alongside the above:
   fitted and can never hold a drive, so
   `libata.force=2.00:disable,2.01:disable,2.04:disable` saves about 3.2 s of
   boot with nothing foregone.
-- **Measure USB properly.** The only device tested tops out around 2 MB/s on
-  the Raspberry Pi too, so it is the device, not the port. A faster device
-  would establish the real figure.
 
 ### Open questions
 
