@@ -205,7 +205,7 @@ cannot absorb a disk image.
 ### Mac workspace
 
 ```text
-/Users/niallsmart/workspace/dhb_ax/
+<workspace>/dhb_ax/
 ```
 
 Layout:
