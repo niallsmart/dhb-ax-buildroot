@@ -1,7 +1,8 @@
 # Buildroot migration plan
 
-Status: **plan only**, for review before execution. Written 2026-08-04 on the
-`buildroot` branch. The last state known to boot is tagged `pre-buildroot`.
+Status: **Stage 1 done, Stages 2-6 pending review.** Written 2026-08-04 on the
+`buildroot` branch. The last state known to boot is tagged `pre-buildroot`;
+Stage 1 has since been boot-tested on hardware in its own right.
 
 Companion to `../kernel-port/README.md`, which holds the current build and the
 hardware evidence this plan is validated against.
@@ -37,7 +38,7 @@ real but minor, and would not on their own justify this.
 |---|---|
 | `bootstrap-sources.sh` fetches and derives trees | `BR2_LINUX_KERNEL_CUSTOM_TARBALL`, managed automatically |
 | Patch queue applied in place, with an idempotency check | Patch directory applied to a fresh tree |
-| Three drivers copied in, their Kconfig hooks as patches | Twelve uniform patches, one mechanism |
+| ~~Three drivers copied in, their Kconfig hooks as patches~~ done in Stage 1 | Nine uniform patches, one mechanism |
 | DTS files copied into the kernel tree | `BR2_LINUX_KERNEL_CUSTOM_DTS_PATH` |
 | Kconfig seed plus `scripts/config` edits | `BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE` |
 | Initramfs hand-assembled with `ln -s` per applet | `BR2_TARGET_ROOTFS_CPIO` plus a rootfs overlay |
@@ -90,7 +91,7 @@ suits a project that will be picked up intermittently.
 Each stage is independently verifiable and leaves a working build behind.
 `kernel-port/build.sh` keeps working until the final stage removes it.
 
-### Stage 1 — convert the drivers to patches
+### Stage 1 — convert the drivers to patches — **DONE 2026-08-04**
 
 Turn `dwmac-hi3531.c`, `ahci_hi3531.c` and `phy-hi3531-usb.c` into
 file-adding patches, merged with their existing Kconfig and Makefile patches
@@ -102,6 +103,22 @@ so each driver is one patch rather than a copied file plus a separate hunk.
 boots and passes the checks below. The DTB should be byte-identical; the
 kernel image will not be, because the legacy uImage header carries a
 timestamp.
+
+**Outcome.** Patches 0003, 0007 and 0009 now each add their driver as a new
+file alongside its Kconfig and Makefile hunks. `kernel-port/drivers/` is gone
+and `build-in-container.sh` no longer copies sources; the DTS files are still
+installed by the script, which Stage 3 replaces.
+
+Verified:
+
+- full build from a tree reset with `bootstrap-sources.sh --reset-build`, so
+  the patches are the only source of the drivers
+- applied sources byte-identical to the removed originals
+- repeat build reports `already applied` for all nine patches — the
+  idempotency check still works, which was the risk with file-adding patches
+- booted over TFTP and passed every acceptance check below except the two
+  needing hardware that was not attached (USB full speed) or not exercised
+  (serial rescue)
 
 ### Stage 2 — Buildroot skeleton, no output yet
 

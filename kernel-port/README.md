@@ -52,8 +52,8 @@ Important confirmed values used by the device trees:
 
 | Block | Physical address | Interrupt/rate |
 |---|---:|---:|
-| RAM | `0x80000000` | 256 MiB physical |
-| Reserved media RAM | `0x8e000000` | 32 MiB |
+| RAM (DDR0) | `0x80000000` | 512 MiB; all of it used |
+| RAM (DDR1) | `0xc0000000` | 512 MiB; **not declared**, see `docs/memory-map.md` |
 | GIC CPU interface | `0x20300100` | — |
 | GIC distributor | `0x20301000` | — |
 | SP804 timer pair | `0x20000000` | GIC SPI 3 / 155 MHz |
@@ -148,9 +148,16 @@ had a working soft reset.
 - `dts/hi3531-dhb-ax.dtsi`: shared board description.
 - `dts/hi3531-dhb-ax.dts`: minimal variant.
 - `dts/hi3531-dhb-ax-ethernet.dts`: minimal plus GMAC1.
-- `drivers/dwmac-hi3531.c`: DWMAC glue for the shared MDIO/DMA integration.
-- `drivers/ahci_hi3531.c`: AHCI glue; clock, reset and PHY bring-up.
-- `drivers/phy-hi3531-usb.c`: USB 2.0 PHY; clock and reset bring-up.
+- `patches/`: the patch queue, applied in order. Three of them add a glue
+  driver as a new file alongside the Kconfig and Makefile entries that build
+  it, so a driver and its build wiring cannot drift apart:
+  - `0003`: `dwmac-hi3531.c`, DWMAC glue for the shared MDIO/DMA integration.
+  - `0007`: `ahci_hi3531.c`, AHCI glue; clock, reset and PHY bring-up.
+  - `0009`: `phy-hi3531-usb.c`, USB 2.0 PHY; clock and reset bring-up.
+
+  To change a driver, edit it in the kernel build tree and regenerate the
+  patch; do not add a separate copy under `kernel-port/`, which is what this
+  arrangement replaced.
 - `reference/vendor-runtime-probe.md`: read-only capture of the stock
   firmware's `/proc`, and the authoritative record of what this board runs.
 - `reference/board-chips.md`: part numbers read off the PCB, and the
@@ -439,7 +446,7 @@ ignores the FIFO size when programming the DMA operation mode.
 The controller is a stock AHCI 1.2 block with two ports at `0x10080000`
 (`SATA_BASE` in the vendor `mach-godnet/include/mach/platform.h`), reached
 through GIC SPI 36. It comes out of chip reset with its clocks gated and its
-PHY unconfigured, so `drivers/ahci_hi3531.c` reproduces the vendor
+PHY unconfigured, so `ahci_hi3531.c` (patch 0007) reproduces the vendor
 `hi_sata_init()`: enable the three SATA clocks in CRG `0x200300b4`, select
 the PHY clock, apply the port erratum, release the controller and PHY
 resets, program both PHYs, the OOB timing and the per-port PHY config, then
@@ -923,7 +930,7 @@ Both host controllers work. EHCI at `0x100b0000` (SPI 31) and OHCI at
 unchanged; the only board-specific part is the PHY, which comes out of chip
 reset clock-gated and held in reset.
 
-`drivers/phy-hi3531-usb.c` reproduces the vendor `hiusb_start_hcd()`: set the
+`phy-hi3531-usb.c` (patch 0009) reproduces the vendor `hiusb_start_hcd()`: set the
 USB clock enable and clear seven reset bits in CRG `0x200300b8`, then select
 an 8-bit UTMI interface with the ULPI wrapper bypassed in sysctrl
 `0x20050080`, disabling EHCI burst-16 as the vendor does. Both windows are
@@ -1083,7 +1090,7 @@ assumed:
 - **Does the SATA link run at 3 Gbps?** The PHY is programmed for 1.5 Gbps
   because the vendor programs it that way, but their source carries 3 Gbps
   constants behind a `mode_3g` parameter. Two constants in
-  `drivers/ahci_hi3531.c`; would double the bandwidth shared by every drive.
+  `ahci_hi3531.c` (patch 0007); would double the bandwidth shared by every drive.
 - **Does the empty fitted SATA connector work?** Putting a drive in SATA4
   would confirm the multiplier port mapping, which is currently inferred. Free
   — see the drive-bay notes above. Enabling it also flips the driver to store-and-forward, which

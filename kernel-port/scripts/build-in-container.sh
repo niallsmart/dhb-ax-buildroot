@@ -45,7 +45,6 @@ output_dir=$build_root/$variant
 initramfs_dir=$build_root/initramfs-$variant
 artifacts=$port_dir/build/artifacts
 dts_dir=arch/arm/boot/dts/hisilicon
-stmmac_dir=drivers/net/ethernet/stmicro/stmmac
 
 rm -rf "$initramfs_dir"
 mkdir -p "$output_dir" "$artifacts" \
@@ -63,14 +62,14 @@ done
 # is logged, because the failure happens before the filesystem driver starts.
 ln -sfn ../bin/busybox "$initramfs_dir/sbin/modprobe"
 
-# Both device trees and the glue driver are installed for either variant;
-# the Kconfig seed decides what is actually built into the image.
+# Both device trees are installed for either variant; the Kconfig seed decides
+# what is actually built into the image.  The glue drivers are not copied here
+# -- each one is added by its own patch, alongside the Kconfig and Makefile
+# hunks that reference it, so a driver and the entries that build it cannot
+# drift apart.
 install -m 0644 "$port_dir/dts/hi3531-dhb-ax.dtsi" "$kernel_src/$dts_dir/"
 install -m 0644 "$port_dir/dts/hi3531-dhb-ax.dts" "$kernel_src/$dts_dir/"
 install -m 0644 "$port_dir/dts/hi3531-dhb-ax-ethernet.dts" "$kernel_src/$dts_dir/"
-install -m 0644 "$port_dir/drivers/dwmac-hi3531.c" "$kernel_src/$stmmac_dir/"
-install -m 0644 "$port_dir/drivers/ahci_hi3531.c" "$kernel_src/drivers/ata/"
-install -m 0644 "$port_dir/drivers/phy-hi3531-usb.c" "$kernel_src/drivers/phy/hisilicon/"
 
 # Apply the queue in order.  A patch that reverse-applies cleanly is already
 # in the tree, which keeps repeat builds against the same source working.
