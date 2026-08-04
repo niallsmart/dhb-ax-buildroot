@@ -288,9 +288,13 @@ In order of value per unit of work:
 3. **Read-only SPI NOR and NAND.** Mainline has `hisi-sfc` and `hisi504_nand`;
    whether they match this SoC's `hisfc350` and `hinfc300` is the first
    question. Read-only only: this flash holds the only factory system.
-4. **L2 cache** at `0x20700000`. Needs diagnosis before it can be scheduled —
-   it currently reads `CTRL = 0` (disabled) and `CACHE_ID = 0`, which a PL310
-   should not do, and the vendor platform code contains no L2 init at all.
+4. **L2 cache** at `0x20700000`. Diagnosed: it is a HiSilicon proprietary
+   controller, not a PL310, and mainline has no driver for it. Enabling it
+   means porting the vendor's 385-line `cache-hil2v200.c`. The vendor does use
+   it (`CONFIG_CACHE_HIL2V200=y`). Riskier than anything else remaining,
+   because cache maintenance bugs corrupt data silently rather than failing
+   visibly, and the size of the win has never been measured. Notes in
+   `kernel-port/README.md`.
 5. **DMA engine** at `0x100d0000`, SPI 29. Real and heavily used by the
    vendor, but clock-gated, unidentifiable by ID probe, and with no vendor
    source — only a binary module. Low value: Ethernet, SATA and USB all have

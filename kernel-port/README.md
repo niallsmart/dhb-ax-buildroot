@@ -618,6 +618,80 @@ In order of preference:
 The SP805 watchdog is present and its clock is now described correctly, but
 **it does not currently reset the SoC** — see below.
 
+### The L2 cache — notes, not yet acted on
+
+The L2 cache at `0x20700000` is off under this port. Enabling it is a real
+piece of work, not a device tree node, and this records what was learned so it
+does not have to be re-derived.
+
+**It is not a PL310.** It is a HiSilicon proprietary controller with its own
+driver in the vendor tree, `arch/arm/mm/cache-hil2v200.c` (385 lines plus a
+207-line header). The register map differs completely from ARM's:
+
+| Offset | HIL2V200 | PL310, for contrast |
+|---|---|---|
+| `0x000` | `L2_CTRL` | Cache ID |
+| `0x004` | `L2_AUCTRL` | Cache Type |
+| `0x008` | `L2_STATUS` | — |
+| `0x100` | `L2_INTMASK` | Control |
+| `0x200` | `L2_SYNC` | — |
+| `0x210` / `0x214` | `L2_INVALID` / `L2_CLEAN` | — |
+
+Two consequences. First, reading `0x20700000` and finding zero does **not**
+mean a missing cache ID — it is the control register correctly reporting
+disabled. An earlier revision of these notes drew that wrong conclusion by
+assuming a PL310. Second, `0x004` reading `0x01800000` is a live auxiliary
+configuration value, so the block is present and answering.
+
+**The vendor does enable it.** `godnet_defconfig` carries
+`CONFIG_CACHE_HIL2V200=y`, which is what claims `l2cache.0` in the vendor's
+`/proc/iomem` and what the three L2 error interrupts (SPI 37-39) belong to.
+An earlier note here claimed the vendor had no L2 init; that came from
+grepping only `arch/arm/mach-godnet/`, while the driver lives in
+`arch/arm/mm/`.
+
+**Mainline has nothing for this controller.** The only outer-cache
+implementation remaining in 6.18 is `cache-l2x0.c`, for ARM's own designs.
+
+### What porting it would involve
+
+The `outer_cache_fns` interface the vendor hooks into still exists in 6.18
+with the same shape, so the port is structurally feasible:
+
+```c
+outer_cache.inv_range   = l2cache_inv_range;
+outer_cache.clean_range = l2cache_clean_range;
+outer_cache.flush_range = l2cache_flush_range;
+outer_cache.sync        = l2cache_sync;
+outer_cache.disable     = l2cache_disable;
+```
+
+Two mismatches to resolve: the vendor also sets `flush_all` and `inv_all`,
+and neither is a member of the 6.18 `struct outer_cache_fns`. Those call sites
+need rework rather than translation.
+
+### Why this is riskier than anything else in this tree
+
+Every function above is cache maintenance, and cache maintenance bugs do not
+announce themselves. A missed flush on a DMA path means Ethernet delivers
+subtly wrong bytes or SATA writes corrupt data, with no error reported
+anywhere. Every other subsystem here fails visibly; this one fails silently.
+
+It also interacts with SMP, which this port now enables — both cores share the
+L2.
+
+### If it is attempted
+
+1. **Measure first.** Nothing has established that this board is memory-bound,
+   so the size of the win is currently an assumption. A memory-heavy benchmark
+   before and after would make it a number. A network and storage box is often
+   I/O-bound, in which case L2 may buy little.
+2. **Detach anything valuable from SATA.** The disk normally attached holds
+   the owner's recordings.
+3. **Validate with checksums, not just "it boots".** The NFS transfer with an
+   MD5 compared on both ends, already used for the filesystem work, is exactly
+   the right tool because it detects silent corruption.
+
 ### The watchdog does not reset yet
 
 `CONFIG_ARM_SP805_WATCHDOG` builds and binds, and with the corrected 3 MHz
@@ -873,7 +947,11 @@ rough order of value per unit of work. Everything above the line is done.
 
 Remaining, in order:
 
-1. **L2 cache** at `0x20700000` — a performance win nothing here takes yet.
+1. **L2 cache** at `0x20700000` — not a device tree node. It is a HiSilicon
+   proprietary controller with no mainline support, so this means porting the
+   vendor's 385-line `cache-hil2v200.c`. Cache maintenance code fails
+   silently when wrong, and the size of the win is unmeasured. See the L2
+   notes above before starting.
 2. **Extra serial ports** — UART1 (SPI 9) and UART2 (SPI 10) are the same
    PL011 as the console; UART3 is registered but shows no interrupt in use.
 3. **SD/MMC** at `0x10020000` (SPI 35) — the vendor's `himciv100` is a
