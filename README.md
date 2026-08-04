@@ -37,7 +37,7 @@ computer, not a working DVR.**
 | `kernel-port/README.md` | the authority on anything port-related |
 | `kernel-port/reference/` | evidence: vendor runtime probe, chip survey, hardware write-up |
 | `docs/investigation.md` | the reverse-engineering phase and backup procedures |
-| `backups/` | verified flash images. **The irreplaceable content here.** |
+| `backups/` | verified flash images, one copy each + `MANIFEST.md`. **The irreplaceable content here.** |
 | `rootfs/` | extracted vendor root filesystem, used constantly as reference |
 | `vendor/`, `kernel/` | source trees; regenerable, not worth backing up |
 | `pcb/` | photographs of the board and individual chips |

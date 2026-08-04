@@ -149,8 +149,15 @@ Backups are on the Pi under:
 /home/niallsmart/dhb_ax/backups/2026-08-03/
 ```
 
-Each layer was read twice independently. The files are owned by `niallsmart`,
-mode `0444`, and each pair passed both SHA-256 and byte-for-byte comparison.
+Each layer was read twice independently, and each pair passed both SHA-256 and
+byte-for-byte comparison.
+
+**On 2026-08-04 the redundant `-b` copies were deleted** after re-verifying
+each pair byte-identical with `cmp`. One copy of each file remains here and a
+second on the Raspberry Pi, so redundancy is now across two machines rather
+than two files on one. `backups/2026-08-03/MANIFEST.md` records the SHA-256 of
+what survives; the SPI NOR hash still matches the value captured at read time,
+below.
 
 ### Layer 1: complete SPI NOR
 
