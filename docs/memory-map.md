@@ -65,19 +65,30 @@ end.
             │                                              │
 0x80000000  ╞══════════════════════════════════════════════╡
             ║                                              ║
-            ║          D R A M   —   512 MiB               ║
-            ║          two Nanya NT5CB128M16               ║
+            ║   DDR0   —   512 MiB real                    ║
+            ║   this port's memory node lives here         ║
             ║                                              ║
 0xa0000000  ╞══════════════════════════════════════════════╡
-            │  everything above here ALIASES back to       │
-            │  0x80000000.  The wrap is at 0x20000000.     │
-            │  0xa8000000 == 0x88000000  (measured)        │
+            │  aliases DDR0.  Wrap period is 0x20000000.   │
+            │  0xa8000000 == 0x88000000   (measured)       │
             │                                              │
-            │  U-Boot's video buffers live up here:        │
-            │    0xc0000000  jpeg   →  aliases 0x80000000  │
-            │    0xc1000000  vobuf  →  aliases 0x81000000  │
+0xc0000000  ╞══════════════════════════════════════════════╡
+            ║                                              ║
+            ║   DDR1   —   512 MiB real                    ║
+            ║   SEPARATE memory, not an alias of DDR0.     ║
+            ║   Unused by this port; the vendor gives      ║
+            ║   all of it to MMZ for video buffers.        ║
+            ║                                              ║
+0xe0000000  ╞══════════════════════════════════════════════╡
+            │  aliases DDR1.  Same 0x20000000 period.      │
+            │  0xe0000000 == 0xc0000000   (measured)       │
             └──────────────────────────────────────────────┘
 ```
+
+**The board carries 1 GiB of DRAM across two banks**, one per DDR controller
+(`DDRC0` at `0x20110000`, `DDRC1` at `0x20120000`). Four `NT5CB128M16` at
+256 MB each; U1 and U2 are on the top side, the other two are presumably on
+the underside, which has not been photographed.
 
 Registers and RAM never overlap. Every peripheral sits below `0x70000000`;
 DRAM starts at `0x80000000`. That is why extending memory to the full 512 MiB
@@ -134,7 +145,8 @@ impossibly larger than a 512 MiB board.
 
 | | KiB | MiB |
 |---|---:|---:|
-| Physical DRAM, two `NT5CB128M16` | 524,288 | **512** |
+| DRAM on the board, both banks | 1,048,576 | 1024 |
+| DDR0, the bank this port uses | 524,288 | **512** |
 | Before this work — kernel was given | 229,376 | 224 |
 | Before this work — `MemTotal` | 220,736 | **216** |
 | Now — kernel is given | 524,288 | 512 |
@@ -221,25 +233,101 @@ memory@80000000 {
 };
 ```
 
-## The wrap is a hard ceiling
+## Each bank wraps, but the banks are distinct
 
-Addresses at and above `0xa0000000` are the same silicon as `0x80000000`.
-Declaring more than 512 MiB in the memory node would hand Linux aliased
-addresses, and the corruption would be silent — two "different" pages writing
-over each other with no fault raised.
+Addresses from `0xa0000000` to `0xbfffffff` are the same silicon as
+`0x80000000`. Declaring more than 512 MiB **in one node** would hand Linux
+aliased addresses, and the corruption would be silent — two "different" pages
+writing over each other with no fault raised.
 
-`0x20000000` is exactly 512 MiB, so the wrap sits precisely at the top of real
-memory. There is no headroom to be gained and no safe way to declare more.
+The wrap period is `0x20000000` (512 MiB) and it applies *within* each bank.
+It does **not** carry across the `0xc0000000` boundary, which selects a
+different DDR controller. Measured in one U-Boot session:
 
-Note also that U-Boot's video buffers at `0xc0000000` alias down to
-`0x80000000` — the bottom of DRAM, where the kernel loads. The old 32 MiB
-reserve at `0x8e000000` was nowhere near them, which is one reason removing it
-was safe.
+```text
+mw.l 0x88000000 11111111
+mw.l 0xa8000000 22222222
+mw.l 0x94000000 deadbeef 0x20000    # evict
+md.l 0x88000000  ->  22222222       # same memory: DDR0 wraps
+md.l 0xa8000000  ->  22222222
+
+mw.l 0x80000000 aaaa5555
+mw.l 0xc0000000 12345678
+md.l 0x80000000  ->  aaaa5555       # different memory: DDR1 is its own bank
+md.l 0xc0000000  ->  12345678
+
+mw.l 0xe0000000 e0e0e0e0
+md.l 0xc0000000  ->  e0e0e0e0       # same memory: DDR1 wraps too
+```
+
+An earlier revision of this document claimed `0xc0000000` aliased down to
+`0x80000000`. That was wrong: it extrapolated a wrap measured inside DDR0
+across a boundary the wrap does not cross. U-Boot's splash buffers at
+`0xc0000000`/`0xc1000000` are in DDR1, not aliased onto the bottom of DDR0.
+
+## What the vendor does with the gigabyte
+
+The vendor kernel reports only ~215 MiB, which looks like most of the board
+being wasted. It is not. The cap is explicit on the command line:
+
+```text
+mem=224M console=ttyAMA0,115200 root=/dev/mtdblock2 rootfstype=yaffs2 ...
+```
+
+`mem=224M` tells Linux to ignore everything above 224 MiB. The rest goes to
+**MMZ** (Media Memory Zone), HiSilicon's proprietary allocator, which lives
+entirely outside Linux's memory management. From `/proc/media-mem` on the
+running vendor system:
+
+```text
++---ZONE: PHYS(0xC0000000, 0xDF7FFFFF), nBYTES=516096KB, NAME="ddr1"
++---ZONE: PHYS(0x9FA00000, 0x9FEFFFFF), nBYTES=5120KB,   NAME="jpeg"
++---ZONE: PHYS(0x8E000000, 0x9F9FFFFF), nBYTES=288768KB, NAME="anonymous"
+
+total size=809984KB(791MB), used=366956KB(358MB), zone_number=3,
+block_number=139
+```
+
+Note `0x8E000000` — exactly 224 MiB. MMZ picks up precisely where the Linux
+cap ends. Accounting for the whole board:
+
+| Region | Size | Bank |
+|---|---:|---|
+| Linux (`mem=224M`) | 224 MiB | DDR0 |
+| MMZ `anonymous` | 282 MiB | DDR0 |
+| MMZ `jpeg` | 5 MiB | DDR0 |
+| MMZ `ddr1` | 504 MiB | DDR1 |
+| **total** | **~1015 MiB** | of 1024 |
+
+So the vendor uses about 99% of the DRAM. Linux only ever sees 22% of it.
+
+**Why split it this way.** Video encoding needs large physically contiguous
+buffers — one live allocation observed here is 61 MB. Linux's allocator
+fragments over time and cannot promise that indefinitely; a DVR that fails to
+allocate a frame buffer after weeks of uptime is a dead product. Taking the
+memory off Linux at boot, when contiguity is free, trades flexibility for a
+guarantee. For a DVR that is the right trade — video is the product.
+
+Allocations carry names that make the use obvious: `vb` (video buffer),
+`AODMA`/`AIDMA` (audio out/in DMA), `VDA`, and a 5 MiB `jpeg` zone matching
+the boot splash.
+
+## The second bank is unclaimed by this port
+
+This port declares one 512 MiB node in DDR0 and never touches DDR1. That is
+512 MiB sitting idle, because nothing here runs a video pipeline.
+
+Claiming it is not a one-line change. 1 GiB on ARM32 runs into the kernel's
+address-space split: with the default 3G/1G user/kernel split, lowmem tops out
+around 760 MiB, so a second bank needs either `CONFIG_HIGHMEM` or
+`VMSPLIT_2G`. Untested as of this writing.
 
 ## Evidence
 
-The two chips are Nanya `NT5CB128M16` — 128M × 16 bits = 256 MB each, two
-fitted, 512 MiB total. Read off the PCB; see `../kernel-port/reference/board-chips.md`.
+The DRAM parts are Nanya `NT5CB128M16` — 128M × 16 bits = 256 MB each. U1 and
+U2 are visible on the top side; the electrical evidence above requires four,
+so two more are presumably on the underside, which has not been photographed.
+See `../kernel-port/reference/board-chips.md`.
 
 Memory above 256 MiB was proven real in U-Boot before any kernel change, and
 the first attempt at this was unsound. Writing a four-word pattern and reading
