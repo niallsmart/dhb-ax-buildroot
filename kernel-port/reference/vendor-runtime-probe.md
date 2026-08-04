@@ -30,7 +30,7 @@ Vendor numbers are GIC SPI + 32.
 | 61 | 29 | HiSilicon DMAC | available |
 | 63 | 31 | ehci_hcd (USB 2.0) | available |
 | 64 | 32 | ohci_hcd (USB 1.1) | available |
-| 67 | 35 | hi_mci (SD/MMC) | available |
+| 67 | 35 | hi_mci (SD/MMC) | **no slot on this board** — zero interrupts |
 | 68 | 36 | ahci (SATA) | in use — confirms inferred value |
 | 69–71 | 37–39 | L2 cache error/combined | not used |
 | 79–103 | — | VPSS, VIU, VOU, VEDU, JPEGU, VDEC, TDE, VDA, VOIE, SCD | out of scope |
@@ -43,7 +43,7 @@ GMAC SPI 87) are confirmed correct.
 
     10000000-10000100   hinand              NAND controller
     10010000-100100ff   hi_sfc              SPI NOR
-    10020000-10020fff   hi_mci.0            SD/MMC          <- active
+    10020000-10020fff   hi_mci.0            SD/MMC          <- driver bound, nothing attached
     10080000-1008ffff   ahci.0              SATA
     100a0000-100affff   hiusb-ohci.0 -> ohci_hcd
     100b0000-100bffff   hiusb-ehci.0 -> ehci_hcd

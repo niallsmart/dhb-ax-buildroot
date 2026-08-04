@@ -954,12 +954,24 @@ Remaining, in order:
    notes above before starting.
 2. **Extra serial ports** — UART1 (SPI 9) and UART2 (SPI 10) are the same
    PL011 as the console; UART3 is registered but shows no interrupt in use.
-3. **SD/MMC** at `0x10020000` (SPI 35) — the vendor's `himciv100` is a
-   Synopsys DesignWare MMC controller: its register map matches mainline
-   `dw_mmc.h` offset for offset (`CTRL 0x00, PWREN 0x04, CLKDIV 0x08,
-   CLKSRC 0x0c, CLKENA 0x10, TMOUT 0x14, CTYPE 0x18, BLKSIZ 0x1c,
-   BYTCNT 0x20, INTMASK 0x24, CMDARG 0x28, CMD 0x2c, FIFOTH 0x4c`). So this
-   should be `snps,dw-mshc` plus a clock and reset step, not a new driver.
+3. ~~**SD/MMC**~~ — **dropped: there is no card slot on this board.** The
+   controller exists in the SoC at `0x10020000` and the vendor compiles a
+   driver for it, but nothing is attached. The enclosure has no slot, the
+   vendor's `hi_mci` interrupt (SPI 35) shows **zero** counts after hours of
+   uptime, and no vendor init script or application references `mmcblk` or
+   `/mnt/sd`. `CONFIG_MMC=y` is generic in `godnet_defconfig`, not
+   board-specific.
+
+   Recorded because the analysis is still useful if this SoC turns up on a
+   board that *does* have a slot: the vendor's `himciv100` is a Synopsys
+   DesignWare MMC controller, its register map matching mainline `dw_mmc.h`
+   offset for offset (`CTRL 0x00, PWREN 0x04, CLKDIV 0x08, CLKSRC 0x0c,
+   CLKENA 0x10, TMOUT 0x14, CTYPE 0x18, BLKSIZ 0x1c, BYTCNT 0x20,
+   INTMASK 0x24, CMDARG 0x28, CMD 0x2c, FIFOTH 0x4c`). It would be
+   `snps,dw-mshc` plus a clock and reset step, not a new driver.
+
+   An unpopulated slot footprint on the PCB has not been ruled out; nobody has
+   looked for one.
 4. **Read-only SPI NOR and raw NAND** — `drivers/mtd/devices/hisfc350` and
    `drivers/mtd/nand/hinfc300` in the vendor tree. Both hold the factory
    system, so read-only is the only safe target.
