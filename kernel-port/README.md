@@ -776,8 +776,16 @@ would have led to writing drivers that already exist in mainline.
 ## Memory: the board has 512 MiB, not 256
 
 The device tree declared 256 MiB and reserved 32 of it, leaving the kernel
-220 MB. The board actually carries **512 MiB** and the port now uses all of
-it: `MemTotal: 513148 kB`, a single region `80000000-9fffffff`.
+216 MiB. The board actually carries **512 MiB** and the port now uses all of it:
+
+```text
+Memory: 511012K/524288K available (12208K reserved)
+MemTotal: 513148 kB          ~501 MiB after kernel overhead
+80000000-9fffffff : System RAM    one contiguous region
+```
+
+524288K is exactly 512 MiB. About 12 MiB goes to the kernel image, the
+`struct page` array and early reservations before the allocator sees it.
 
 ### How it was established
 

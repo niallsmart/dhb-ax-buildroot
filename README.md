@@ -235,8 +235,9 @@ the SPI NOR image lives in `backups/`, and the vendor Ethernet module in
 - Vendor/family: Shenzhen TVT, four-channel analog DVR.
 - SoC: HiSilicon Hi3531.
 - DRAM: **512 MiB** (two Nanya NT5CB128M16, U1 and U2). The vendor kernel
-  uses only 224 MiB; this port uses all 512. U-Boot's `DRAM: 256 MiB` is a
-  hardcoded constant, not a measurement.
+  uses only 224 MiB; this port uses all 512, giving about 501 MiB after
+  kernel overhead. U-Boot's `DRAM: 256 MiB` is a hardcoded constant, not a
+  measurement.
 - Bootloader: vendor U-Boot 2010.06, built 2012-11-01.
 - U-Boot prompt: `hisilicon #`.
 - Kernel: Linux 3.0.8 for ARM, uncompressed legacy uImage, built 2013-03-11.
