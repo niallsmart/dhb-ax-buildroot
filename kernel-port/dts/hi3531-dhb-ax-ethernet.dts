@@ -1,0 +1,384 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Minimal bring-up plus GMAC1 Ethernet and a watchdog restart
+ * method.  Everything else stays disabled.
+ */
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "hi3531-dhb-ax.dtsi"
+
+/ {
+	model = "Shenzhen TVT DHB_AX V1.2 DVR";
+
+	/*
+	 * The watchdog counts at about 3 MHz, measured on hardware as
+	 * 92,260,365 ticks over 30.60 s; that is 24 MHz / 8, the same slow
+	 * source U-Boot leaves the UART on.  Describing it as the 155 MHz
+	 * peripheral clock made the driver compute a load value that
+	 * overflowed 32 bits, clamp to 0xFFFFFFFF, and take roughly 47
+	 * minutes to reset instead of the 60 s it was asked for.
+	 */
+	wdt_clk: clock-3mhz {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <3000000>;
+		clock-output-names = "hi3531-wdt";
+	};
+
+	aliases {
+		ethernet0 = &gmac1;
+	};
+};
+
+&soc {
+	/*
+	 * USB 2.0 PHY.  Both windows are shared with other peripherals, so the
+	 * driver maps without claiming: 0x20030000 is the CRG the Ethernet and
+	 * SATA glue also use, and 0x20050000 the system controller behind
+	 * reboot and SMP.
+	 */
+	usbphy: usb-phy@200300b8 {
+		compatible = "hisilicon,hi3531-usb-phy";
+		reg = <0x20030000 0x00000100>,
+		      <0x20050000 0x00000100>;
+		reg-names = "crg", "sysctrl";
+		#phy-cells = <0>;
+	};
+
+	/*
+	 * Stock EHCI and OHCI.  The vendor runs the same mainline drivers
+	 * under a thin wrapper, so the only board-specific part is the PHY
+	 * above; the USB core initialises it from the phys property and
+	 * refcounts it across both controllers, which is what the vendor's
+	 * open-count in hiusb-godnet.c did by hand.
+	 *
+	 * Interrupts are from the vendor runtime probe, not inferred:
+	 * ehci_hcd is SPI 31 and ohci_hcd SPI 32.
+	 */
+	usb@100b0000 {
+		compatible = "generic-ehci";
+		reg = <0x100b0000 0x10000>;
+		interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
+		phys = <&usbphy>;
+		phy-names = "usb";
+	};
+
+	usb@100a0000 {
+		compatible = "generic-ohci";
+		reg = <0x100a0000 0x10000>;
+		interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
+		phys = <&usbphy>;
+		phy-names = "usb";
+	};
+
+
+	/*
+	 * Nineteen GPIO banks.  Identified as ARM PL061 by reading the
+	 * PrimeCell ID registers on bank 0 (part 0x061), so the mainline
+	 * driver applies unchanged.  No interrupt is described: the vendor
+	 * registers none, and the driver simply logs "IRQ support disabled"
+	 * and continues to allow reads and writes.
+	 *
+	 * Banks whose clock is gated will fail to identify on the AMBA bus and
+	 * will not bind, which is a useful way of finding out which are live.
+	 */
+	gpio0: gpio@20150000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20150000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio1: gpio@20160000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20160000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio2: gpio@20170000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20170000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio3: gpio@20180000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20180000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio4: gpio@20190000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20190000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio5: gpio@201a0000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x201a0000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio6: gpio@201b0000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x201b0000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio7: gpio@201c0000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x201c0000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio8: gpio@201d0000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x201d0000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio9: gpio@201e0000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x201e0000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio10: gpio@201f0000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x201f0000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio11: gpio@20200000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20200000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio12: gpio@20210000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20210000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio13: gpio@20220000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20220000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio14: gpio@20230000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20230000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio15: gpio@20240000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20240000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio16: gpio@20250000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20250000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio17: gpio@20260000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20260000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	gpio18: gpio@20270000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x20270000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		clocks = <&peripheral_clk>;
+		clock-names = "apb_pclk";
+	};
+
+	/*
+	 * Bit-banged I2C, matching how the vendor reaches the DS1307.  Their
+	 * gpioi2c module drives PL061 data bits 4 and 5 (offsets 0x40 and
+	 * 0x80 in the address-masked data window) and sets both as outputs.
+	 * Bank 12 is the only one of the nineteen whose direction register
+	 * reads 0x30, and both pins sit high at rest, which is what an idle
+	 * bus with pull-ups looks like.
+	 *
+	 * open-drain is required: I2C devices pull the line low and rely on
+	 * the pull-up to return it high, so the controller must never drive
+	 * high actively.
+	 */
+	i2c-gpio {
+		compatible = "i2c-gpio";
+		sda-gpios = <&gpio12 4 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+		scl-gpios = <&gpio12 5 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+		i2c-gpio,delay-us = <5>;   /* ~100 kHz */
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/*
+		 * Battery-backed clock.  This, not the on-chip PL031, is what
+		 * the vendor loads a driver for.  Address 0x68 is fixed for
+		 * the DS1307 family.
+		 */
+		rtc@68 {
+			compatible = "dallas,ds1307";
+			reg = <0x68>;
+		};
+	};
+
+	/*
+	 * No PL031 node.  The block is present at 0x20060000 and the mainline
+	 * driver binds to it, but the counter never advances and neither the
+	 * control nor the load register accepts a write, which is how a
+	 * clock-gated block behaves on this SoC.  The vendor ships hi_rtc.ko
+	 * for it but never loads it: their init loads ds1307.ko instead, so
+	 * real timekeeping on this board is an external DS1307 on the
+	 * bit-banged I2C bus.  Wall-clock time therefore depends on GPIO-based
+	 * I2C, not on this block.
+	 */
+	/*
+	 * SP805 watchdog, WDG_BASE from the vendor platform.h.  Used as a
+	 * deadman during risky bring-up: it only starts when userspace opens
+	 * /dev/watchdog, and U-Boot stops it at boot ("dog_close").  The
+	 * interrupt number is unknown and the driver does not need it.
+	 */
+	watchdog@20040000 {
+		compatible = "arm,sp805", "arm,primecell";
+		reg = <0x20040000 0x1000>;
+		clocks = <&wdt_clk>, <&peripheral_clk>;
+		clock-names = "wdog_clk", "apb_pclk";
+	};
+
+	/*
+	 * SATA bring-up.  SATA_BASE comes from the vendor
+	 * mach-godnet/include/mach/platform.h; the controller is AHCI with
+	 * two ports at the usual 0x100 + n * 0x80 stride.
+	 *
+	 * The interrupt is inferred, not read from a header: the vendor
+	 * kernel reports "irq 68" for ata1/ata2 and its GODNET_IRQ_START is
+	 * 32, giving SPI 36.  The same arithmetic gives the GMAC's SPI 87,
+	 * which is confirmed working, but nothing here has been validated on
+	 * hardware yet.
+	 *
+	 * The second reg window is the shared peripheral CRG; the glue driver
+	 * needs it for the SATA clock and reset bits at 0xb4.  ports-implemented
+	 * is not overridden any more: once the clocks are on, the controller
+	 * reports 0x3 by itself.
+	 */
+	sata: sata@10080000 {
+		compatible = "hisilicon,hi3531-ahci";
+		reg = <0x10080000 0x00010000>,
+		      <0x20030000 0x00000100>;
+		reg-names = "ahci", "syscfg";
+		interrupts = <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>;
+	};
+
+	/*
+	 * reg[0] spans the whole shared block: GMAC0 at +0x0, GMAC1 at
+	 * +0x4000, the three DMA channels at +0x1000/+0x1100/+0x1200, and
+	 * the TNK interrupt aggregator at +0x9000.  reg[1] is the CRG
+	 * window holding the GMAC interface reset and mode registers.
+	 */
+	gmac1: ethernet@101c0000 {
+		compatible = "hisilicon,hi3531-dwmac", "snps,dwmac-3.40a";
+		reg = <0x101c0000 0x00020000>,
+		      <0x20030000 0x00000100>;
+		reg-names = "stmmaceth", "syscfg";
+		interrupts = <GIC_SPI 87 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "macirq";
+		clocks = <&peripheral_clk>;
+		clock-names = "stmmaceth";
+		phy-mode = "rgmii";
+		phy-handle = <&phy1>;
+		max-speed = <1000>;
+		local-mac-address = [00 18 ae 3c a2 49];
+		/*
+		 * Depths are informational here: dwmac1000 ignores the FIFO
+		 * size when setting the DMA operation mode.
+		 */
+		tx-fifo-depth = <8192>;
+		rx-fifo-depth = <8192>;
+		snps,pbl = <16>;
+		snps,no-pbl-x8;
+
+		/*
+		 * No snps,force_sf_dma_mode.  The vendor driver enables TX
+		 * store-and-forward only when TX checksum insertion is on,
+		 * and otherwise runs TX in threshold mode with RX
+		 * store-and-forward.  Forcing TX store-and-forward with COE
+		 * disabled wedges the TX DMA once a burst exceeds a few
+		 * frames: the engine sticks in "reading data from host
+		 * memory" and never completes, with no underflow, no bus
+		 * error and no transmit timeout reported.
+		 */
+
+		mdio {
+			compatible = "snps,dwmac-mdio";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			phy1: ethernet-phy@1 {
+				reg = <1>;
+			};
+		};
+	};
+};

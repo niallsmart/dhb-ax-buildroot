@@ -1,0 +1,38 @@
+From: DHB-AX local port <local@invalid>
+Subject: [LOCAL ONLY] ata: add HiSilicon Hi3531 AHCI glue option
+
+Kconfig symbol and Makefile entry for the Hi3531 AHCI glue.  The driver
+itself is added as a new file by the build script.
+---
+diff --git a/drivers/ata/Kconfig b/drivers/ata/Kconfig
+--- a/drivers/ata/Kconfig
++++ b/drivers/ata/Kconfig
+@@ -271,6 +271,17 @@
+ 
+ 	  If unsure, say N.
+ 
++config AHCI_HI3531
++	tristate "HiSilicon Hi3531 AHCI SATA support"
++	depends on ARCH_HISI || COMPILE_TEST
++	select SATA_HOST
++	help
++	  This option enables support for the HiSilicon Hi3531 onboard AHCI
++	  SATA controller, which needs its clocks enabled and its PHY
++	  configured before the generic platform driver can use it.
++
++	  If unsure, say N.
++
+ config AHCI_TEGRA
+ 	tristate "NVIDIA Tegra AHCI SATA support"
+ 	depends on ARCH_TEGRA || COMPILE_TEST
+diff --git a/drivers/ata/Makefile b/drivers/ata/Makefile
+--- a/drivers/ata/Makefile
++++ b/drivers/ata/Makefile
+@@ -18,6 +18,7 @@
+ obj-$(CONFIG_AHCI_DA850)	+= ahci_da850.o libahci.o libahci_platform.o
+ obj-$(CONFIG_AHCI_DM816)	+= ahci_dm816.o libahci.o libahci_platform.o
+ obj-$(CONFIG_AHCI_DWC)		+= ahci_dwc.o libahci.o libahci_platform.o
++obj-$(CONFIG_AHCI_HI3531)	+= ahci_hi3531.o libahci.o libahci_platform.o
+ obj-$(CONFIG_AHCI_IMX)		+= ahci_imx.o libahci.o libahci_platform.o
+ obj-$(CONFIG_AHCI_MTK)		+= ahci_mtk.o libahci.o libahci_platform.o
+ obj-$(CONFIG_AHCI_MVEBU)	+= ahci_mvebu.o libahci.o libahci_platform.o

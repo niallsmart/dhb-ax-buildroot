@@ -1,0 +1,21 @@
+From: DHB-AX local port <local@invalid>
+Subject: [LOCAL ONLY] ARM: dts: build the DHB-AX device trees
+
+Both variants are built from the same source tree, so add both in one hunk:
+splitting them across two patches makes neither able to apply nor reverse-
+apply once the other is in the tree, which breaks repeat builds.
+---
+diff --git a/arch/arm/boot/dts/hisilicon/Makefile b/arch/arm/boot/dts/hisilicon/Makefile
+--- a/arch/arm/boot/dts/hisilicon/Makefile
++++ b/arch/arm/boot/dts/hisilicon/Makefile
+@@ -6,7 +6,9 @@
+ dtb-$(CONFIG_ARCH_HIP04) += \
+ 	hip04-d01.dtb
+ dtb-$(CONFIG_ARCH_HISI) += \
+-	hi3519-demb.dtb
++	hi3519-demb.dtb \
++	hi3531-dhb-ax.dtb \
++	hi3531-dhb-ax-ethernet.dtb
+ dtb-$(CONFIG_ARCH_HIX5HD2) += \
+ 	hisi-x5hd2-dkb.dtb
+ dtb-$(CONFIG_ARCH_SD5203) += \

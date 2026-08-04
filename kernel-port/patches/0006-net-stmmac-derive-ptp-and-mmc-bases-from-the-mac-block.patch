@@ -1,0 +1,57 @@
+From: DHB-AX local port <local@invalid>
+Subject: [LOCAL ONLY] net: stmmac: derive PTP and MMC bases from the MAC block
+
+The PTP, MMC and EST register blocks sit at fixed offsets from the MAC
+registers, but stmmac_hwif_init() computes them from priv->ioaddr.  Where
+platform setup has relocated the MAC block those offsets land on the wrong
+MAC: on Hi3531 the MMC counters and the timestamp block of GMAC0 are read
+and cleared while GMAC1 is the MAC in use.
+
+Take the base from mac_device_info::pcsr once platform setup has provided
+it.  The assignment already runs after plat->setup(), and core setup
+callbacks that fill pcsr in later leave it NULL here, so every other
+platform keeps the resource base.
+
+This is a local hardware-enablement patch and is not for submission.
+---
+diff --git a/drivers/net/ethernet/stmicro/stmmac/hwif.c b/drivers/net/ethernet/stmicro/stmmac/hwif.c
+--- a/drivers/net/ethernet/stmicro/stmmac/hwif.c
++++ b/drivers/net/ethernet/stmicro/stmmac/hwif.c
+@@ -295,6 +295,7 @@
+ 	struct mac_device_info *mac;
+ 	bool needs_setup = true;
+ 	u32 id, dev_id = 0;
++	void __iomem *macbase;
+ 	int i, ret;
+ 
+ 	if (core_type == DWMAC_CORE_GMAC) {
+@@ -332,6 +333,13 @@
+ 
+ 	if (!mac)
+ 		return -ENOMEM;
++
++	/* The PTP, MMC and EST blocks are addressed relative to the MAC
++	 * registers, which platform setup may have placed away from the
++	 * resource base.  Core setup callbacks have not run at this point and
++	 * leave pcsr NULL, which keeps the resource base.
++	 */
++	macbase = mac->pcsr ? : priv->ioaddr;
+ 
+ 	/* Fallback to generic HW */
+ 	for (i = ARRAY_SIZE(stmmac_hw) - 1; i >= 0; i--) {
+@@ -358,12 +366,12 @@
+ 
+ 		priv->hw = mac;
+ 		priv->fpe_cfg.reg = entry->regs.fpe_reg;
+-		priv->ptpaddr = priv->ioaddr + entry->regs.ptp_off;
+-		priv->mmcaddr = priv->ioaddr + entry->regs.mmc_off;
++		priv->ptpaddr = macbase + entry->regs.ptp_off;
++		priv->mmcaddr = macbase + entry->regs.mmc_off;
+ 		memcpy(&priv->ptp_clock_ops, entry->ptp,
+ 		       sizeof(struct ptp_clock_info));
+ 		if (entry->est)
+-			priv->estaddr = priv->ioaddr + entry->regs.est_off;
++			priv->estaddr = macbase + entry->regs.est_off;
+ 
+ 		/* Entry found */
+ 		if (needs_setup) {

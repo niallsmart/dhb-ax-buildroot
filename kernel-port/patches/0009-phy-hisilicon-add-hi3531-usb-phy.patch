@@ -1,0 +1,34 @@
+From: DHB-AX local port <local@invalid>
+Subject: [LOCAL ONLY] phy: hisilicon: add Hi3531 USB PHY option
+
+Kconfig symbol and Makefile entry for the Hi3531 USB 2.0 PHY.  The driver
+itself is added as a new file by the build script.
+---
+diff --git a/drivers/phy/hisilicon/Kconfig b/drivers/phy/hisilicon/Kconfig
+--- a/drivers/phy/hisilicon/Kconfig
++++ b/drivers/phy/hisilicon/Kconfig
+@@ -2,6 +2,15 @@
+ #
+ # Phy drivers for Hisilicon platforms
+ #
++config PHY_HI3531_USB
++	tristate "HiSilicon Hi3531 USB PHY support"
++	depends on ARCH_HISI || COMPILE_TEST
++	select GENERIC_PHY
++	help
++	  Enable this to support the HiSilicon Hi3531 USB 2.0 PHY, which must
++	  be brought out of reset before the EHCI and OHCI controllers can be
++	  used.
++
+ config PHY_HI6220_USB
+ 	tristate "hi6220 USB PHY support"
+ 	depends on (ARCH_HISI && ARM64) || COMPILE_TEST
+diff --git a/drivers/phy/hisilicon/Makefile b/drivers/phy/hisilicon/Makefile
+--- a/drivers/phy/hisilicon/Makefile
++++ b/drivers/phy/hisilicon/Makefile
+@@ -1,4 +1,5 @@
+ # SPDX-License-Identifier: GPL-2.0-only
++obj-$(CONFIG_PHY_HI3531_USB)	+= phy-hi3531-usb.o
+ obj-$(CONFIG_PHY_HI6220_USB)		+= phy-hi6220-usb.o
+ obj-$(CONFIG_PHY_HI3660_USB)		+= phy-hi3660-usb3.o
+ obj-$(CONFIG_PHY_HI3670_USB)		+= phy-hi3670-usb3.o

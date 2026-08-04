@@ -1,0 +1,21 @@
+#!/bin/sh
+
+export PATH=/bin:/sbin
+
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+
+echo
+echo "DHB-AX Linux 6.18 RAM-only Ethernet bring-up shell"
+echo "No flash filesystems have been mounted."
+uname -a
+if [ -d /sys/class/net/eth0 ]; then
+	echo "Ethernet probe created eth0; it remains administratively down."
+	ip -details link show dev eth0
+else
+	echo "No eth0 device was created. Check dmesg for probe diagnostics."
+fi
+echo
+
+exec setsid cttyhack sh

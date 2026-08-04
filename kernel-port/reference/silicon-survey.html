@@ -1,0 +1,1232 @@
+<title>What Else Is In This Chip?</title>
+
+<style>
+  :root {
+    --ground:   #F4F5F2;
+    --surface:  #FCFCFA;
+    --panel:    #EDEFEA;
+    --ink:      #171C1A;
+    --ink-soft: #5A655F;
+    --ink-faint:#8B968F;
+    --accent:   #0F6E5C;
+    --accent-w: #0F6E5C1A;
+    --copper:   #A85C28;
+    --copper-w: #A85C281A;
+    --rule:     #DDE1DA;
+    --rule-firm:#C4CBC1;
+
+    --f-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    --f-body:    Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia,
+                 "Times New Roman", serif;
+    --f-mono:    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+                 "Liberation Mono", monospace;
+
+    --measure: 66ch;
+    --wide: 74rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:   #111513;
+      --surface:  #191F1C;
+      --panel:    #1E2522;
+      --ink:      #E7EBE7;
+      --ink-soft: #97A39D;
+      --ink-faint:#6E7A74;
+      --accent:   #57C3A6;
+      --accent-w: #57C3A622;
+      --copper:   #E2914F;
+      --copper-w: #E2914F22;
+      --rule:     #29312D;
+      --rule-firm:#3A443F;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:   #111513;
+    --surface:  #191F1C;
+    --panel:    #1E2522;
+    --ink:      #E7EBE7;
+    --ink-soft: #97A39D;
+    --ink-faint:#6E7A74;
+    --accent:   #57C3A6;
+    --accent-w: #57C3A622;
+    --copper:   #E2914F;
+    --copper-w: #E2914F22;
+    --rule:     #29312D;
+    --rule-firm:#3A443F;
+  }
+
+  :root[data-theme="light"] {
+    --ground:   #F4F5F2;
+    --surface:  #FCFCFA;
+    --panel:    #EDEFEA;
+    --ink:      #171C1A;
+    --ink-soft: #5A655F;
+    --ink-faint:#8B968F;
+    --accent:   #0F6E5C;
+    --accent-w: #0F6E5C1A;
+    --copper:   #A85C28;
+    --copper-w: #A85C281A;
+    --rule:     #DDE1DA;
+    --rule-firm:#C4CBC1;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 1.0625rem;
+    line-height: 1.68;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: var(--wide);
+    margin: 0 auto;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    border-bottom: 1px solid var(--rule-firm);
+    padding: 4.5rem 0 2.25rem;
+    margin-bottom: 3rem;
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 1.5rem;
+  }
+
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(2.25rem, 6vw, 3.75rem);
+    line-height: 1.04;
+    letter-spacing: -0.028em;
+    text-wrap: balance;
+    margin: 0 0 1.25rem;
+    max-width: 20ch;
+  }
+
+  .standfirst {
+    font-size: 1.1875rem;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    max-width: 56ch;
+    margin: 0;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 2.5rem;
+    margin-top: 2.5rem;
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+  }
+  .facts div { display: flex; flex-direction: column; gap: 0.25rem; }
+  .facts dt {
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 0.66rem;
+  }
+  .facts dd { margin: 0; color: var(--ink); }
+
+  /* ---------- reading column ---------- */
+
+  /* The reading measure applies to prose, not to figures: panels and tables
+     use the full container width. */
+  .col > section > p,
+  .col > section > h2,
+  .col > section > h3,
+  .col > section > ul,
+  .col > section > ol,
+  .col > section > .brief { max-width: var(--measure); }
+
+  section { margin-bottom: 4rem; }
+
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(1.45rem, 3vw, 1.9rem);
+    line-height: 1.18;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0 0 1.25rem;
+    max-width: 26ch;
+  }
+
+  h3 {
+    font-family: var(--f-display);
+    font-weight: 650;
+    font-size: 1.0625rem;
+    letter-spacing: -0.008em;
+    text-wrap: balance;
+    margin: 2.5rem 0 0.75rem;
+  }
+
+  p { margin: 0 0 1.15rem; }
+  p:last-child { margin-bottom: 0; }
+
+  a {
+    color: var(--accent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.16em;
+  }
+  a:hover { text-decoration-thickness: 2px; }
+  a:focus-visible {
+    outline: 2px solid var(--copper);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.855em;
+    background: var(--accent-w);
+    padding: 0.1em 0.34em;
+    border-radius: 3px;
+  }
+
+  strong { font-weight: 600; }
+
+  ul, ol { margin: 0 0 1.15rem; padding-left: 1.35rem; }
+  li { margin-bottom: 0.5rem; }
+  li::marker { color: var(--ink-faint); }
+
+  /* ---------- briefer callouts ---------- */
+
+  .brief {
+    background: var(--surface);
+    border-left: 3px solid var(--copper);
+    padding: 1.15rem 1.35rem;
+    margin: 1.75rem 0;
+    font-size: 0.9825rem;
+    line-height: 1.6;
+  }
+  .brief .tag {
+    display: block;
+    font-family: var(--f-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--copper);
+    margin-bottom: 0.6rem;
+  }
+  .brief p { margin-bottom: 0.7rem; }
+  .brief p:last-child { margin-bottom: 0; }
+
+  /* ---------- instrument panels ---------- */
+
+  .panel {
+    margin: 2rem 0;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .panel-head {
+    font-family: var(--f-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface);
+  }
+  .scroll { overflow-x: auto; }
+
+  pre {
+    font-family: var(--f-mono);
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    margin: 0;
+    padding: 1rem;
+    white-space: pre;
+    color: var(--ink);
+  }
+  pre .c { color: var(--ink-faint); }
+  pre .hit { color: var(--copper); font-weight: 600; }
+  pre .ok { color: var(--accent); }
+
+  /* ---------- tables ---------- */
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: var(--f-mono);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+  }
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--rule-firm);
+    white-space: nowrap;
+  }
+  td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.name { color: var(--ink); }
+  .note { font-family: var(--f-body); font-size: 0.9375rem; color: var(--ink-soft); }
+  .pill + .note { margin-left: 0.45rem; }
+
+  /* capability survey: let the description breathe, keep addresses intact */
+  .survey td:nth-child(2) { min-width: 22rem; }
+  .survey td:nth-child(3) { white-space: nowrap; }
+  .survey td:nth-child(5) .note { display: inline-block; margin-top: 0.2rem; font-size: 0.875rem; }
+
+  .pill {
+    display: inline-block;
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.2em 0.55em;
+    border-radius: 3px;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .pill.done  { background: var(--accent-w); color: var(--accent); }
+  .pill.easy  { background: var(--copper-w); color: var(--copper); }
+  .pill.hard  { background: var(--rule); color: var(--ink-soft); }
+  .pill.no    { background: transparent; color: var(--ink-faint); border: 1px solid var(--rule-firm); }
+
+  /* ---------- steps ---------- */
+
+  .steps { list-style: none; padding: 0; margin: 2rem 0 0; counter-reset: s; }
+  .steps li {
+    counter-increment: s;
+    display: grid;
+    grid-template-columns: 2.5rem 1fr;
+    gap: 0 1rem;
+    padding: 1.15rem 0;
+    border-top: 1px solid var(--rule);
+  }
+  .steps li::before {
+    content: counter(s);
+    font-family: var(--f-mono);
+    font-size: 0.8125rem;
+    color: var(--copper);
+    padding-top: 0.15rem;
+  }
+  .steps h4 {
+    font-family: var(--f-display);
+    font-size: 1rem;
+    font-weight: 650;
+    margin: 0 0 0.3rem;
+  }
+  .steps p { font-size: 0.9375rem; margin: 0; color: var(--ink-soft); }
+
+  /* ---------- sources ---------- */
+
+  .sources { font-size: 0.9375rem; }
+  .sources h3 { margin-top: 2rem; }
+  .sources ul { list-style: none; padding: 0; }
+  .sources li {
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.6rem;
+    align-items: baseline;
+  }
+  .sources .what { color: var(--ink-soft); font-size: 0.875rem; }
+
+  footer {
+    border-top: 1px solid var(--rule-firm);
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    line-height: 1.8;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">DHB_AX V1.2 &middot; Hi3531 Port &middot; Field Notes</p>
+    <h1>What else is in this chip?</h1>
+    <p class="standfirst">
+      We are putting a modern Linux kernel on a 2012 security recorder. Networking and
+      storage now work. This is how we worked out what else is in there — using four
+      sources that each catch the others' mistakes, and finding along the way that we
+      had been using half the machine.
+    </p>
+    <dl class="facts">
+      <div><dt>Target</dt><dd>HiSilicon Hi3531</dd></div>
+      <div><dt>CPU</dt><dd>Cortex-A9 &times;2, 32-bit</dd></div>
+      <div><dt>Kernel</dt><dd>Linux 6.18.42 LTS</dd></div>
+      <div><dt>Both cores</dt><dd>running</dd></div>
+      <div><dt>Vendor kernel</dt><dd>Linux 3.0.8 (2012)</dd></div>
+    </dl>
+  </header>
+
+  <div class="col">
+
+    <section>
+      <h2>The program</h2>
+      <p>
+        The device is a Shenzhen TVT digital video recorder, marked
+        <code>DHB_AX V1.2</code> on the circuit board &mdash; a detail worth knowing,
+        because that string appears nowhere in the manufacturer's software. The board
+        revision is only discoverable by looking at the hardware. Inside is a HiSilicon
+        Hi3531: a <em>system-on-chip</em>, meaning one piece of silicon containing the
+        processor plus dozens of separate hardware blocks &mdash; network, storage, video,
+        serial ports and so on.
+      </p>
+      <p>
+        It shipped running Linux 3.0.8, released in 2011. The goal is to run a current
+        kernel on it instead. That matters because a modern kernel gets security fixes,
+        and because the vendor's kernel is a dead end — you cannot update it, and much of
+        it depends on binary-only drivers nobody can rebuild.
+      </p>
+
+      <aside class="brief">
+        <span class="tag">Briefer &middot; Why porting is hard</span>
+        <p>
+          A kernel does not automatically know what hardware exists. On a PC, firmware
+          enumerates devices and hands the kernel a list. Embedded ARM systems have no
+          such mechanism — the kernel must be <em>told</em>, in advance, that "there is a
+          network controller at address <code>0x101c0000</code> and it interrupts on line 87."
+        </p>
+        <p>
+          That description lives in a <strong>device tree</strong>: a text file, compiled
+          into a small binary, handed to the kernel at boot. Porting largely consists of
+          writing an accurate device tree and supplying any driver code the mainline
+          kernel lacks.
+        </p>
+      </aside>
+
+      <p>Where the port currently stands:</p>
+
+      <div class="panel">
+        <div class="panel-head">Working today</div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Subsystem</th><th>Detail</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="name">Serial console</td><td class="note">PL011 UART, 115200 baud</td><td><span class="pill done">Working</span></td></tr>
+              <tr><td class="name">Timers</td><td class="note">SP804 dual timer</td><td><span class="pill done">Working</span></td></tr>
+              <tr><td class="name">Ethernet</td><td class="note">Gigabit, verified at 0% packet loss</td><td><span class="pill done">Working</span></td></tr>
+              <tr><td class="name">SATA</td><td class="note">1&nbsp;TB disk, ~128&nbsp;MB/s reads</td><td><span class="pill done">Working</span></td></tr>
+              <tr><td class="name">Filesystem</td><td class="note">FAT32, read-only, extraction verified</td><td><span class="pill done">Working</span></td></tr>
+              <tr><td class="name">Reset / recovery</td><td class="note">Software reset plus serial-break rescue</td><td><span class="pill done">Working</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p>
+        With those in place, the obvious question is what else the chip can do — and how
+        to find out without guessing.
+      </p>
+    </section>
+
+    <section>
+      <h2>The approach: four sources that check each other</h2>
+      <p>
+        There is no single place that tells you what a board contains. There are four,
+        each authoritative about something different and each wrong in a way the others
+        catch. Using fewer than all four is how you end up confidently mistaken.
+      </p>
+
+      <ol class="steps">
+        <li>
+          <div>
+            <h4>A reference source tree &mdash; what the chip family contains</h4>
+            <p>
+              A public mirror of HiSilicon's own kernel includes a header listing roughly
+              eighty hardware blocks and their addresses. Broad and free to consult, but
+              it describes a <em>reference design</em>, not this recorder. Treating it as
+              the last word is the mistake an earlier draft of this page made.
+            </p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h4>The vendor's own kernel and filesystem &mdash; what was really built</h4>
+            <p>
+              We have a byte-for-byte backup of the recorder's flash, including the
+              kernel the manufacturer compiled for this board. Decompress it and its
+              driver names are readable. This tells you what was genuinely wired and
+              driven — but it understates the hardware, because it omits anything the
+              manufacturer chose not to use.
+            </p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h4>The original firmware, running &mdash; what is live, and where</h4>
+            <p>
+              Boot the factory system and read <code>/proc/iomem</code> and
+              <code>/proc/interrupts</code>. This is the only source that gives real
+              interrupt numbers, and it is where the biggest surprises turned up.
+              Requires the original firmware to still be bootable.
+            </p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h4>The silicon itself &mdash; what a block actually is</h4>
+            <p>
+              Ask the hardware directly, using the trick in the next section. Slowest to
+              gather and it goes quiet when a block is powered down, but nothing else can
+              contradict it.
+            </p>
+          </div>
+        </li>
+      </ol>
+
+      <aside class="brief">
+        <span class="tag">Briefer &middot; Why four and not one</span>
+        <p>
+          Each source has a characteristic blind spot. The reference tree overstates,
+          listing blocks this board may not wire. The manufacturer's kernel understates,
+          omitting working hardware they had no use for. The running system only reports
+          what its drivers claimed. The silicon answers precisely, but only where you
+          already thought to ask.
+        </p>
+        <p>
+          The concrete case: the manufacturer's kernel contains no trace of the standard
+          ARM drivers for GPIO, SPI or the clock — they wrote their own. Consulting only
+          that kernel, you would conclude those parts need custom drivers. Ask the
+          silicon and it reports standard ARM designs that Linux has supported for years.
+        </p>
+      </aside>
+
+      <h3>What question one produced</h3>
+      <p>
+        The vendor header gave a complete memory map. Abridged, grouped by what it means
+        for us:
+      </p>
+
+      <div class="panel">
+        <div class="panel-head">Hi3531 peripheral map (excerpt)</div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Address</th><th>Block</th><th>Meaning for the port</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>0x10000000</td><td class="name">NAND controller</td><td class="note">Flash storage — read-only would be useful</td></tr>
+              <tr><td>0x10010000</td><td class="name">SPI NOR</td><td class="note">Holds the bootloader</td></tr>
+              <tr><td>0x10020000</td><td class="name">SDIO</td><td class="note">SD card interface</td></tr>
+              <tr><td>0x10080000</td><td class="name">SATA</td><td class="note">Already working</td></tr>
+              <tr><td>0x100a0000</td><td class="name">USB OHCI</td><td class="note">USB 1.1 host</td></tr>
+              <tr><td>0x100b0000</td><td class="name">USB EHCI</td><td class="note">USB 2.0 host</td></tr>
+              <tr><td>0x100d0000</td><td class="name">DMA controller</td><td class="note">Bulk memory movement</td></tr>
+              <tr><td>0x101c0000</td><td class="name">Ethernet</td><td class="note">Already working</td></tr>
+              <tr><td>0x20060000</td><td class="name">RTC</td><td class="note">Real-time clock</td></tr>
+              <tr><td>0x20080000</td><td class="name">UART0–3</td><td class="note">Four serial ports; one in use</td></tr>
+              <tr><td>0x200c0000</td><td class="name">SPI</td><td class="note">Peripheral bus</td></tr>
+              <tr><td>0x200d0000</td><td class="name">I2C</td><td class="note">Peripheral bus</td></tr>
+              <tr><td>0x20150000</td><td class="name">GPIO ×19</td><td class="note">Nineteen banks of general-purpose pins</td></tr>
+              <tr><td>0x20580000</td><td class="name">Video capture</td><td class="note">Proprietary</td></tr>
+              <tr><td>0x20620000</td><td class="name">Video encoder</td><td class="note">Proprietary</td></tr>
+              <tr><td>0x20800000</td><td class="name">PCIe ×2</td><td class="note">Expansion bus</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <h3>What question two produced</h3>
+      <p>
+        The vendor's driver files name the support chips soldered next to the SoC. These
+        are not in the chip at all, which is exactly why the memory map alone would miss
+        them:
+      </p>
+      <ul>
+        <li><code>ds1307</code> — a battery-backed clock chip on the I2C bus</li>
+        <li><code>tlv_320aic31</code> — a Texas Instruments audio codec</li>
+        <li><code>adv_7179</code> — an Analog Devices video output encoder</li>
+        <li><code>nvp1918</code>, <code>tw2865</code>, <code>tw2960</code> — analogue camera input decoders</li>
+        <li><code>sil9024</code> — a Silicon Image HDMI transmitter</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>The trick: asking the silicon directly</h2>
+      <p>
+        The memory map says <em>where</em> a block is, but not <em>what</em> it is. Knowing
+        there is "an SPI controller at <code>0x200c0000</code>" does not tell you whether
+        Linux already has a driver for it.
+      </p>
+      <p>
+        There is a shortcut, and it rests on how this chip was built. A company like
+        HiSilicon does not design every block from scratch. It licenses standard designs
+        from ARM — called <strong>PrimeCell</strong> peripherals — and wires them together.
+        We had already seen the pattern: the serial port is ARM's PL011, the timer is
+        ARM's SP804, the storage controller is standard AHCI. All worked with drivers
+        already in Linux.
+      </p>
+
+      <aside class="brief">
+        <span class="tag">Briefer &middot; Registers and memory-mapped I/O</span>
+        <p>
+          Hardware blocks are controlled through <strong>registers</strong> — small
+          numbered storage slots that appear to software as ordinary memory addresses.
+          Writing a value to one changes the hardware's behaviour; reading one reports
+          its state.
+        </p>
+        <p>
+          So "the GPIO controller is at <code>0x20150000</code>" means its first register
+          sits at that address, with the rest following. The Linux tool
+          <code>devmem</code> reads and writes these addresses directly, which is
+          invaluable during bring-up.
+        </p>
+      </aside>
+
+      <p>
+        Every ARM PrimeCell block is required to identify itself. At the very top of its
+        register window sit two sets of read-only registers:
+      </p>
+      <ul>
+        <li><strong>Peripheral ID</strong> at offset <code>0xFE0</code>–<code>0xFEC</code> — encodes the part number</li>
+        <li><strong>Cell ID</strong> at offset <code>0xFF0</code>–<code>0xFFC</code> — always reads <code>0xB105F00D</code></li>
+      </ul>
+      <p>
+        That constant is a joke that has shipped in billions of devices: read as letters,
+        <code>B105F00D</code> spells <em>BLOOD FOOD</em>. Its purpose is serious, though —
+        if you read those four bytes and get that value, you are definitely looking at a
+        PrimeCell block.
+      </p>
+
+      <h3>Worked example: validating the method</h3>
+      <p>
+        Before trusting a technique on unknowns, point it at something whose answer you
+        already know. UART0 is the serial console this project has used since day one, and
+        it is documented as a PL011:
+      </p>
+
+      <div class="panel">
+        <div class="panel-head">Control test &middot; UART0 at 0x20080000</div>
+        <div class="scroll">
+<pre><span class="c"># read Peripheral ID 0, Peripheral ID 1, and Cell ID 0</span>
+devmem 0x20080fe0 32   <span class="c">→</span> <span class="ok">0x00000011</span>
+devmem 0x20080fe4 32   <span class="c">→</span> <span class="ok">0x00000010</span>
+devmem 0x20080ff0 32   <span class="c">→</span> <span class="ok">0x0000000D</span></pre>
+        </div>
+      </div>
+
+      <p>Decoding it. The part number is split across two registers:</p>
+
+      <div class="panel">
+        <div class="panel-head">Decoding the part number</div>
+        <div class="scroll">
+<pre>PID1 = 0x10  →  low 4 bits = 0x0   → part number bits [11:8]
+PID0 = 0x11  →  all 8 bits = 0x11  → part number bits  [7:0]
+
+part number = (0x0 &lt;&lt; 8) | 0x11 = <span class="hit">0x011</span>  →  <span class="hit">PL011</span>
+
+CID0 = 0x0D  →  first byte of 0xB105F00D  ✓ genuine PrimeCell</pre>
+        </div>
+      </div>
+
+      <p>
+        The method returns the right answer on a known block, so it can be trusted on
+        unknown ones.
+      </p>
+
+      <h3>Worked example: an unknown block</h3>
+      <p>
+        The GPIO controller at <code>0x20150000</code> had never been touched by this port.
+        Same three reads:
+      </p>
+
+      <div class="panel">
+        <div class="panel-head">Unknown &middot; GPIO bank 0 at 0x20150000</div>
+        <div class="scroll">
+<pre>devmem 0x20150fe4 32   <span class="c">→</span> 0x00000010   <span class="c">PID1</span>
+devmem 0x20150fe0 32   <span class="c">→</span> 0x00000061   <span class="c">PID0</span>
+devmem 0x20150ff0 32   <span class="c">→</span> 0x0000000D   <span class="c">CID0 ✓</span>
+
+part number = (0x0 &lt;&lt; 8) | 0x61 = <span class="hit">0x061</span>  →  <span class="hit">PL061</span></pre>
+        </div>
+      </div>
+
+      <p>
+        Linux has shipped a <code>gpio-pl061</code> driver for years. All nineteen GPIO
+        banks become available by adding a device tree entry — no new driver code at all.
+      </p>
+    </section>
+
+    <section>
+      <h2>Results</h2>
+      <p>Four blocks probed, three identified, in roughly a minute:</p>
+
+      <div class="panel">
+        <div class="panel-head">Identification results</div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Block</th><th>Address</th><th>ID</th><th>Verdict</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="name">UART0</td><td>0x20080000</td><td>0x011</td><td class="note">PL011 — control test, as expected</td></tr>
+              <tr><td class="name">GPIO ×19</td><td>0x20150000</td><td>0x061</td><td class="note">PL061 — driver exists</td></tr>
+              <tr><td class="name">SPI</td><td>0x200c0000</td><td>0x022</td><td class="note">PL022 — driver exists</td></tr>
+              <tr><td class="name">RTC</td><td>0x20060000</td><td>0x031</td><td class="note">PL031 — driver exists</td></tr>
+              <tr><td class="name">DMA</td><td>0x100d0000</td><td>0x000</td><td class="note">Inconclusive — see below</td></tr>
+              <tr><td class="name">I2C</td><td>0x200d0000</td><td>0x000</td><td class="note">Inconclusive — see below</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p>
+        The two that read all zeros are ambiguous rather than failed. A block whose clock
+        is switched off reads as zeros everywhere — we saw exactly that with SATA, where
+        every register read <code>0x00000000</code> until we enabled its clock, after which
+        the chip identified itself immediately. So these two are either asleep or not
+        PrimeCell designs. Distinguishing the cases needs more work.
+      </p>
+
+      <aside class="brief">
+        <span class="tag">Briefer &middot; Why a sleeping block reads as zero</span>
+        <p>
+          To save power, chips gate the clock signal to blocks that are not in use.
+          Without a clock, the registers cannot respond, and the bus returns zeros rather
+          than an error.
+        </p>
+        <p>
+          This is a genuine trap: it looks identical to "there is nothing here." During
+          the SATA work it cost real time before the clock-enable register turned out to
+          be the entire problem.
+        </p>
+      </aside>
+    </section>
+
+    <section>
+      <h2>What the running firmware revealed</h2>
+      <p>
+        The last source is the factory firmware itself. Booting it and reading two files
+        produced more correction than everything else combined.
+      </p>
+
+      <div class="panel">
+        <div class="panel-head">Vendor firmware &middot; /proc/interrupts (excerpt)</div>
+        <div class="scroll">
+<pre>          CPU0      CPU1
+ 35:     24941         0   System Timer      <span class="c">already in use</span>
+ 40:      2496         0   uart-pl011        <span class="c">already in use</span>
+ 61:     22873         0   HiSilicon Dmac    <span class="hit">real, and busy</span>
+ 63:         0         0   ehci_hcd:usb1     <span class="hit">USB 2.0</span>
+ 64:         0         0   ohci_hcd:usb2     <span class="hit">USB 1.1</span>
+ 67:         0         0   hi_mci            <span class="hit">SD / MMC</span>
+ 68:     19606         0   ahci              <span class="ok">confirms our guess</span>
+119:       543         0   stmmaceth         <span class="ok">confirms our guess</span></pre>
+        </div>
+      </div>
+
+      <p>Four things fell out of that, in rough order of significance.</p>
+
+      <h3>The processor has two cores</h3>
+      <p>
+        There are two columns in that table, not one. The factory kernel schedules work
+        across two processors; our port declares a single one and is built with
+        multiprocessing switched off. We have been running on half the machine since the
+        beginning, and no amount of reading the reference source would have said so.
+      </p>
+
+      <h3>The recorder contains three of these chips</h3>
+      <p>
+        The PCIe bus — normally where you would find an add-in card — reports two devices,
+        both identifying as HiSilicon part 3531. They are further copies of the same SoC,
+        wired to the main one to handle additional camera channels. That explains a set of
+        "host" and "slave" driver files in the factory filesystem that had not made sense
+        before.
+      </p>
+
+      <h3>USB really does use the standard drivers</h3>
+      <p>
+        The suspicion is now confirmed in the strongest possible form: the firmware
+        registers stock Linux <code>ehci_hcd</code> and <code>ohci_hcd</code> underneath a
+        thin manufacturer-specific wrapper — precisely the arrangement our storage driver
+        already uses. And we now have the interrupt numbers, which previously would have
+        had to be guessed.
+      </p>
+
+      <h3>Both earlier guesses were right</h3>
+      <p>
+        Two interrupt numbers in this port were derived by arithmetic rather than read
+        from any document — storage and networking. The factory firmware confirms both.
+        That is worth knowing precisely because the same arithmetic can now be trusted
+        elsewhere.
+      </p>
+
+      <aside class="brief">
+        <span class="tag">Briefer &middot; Why an interrupt number matters so much</span>
+        <p>
+          An interrupt is how a device signals that it has finished work. Give the kernel
+          the wrong number and nothing fails immediately — setup succeeds, the device
+          reports itself correctly, and the first real operation then hangs forever,
+          because the completion signal arrives on a line nobody is listening to.
+        </p>
+        <p>
+          It is a nasty class of bug: everything looks healthy right up until it doesn't.
+          Reading the numbers from the running factory system removes the guesswork
+          entirely.
+        </p>
+      </aside>
+
+      <h3>And it explained the two silent blocks</h3>
+      <p>
+        The DMA and I2C windows that read as all zeros are now accounted for. DMA is real
+        and heavily used — 22,873 interrupts while we watched — so its silence was a
+        powered-down clock. The I2C hardware, by contrast, is genuinely idle: the
+        manufacturer drives I2C in software over general-purpose pins instead, so the
+        dedicated block was never switched on.
+      </p>
+    </section>
+
+    <section>
+      <h2>What is realistically achievable</h2>
+      <p>
+        Combining all four sources gives a per-capability picture. The evidence column
+        matters as much as the verdict: it records <em>which</em> source established each
+        row, and therefore how much weight it carries.
+      </p>
+
+      <div class="panel">
+        <div class="panel-head">Capability survey &middot; sorted by effort</div>
+        <div class="scroll">
+          <table class="survey">
+            <thead>
+              <tr>
+                <th>Capability</th>
+                <th>What it is, and what it buys us</th>
+                <th>Location</th>
+                <th>How we know</th>
+                <th>Vendor source</th>
+                <th>Work</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="name">Second CPU core</td>
+                <td class="note">A whole additional processor. Doubles the compute available to anything that can run in parallel.</td>
+                <td>&mdash;</td>
+                <td class="note">Running firmware</td>
+                <td><span class="pill done">Yes</span><br><span class="note"><code>mach-godnet/platsmp.c</code></span></td>
+                <td><span class="pill done">Working</span> <span class="note">description only, no new code</span></td>
+              </tr>
+              <tr>
+                <td class="name">L2 cache</td>
+                <td class="note">Fast memory sitting between the processors and RAM. Speeds everything up, invisibly.</td>
+                <td>0x20700000<br>IRQ 37&ndash;39</td>
+                <td class="note">Running firmware</td>
+                <td><span class="pill easy">Partial</span><br><span class="note">architecture code only</span></td>
+                <td><span class="pill done">Config</span></td>
+              </tr>
+              <tr>
+                <td class="name">GPIO &times;19 banks</td>
+                <td class="note">Individually controllable pins. Front-panel buttons and lights, and the basis for a software-driven I2C bus.</td>
+                <td>0x20150000+</td>
+                <td class="note">Silicon ID &mdash; PL061</td>
+                <td><span class="pill no">No</span><br><span class="note">standard part; none needed</span></td>
+                <td><span class="pill done">Working</span> <span class="note">all 19 banks</span></td>
+              </tr>
+              <tr>
+                <td class="name">SPI bus</td>
+                <td class="note">A short-range bus for chips on the same board, such as the bootloader flash.</td>
+                <td>0x200c0000</td>
+                <td class="note">Silicon ID &mdash; PL022</td>
+                <td><span class="pill no">No</span><br><span class="note">standard part; none needed</span></td>
+                <td><span class="pill done">Describe</span></td>
+              </tr>
+              <tr>
+                <td class="name">Wall-clock time</td>
+                <td class="note">A battery-backed clock, so the machine knows the date at power-on. Not the on-chip part &mdash; that one is dead; see below.</td>
+                <td>I2C 0x68<br>via GPIO 12</td>
+                <td class="note">Vendor kernel + silicon</td>
+                <td><span class="pill done">Yes</span><br><span class="note">vendor loads <code>ds1307.ko</code></span></td>
+                <td><span class="pill done">Working</span> <span class="note">needed GPIO and a software I2C bus first</span></td>
+              </tr>
+              <tr>
+                <td class="name">Serial ports 2&ndash;4</td>
+                <td class="note">Three more consoles, for debugging and for talking to sub-boards.</td>
+                <td>0x20090000+<br>IRQ 9, 10</td>
+                <td class="note">Running firmware</td>
+                <td><span class="pill done">Yes</span><br><span class="note">same part as the console</span></td>
+                <td><span class="pill done">Describe</span></td>
+              </tr>
+              <tr>
+                <td class="name">Timers 3 and 4</td>
+                <td class="note">Extra hardware counters. Two are already in use and are sufficient.</td>
+                <td>0x20130000</td>
+                <td class="note">Reference tree only</td>
+                <td><span class="pill done">Yes</span><br><span class="note"><code>mach-godnet</code></span></td>
+                <td><span class="pill done">Describe</span></td>
+              </tr>
+              <tr>
+                <td class="name">USB 2.0 host</td>
+                <td class="note">Standard USB. Brings removable storage, network adapters and keyboards.</td>
+                <td>0x100b0000<br>IRQ 31</td>
+                <td class="note">Running firmware &mdash; stock driver</td>
+                <td><span class="pill done">Yes</span><br><span class="note"><code>hiusb-godnet.c</code></span></td>
+                <td><span class="pill easy">Glue</span></td>
+              </tr>
+              <tr>
+                <td class="name">USB 1.1 host</td>
+                <td class="note">Legacy USB for older devices; shares the same power-up work.</td>
+                <td>0x100a0000<br>IRQ 32</td>
+                <td class="note">Running firmware &mdash; stock driver</td>
+                <td><span class="pill done">Yes</span><br><span class="note"><code>hiusb-ohci.c</code></span></td>
+                <td><span class="pill easy">Glue</span></td>
+              </tr>
+              <tr>
+                <td class="name">Bootloader flash</td>
+                <td class="note">The 2 MiB chip holding the boot code. Read access lets us archive and inspect it safely.</td>
+                <td>0x10010000</td>
+                <td class="note">Running firmware</td>
+                <td><span class="pill done">Yes</span><br><span class="note"><code>mtd/devices/hisfc350</code></span></td>
+                <td><span class="pill easy">Glue</span></td>
+              </tr>
+              <tr>
+                <td class="name">SD / MMC slot</td>
+                <td class="note">A memory-card slot &mdash; removable storage without opening the case.</td>
+                <td>0x10020000<br>IRQ 35</td>
+                <td class="note">Vendor kernel + firmware</td>
+                <td><span class="pill done">Yes</span><br><span class="note"><code>mmc/host/himciv100</code></span></td>
+                <td><span class="pill easy">Port</span></td>
+              </tr>
+              <tr>
+                <td class="name">Main flash storage</td>
+                <td class="note">128 MiB holding the factory system. Read-only access preserves it while we study it.</td>
+                <td>0x10000000</td>
+                <td class="note">Running firmware &mdash; 5 partitions</td>
+                <td><span class="pill done">Yes</span><br><span class="note"><code>mtd/nand/hinfc300</code></span></td>
+                <td><span class="pill easy">Port</span></td>
+              </tr>
+              <tr>
+                <td class="name">Infrared receiver</td>
+                <td class="note">Decodes the handheld remote control.</td>
+                <td>0x20070000<br>IRQ 16</td>
+                <td class="note">Running firmware</td>
+                <td><span class="pill no">No</span><br><span class="note">binary module only</span></td>
+                <td><span class="pill hard">New driver</span></td>
+              </tr>
+              <tr>
+                <td class="name">DMA engine</td>
+                <td class="note">Moves blocks of memory without involving the processor, freeing it during bulk transfers.</td>
+                <td>0x100d0000<br>IRQ 29</td>
+                <td class="note">Running firmware &mdash; heavily used</td>
+                <td><span class="pill no">No</span><br><span class="note">binary module only</span></td>
+                <td><span class="pill hard">New driver</span></td>
+              </tr>
+              <tr>
+                <td class="name">Audio in / out</td>
+                <td class="note">Microphone and speaker paths through an external codec chip.</td>
+                <td>0x10030000+</td>
+                <td class="note">Vendor kernel &mdash; codec named</td>
+                <td><span class="pill no">No</span><br><span class="note">proprietary modules</span></td>
+                <td><span class="pill hard">New driver</span></td>
+              </tr>
+              <tr>
+                <td class="name">Hardware I2C</td>
+                <td class="note">A two-wire bus for small chips. Redundant: the software bus over GPIO now works and reaches the clock chip.</td>
+                <td>0x200d0000</td>
+                <td class="note">Reference tree only &mdash; unused</td>
+                <td><span class="pill no">No</span><br><span class="note">none</span></td>
+                <td><span class="pill hard">Unknown</span></td>
+              </tr>
+              <tr>
+                <td class="name">Companion chips</td>
+                <td class="note">Two further Hi3531 processors over PCIe, added to handle extra camera channels.</td>
+                <td>0x20800000</td>
+                <td class="note">Running firmware</td>
+                <td><span class="pill no">No</span><br><span class="note">proprietary modules</span></td>
+                <td><span class="pill no">Out of reach</span></td>
+              </tr>
+              <tr>
+                <td class="name">Video capture &amp; encode</td>
+                <td class="note">Turns camera signals into compressed video. The reason the box exists.</td>
+                <td>0x20580000+<br>IRQ 79&ndash;103</td>
+                <td class="note">Vendor kernel &mdash; proprietary</td>
+                <td><span class="pill no">No</span><br><span class="note">proprietary modules</span></td>
+                <td><span class="pill no">Out of reach</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p>
+        Two columns repay a careful read. <strong>How we know</strong> records which
+        source established each row: almost everything actionable came from the running
+        firmware or from asking the silicon, and the rows resting on the reference tree
+        alone are precisely the ones nothing has confirmed.
+      </p>
+      <p>
+        <strong>Vendor source</strong> is the difference between porting and inventing.
+        Where the manufacturer's own code survives &mdash; USB, the card slot, both flash
+        controllers, the second processor core &mdash; there is a working reference to
+        follow, and this project has twice found that faster and more reliable than any
+        other method. Where it does not, the work means reading compiled code or
+        experimenting on live hardware. That single distinction moved the card slot and
+        the main flash out of the &ldquo;new driver&rdquo; category entirely.
+      </p>
+
+      <p>
+        The bottom two rows deserve a blunt statement. The recorder's entire reason for
+        existing — capturing and compressing video — is precisely the part that cannot be
+        supported on a modern kernel, and the companion chips are unreachable for the same
+        reason. What this port can realistically become is a capable general-purpose ARM
+        computer with networking, storage, USB, GPIO and serial. That is a worthwhile
+        outcome, but it is not a working DVR.
+      </p>
+    </section>
+
+    <section>
+      <h2>Acting on it</h2>
+      <p>
+        The survey was written as a plan. Three of its rows have since been carried out,
+        and the results are worth recording &mdash; particularly the one that turned out
+        to be wrong.
+      </p>
+
+      <h3>The second core: free, as predicted</h3>
+      <p>
+        No driver, no new code. The factory system releases the second processor by
+        writing a start address to a specific register and nudging it awake; Linux already
+        contains that exact procedure for a related chip, so the entire change was four
+        lines of hardware description and one build setting. Both cores now run, and the
+        machine stayed stable under deliberate load on both at once while moving network
+        traffic without a single lost packet.
+      </p>
+
+      <h3>The pins: free, as predicted</h3>
+      <p>
+        All nineteen banks of general-purpose pins came up on the driver Linux already
+        ships &mdash; the payoff for having asked the silicon what they were. One small
+        local change was needed to stop the driver complaining about the absent interrupt,
+        which had produced nineteen alarming-looking warnings at every boot.
+      </p>
+
+      <h3>The clock: not free, and not where I said it was</h3>
+      <p>
+        This page previously listed the clock as a free win, on the strength of the
+        silicon reporting a standard ARM part. That was wrong in a way worth spelling out.
+      </p>
+      <p>
+        The part is there and Linux drives it happily &mdash; but its counter never moves,
+        and it ignores attempts to set it. It is powered down, in the same manner as the
+        storage controller was before we switched it on. The manufacturer's own kernel
+        settles the question: they include a driver for that part and never load it.
+      </p>
+      <p>
+        What the recorder actually uses is a separate clock chip on the board, with its
+        own battery &mdash; which matters, because the on-chip one loses its value the
+        moment the power goes off, and a machine that cannot tell you the date at power-on
+        is not much of a clock. Reaching that chip meant a chain of three things rather
+        than one entry: the pin driver, a bus synthesised in software on top of it, and
+        finally the clock chip itself.
+      </p>
+      <p>
+        Locating it needed two sources again. The manufacturer's compiled module revealed
+        <em>which two pins</em> carry the bus but not which of the nineteen banks; the
+        running board settled that, because exactly one bank had those two pins configured
+        as outputs and sitting high &mdash; the signature of an idle bus held up by
+        resistors. First attempt after that:
+      </p>
+
+      <div class="panel">
+        <div class="panel-head">First boot with the clock chip described</div>
+        <div class="scroll">
+<pre>i2c-gpio soc:i2c-gpio: using lines 612 (SDA) and 613 (SCL)
+rtc-ds1307 0-0068: registered as rtc0
+rtc-ds1307 0-0068: setting system clock to <span class="hit">2026-08-04T16:17:36 UTC</span></pre>
+        </div>
+      </div>
+
+      <p>
+        A real date, read off a battery-backed chip, on a machine that until then believed
+        every boot began in 1970. The battery has since proved good: the time survives
+        repeated cold starts, which is the only test that counts &mdash; an external clock
+        chip exists precisely to keep counting while the board has no power.
+      </p>
+
+      <aside class="brief">
+        <span class="tag">Briefer &middot; What &ldquo;powered down&rdquo; means here</span>
+        <p>
+          Digital logic only draws meaningful power when it changes state, and change is
+          driven by a clock signal. Switch that signal off and the circuit freezes,
+          consuming almost nothing. Chips do this constantly, because any given product
+          uses a fraction of what the silicon offers.
+        </p>
+        <p>
+          The trap is that a frozen block is indistinguishable from an absent one: reads
+          return zeros, writes vanish, and no error is reported. This project has been
+          caught by it twice. The rule that emerged: on hardware like this,
+          <em>reads as zero</em> means &ldquo;ask why&rdquo;, never &ldquo;not
+          there&rdquo;.
+        </p>
+      </aside>
+    </section>
+
+    <section>
+      <h2>Recommendation</h2>
+      <p>Three next steps, ordered by value earned per hour spent:</p>
+
+      <p>
+        With the first two carried out, the queue is now:
+      </p>
+
+      <ol class="steps">
+        <li>
+          <div>
+            <h4>USB</h4>
+            <p>
+              The highest remaining payoff. The uncertainty is largely gone: the factory
+              system runs standard Linux drivers under a thin wrapper, we have the
+              interrupt numbers, and the manufacturer's source for this exact chip variant
+              survives &mdash; the same file shape that made storage work. A USB-to-serial
+              adapter is currently plugged into the rear socket, so success has an
+              unambiguous test: a new serial port appears.
+            </p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h4>The second-level cache</h4>
+            <p>
+              A speed improvement the port does not yet take, and another that needs
+              description rather than code.
+            </p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h4>The memory-card slot</h4>
+            <p>
+              Genuine work &mdash; Linux has no driver for this controller &mdash; but the
+              manufacturer's implementation is available to port from, which is a very
+              different proposition from writing one blind.
+            </p>
+          </div>
+        </li>
+      </ol>
+
+      <h3>Already done</h3>
+      <ol class="steps">
+        <li>
+          <div>
+            <h4>Turn on the second core</h4>
+            <p>
+              The cheapest real gain available: no driver to write, no hardware to
+              investigate, and it potentially doubles available processing. It is only
+              switched off because the port began as a minimal proof that the board would
+              boot at all, and nothing since has revisited it.
+            </p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h4>The pins, and then the clock</h4>
+            <p>
+              The pins were free as expected. The clock was not: the on-chip part is
+              powered down and unusable, and real timekeeping turned out to sit on a
+              separate battery-backed chip reachable only through a software bus built on
+              those pins. Doing them in this order was accidental but necessary.
+            </p>
+          </div>
+        </li>
+      </ol>
+
+      <h3>The transferable lesson</h3>
+      <p>
+        An earlier version of this page said the reference source tree answered the
+        question "what is inside the chip." It does not. It answers "what does this
+        family of chips generally contain" — a related but weaker claim, and the gap
+        between the two is where a second processor core sat unnoticed.
+      </p>
+      <p>
+        Every source here is authoritative about something and misleading about something
+        else. The reference tree lists blocks this board may not wire. The manufacturer's
+        kernel omits hardware they had no use for, which would have led us to write
+        drivers Linux already ships. The running system reports only what its drivers
+        claimed. The silicon answers precisely, and says nothing at all when a block is
+        powered down.
+      </p>
+      <p>
+        So the practical method is not to find the best source. It is to consult all of
+        them and pay attention to where they disagree — because a disagreement is not
+        noise, it is the interesting part. Every significant finding on this page came
+        from exactly that.
+      </p>
+    </section>
+
+    <section class="sources">
+      <h2>Sources</h2>
+
+      <h3>Vendor material</h3>
+      <ul>
+        <li>
+          <a href="https://github.com/OpenIPC/linux">OpenIPC Linux 3.0.8 tree</a>
+          <span class="what">— a reference mirror; branch <code>hisilicon-hi3520dv200-3.0.8</code>, commit <code>a3bfde54</code>. Describes the chip family, not this board</span>
+        </li>
+        <li>
+          <span>Factory firmware, read at runtime</span>
+          <span class="what">— <code>/proc/interrupts</code>, <code>/proc/iomem</code>, <code>/proc/cpuinfo</code> on the original system; the source of every correction above</span>
+        </li>
+        <li>
+          <a href="https://github.com/OpenIPC/linux/blob/a3bfde54cdcf641cc061206f5d2ba6e9ddbad324/arch/arm/mach-godnet/include/mach/platform.h">mach-godnet platform.h</a>
+          <span class="what">— the peripheral memory map used throughout</span>
+        </li>
+      </ul>
+
+      <h3>ARM PrimeCell documentation</h3>
+      <ul>
+        <li><a href="https://developer.arm.com/documentation/ddi0183/latest/">PL011 UART</a> <span class="what">— including the ID register layout</span></li>
+        <li><a href="https://developer.arm.com/documentation/ddi0190/latest/">PL061 GPIO</a></li>
+        <li><a href="https://developer.arm.com/documentation/ddi0194/latest/">PL022 SPI</a></li>
+        <li><a href="https://developer.arm.com/documentation/ddi0224/latest/">PL031 RTC</a></li>
+        <li><a href="https://developer.arm.com/documentation/ddi0271/latest/">SP804 timer</a></li>
+        <li><a href="https://developer.arm.com/documentation/ddi0270/latest/">SP805 watchdog</a></li>
+      </ul>
+
+      <h3>Linux and standards</h3>
+      <ul>
+        <li><a href="https://www.kernel.org/">kernel.org</a> <span class="what">— mainline source; this port targets 6.18.42 LTS</span></li>
+        <li><a href="https://elixir.bootlin.com/linux/latest/source/drivers/gpio/gpio-pl061.c">gpio-pl061 driver</a> <span class="what">— the existing driver the GPIO finding unlocks</span></li>
+        <li><a href="https://www.devicetree.org/">devicetree.org</a> <span class="what">— specification and introduction</span></li>
+        <li><a href="https://wiki.debian.org/ArmHardFloatPort">Debian ArmHardFloatPort</a> <span class="what">— the armhf baseline this board sits exactly on</span></li>
+      </ul>
+    </section>
+
+    <footer>
+      Field notes from an in-progress port. Every measurement here was taken on the
+      device; nothing was written to the recorder's disk or flash.
+    </footer>
+
+  </div>
+</div>

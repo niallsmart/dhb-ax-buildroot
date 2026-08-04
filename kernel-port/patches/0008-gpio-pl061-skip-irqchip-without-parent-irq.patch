@@ -1,0 +1,47 @@
+From: DHB-AX local port <local@invalid>
+Subject: [LOCAL ONLY] gpio: pl061: skip irqchip setup when there is no parent irq
+
+The driver already tolerates a missing parent interrupt, logging "IRQ support
+disabled" and continuing.  It then registers the irqchip anyway, so
+gpiochip_add_data() calls irq_set_chained_handler_and_data() with IRQ 0 and
+warns with a backtrace.
+
+On this board none of the nineteen PL061 banks has an interrupt described --
+the vendor kernel does not use GPIO interrupts either -- so every bank
+produced a backtrace at boot.  Only register the irqchip when a parent
+interrupt actually exists.
+
+This is a local hardware-enablement patch and is not for submission; an
+upstream fix would want to distinguish "no interrupt described" from "failed
+to get one".
+---
+diff --git a/drivers/gpio/gpio-pl061.c b/drivers/gpio/gpio-pl061.c
+--- a/drivers/gpio/gpio-pl061.c
++++ b/drivers/gpio/gpio-pl061.c
+@@ -346,15 +346,17 @@
+ 	pl061->parent_irq = irq;
+ 
+ 	girq = &pl061->gc.irq;
+-	gpio_irq_chip_set_chip(girq, &pl061_irq_chip);
+-	girq->parent_handler = pl061_irq_handler;
+-	girq->num_parents = 1;
+-	girq->parents = devm_kcalloc(dev, 1, sizeof(*girq->parents),
+-				     GFP_KERNEL);
+-	if (!girq->parents)
+-		return -ENOMEM;
+-	girq->parents[0] = irq;
+-	girq->default_type = IRQ_TYPE_NONE;
++	if (irq) {
++		gpio_irq_chip_set_chip(girq, &pl061_irq_chip);
++		girq->parent_handler = pl061_irq_handler;
++		girq->num_parents = 1;
++		girq->parents = devm_kcalloc(dev, 1, sizeof(*girq->parents),
++					     GFP_KERNEL);
++		if (!girq->parents)
++			return -ENOMEM;
++		girq->parents[0] = irq;
++		girq->default_type = IRQ_TYPE_NONE;
++	}
+ 	girq->handler = handle_bad_irq;
+ 
+ 	ret = devm_gpiochip_add_data(dev, &pl061->gc, pl061);

@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Minimal RAM-only bring-up: CPU, GIC, SP804 timer, PL011 UART0 only.
+ */
+/dts-v1/;
+
+#include "hi3531-dhb-ax.dtsi"
+
+/ {
+	model = "Shenzhen TVT DHB_AX V1.2 DVR (minimal)";
+};

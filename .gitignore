@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# Regenerable source trees, ~4 GB.
+# Recreate with kernel-port/scripts/bootstrap-sources.sh
+kernel/
+vendor/
+
+# Build outputs. Recreate with kernel-port/build.sh
+kernel-port/build/
+
+# Large binary assets, kept locally but not in source control.
+#   backups/    verified flash images -- irreplaceable, back up separately
+#   rootfs/     extracted vendor root filesystem
+#   pcb/        board photographs
+#   vm-assets/  vendor tooling VM
+backups/
+rootfs/
+pcb/
+vm-assets/
