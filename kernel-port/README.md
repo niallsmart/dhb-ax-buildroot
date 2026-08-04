@@ -773,6 +773,79 @@ The last one is worth the trouble because the vendor kernel contains no
 hardware reports exactly those part numbers. Consulting only the vendor kernel
 would have led to writing drivers that already exist in mainline.
 
+## Memory: the board has 512 MiB, not 256
+
+The device tree declared 256 MiB and reserved 32 of it, leaving the kernel
+220 MB. The board actually carries **512 MiB** and the port now uses all of
+it: `MemTotal: 513148 kB`, a single region `80000000-9fffffff`.
+
+### How it was established
+
+Two Nanya `NT5CB128M16` packages are fitted, at U1 and U2 either side of the
+SoC. Each is 128M x 16 bits = 2 Gbit = 256 MB, so 512 MB in the usual two-x16
+arrangement giving a 32-bit bus.
+
+Probing confirmed it, and the first attempt was unsound in a way worth
+recording. Writing distinct patterns to a handful of addresses and reading
+them back proves little: with the MMU on, four words are four cache lines and
+the test may never reach DRAM at all. The reads must be forced out of cache:
+
+```text
+mw.l 0x9f000000 44444444
+mw.l 0x84000000 deadbeef 0x20000    512 KiB, 16x the L1 D-cache
+md.l 0x9f000000 1        -> 44444444    survived eviction, so it is real DRAM
+md.l 0x8f000000 1        -> 80808080    different, so no alias at 256 MiB
+```
+
+The wrap is at exactly `0x20000000`: `0xa8000000` and `0x88000000` resolve to
+the same storage. **The device tree must declare no more than 512 MiB** —
+beyond that Linux would be handed aliased addresses and corrupt itself.
+
+U-Boot reports `DRAM: 256 MiB`, which is a hardcoded constant in the vendor
+board file rather than a measurement. It should not be trusted.
+
+### The trap: ATAGs silently override the device tree
+
+The first 512 MiB build changed nothing — still 220 MB. `atags_to_fdt.c`
+copies U-Boot's `ATAG_MEM` into the FDT, **overwriting the memory node**, so
+the vendor's hardcoded 256 MiB beat the device tree. The memory declaration
+here had been decorative for the whole project.
+
+Fixed by setting `CONFIG_ARM_ATAG_DTB_COMPAT=n`. Nothing is lost:
+`CONFIG_CMDLINE_FORCE` already ignores the ATAG command line, and the
+appended-DTB support that matters is the separate `CONFIG_ARM_APPENDED_DTB`.
+
+### No memory is reserved
+
+The former 32 MiB reserve at `0x8e000000` is gone. It was described as the
+vendor's media carveout, but the vendor's carveout is everything above
+`0x8e000000` — 288 MiB on a 512 MiB board. The 32 MiB figure was an artefact
+of believing the board had 256 MiB, and this port already claims 256 MiB
+inside that same region.
+
+It also guarded the wrong place. U-Boot's video buffers at `0xc0000000` and
+`0xc1000000` alias onto `0x80000000` and `0x81000000` with the 512 MiB wrap —
+the bottom of DRAM, where the kernel loads. Nothing ever protected those, and
+video output is read-only DMA.
+
+### Validation
+
+With the reserve removed and 462 MB pinned in tmpfs, so buffers must come from
+the previously unavailable range:
+
+```text
+450 MiB filled and checksummed   41a5c18732255022b922da40ad5a7edb   matches
+same, re-checked after 90 s      41a5c18732255022b922da40ad5a7edb   unchanged
+network flood, 20000 packets     0% loss
+memory re-checked after flood    41a5c18732255022b922da40ad5a7edb   unchanged
+USB DMA, 128 MiB read twice      a9b9e693c998c54e5dfaf02c875ce161   identical
+SATA DMA, 128 MiB read twice     78360580f94b4e084c1ae5e3bb04cd23   identical
+kernel log                       no new warnings
+```
+
+The 90-second re-check matters: an immediate checksum would not catch a
+periodic writer such as a display refresh. Nothing is writing there.
+
 ## SMP, GPIO, I2C and the clock
 
 All verified on hardware 2026-08-04.

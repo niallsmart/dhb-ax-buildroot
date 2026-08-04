@@ -53,22 +53,44 @@
 		};
 	};
 
+	/*
+	 * 512 MiB, not the 256 MiB the vendor declares.  Two Nanya
+	 * NT5CB128M16 at U1 and U2, 256 MB each, confirmed by reading the
+	 * packages and by probing: a pattern written at 0x9f000000 survives a
+	 * cache-evicting 512 KiB write elsewhere, so it is real DRAM rather
+	 * than a cache hit, and 0xa8000000 aliases onto 0x88000000, placing
+	 * the wrap at exactly 0x20000000.
+	 *
+	 * The vendor's "DRAM: 256 MiB" is a hardcoded constant in their U-Boot
+	 * board file, not a measurement.
+	 */
 	memory@80000000 {
 		device_type = "memory";
-		reg = <0x80000000 0x10000000>;
+		reg = <0x80000000 0x20000000>;
 	};
 
-	reserved-memory {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges;
-
-		/* Keep the stock firmware's upper 32 MiB media carveout reserved. */
-		media@8e000000 {
-			reg = <0x8e000000 0x02000000>;
-			no-map;
-		};
-	};
+	/*
+	 * No reserved-memory node, deliberately.
+	 *
+	 * Earlier revisions reserved 32 MiB at 0x8e000000, described as "the
+	 * stock firmware's media carveout".  That description was wrong on two
+	 * counts.  The vendor passes mem=224M, so their carveout is everything
+	 * above 0x8e000000 -- 288 MiB on a 512 MiB board, not 32 MiB.  The
+	 * 32 MiB figure was an artefact of believing the board had 256 MiB.
+	 * And this port already claims 0x90000000-0x9fffffff, which is inside
+	 * that same vendor region, and has passed sustained DMA tests there.
+	 *
+	 * The reserve also protected the wrong place.  U-Boot's video buffers
+	 * sit at 0xc0000000 and 0xc1000000, which with the 512 MiB wrap alias
+	 * onto 0x80000000 and 0x81000000 -- the bottom of DRAM, where the
+	 * kernel itself loads.  Nothing has ever guarded those, and video
+	 * output is read-only DMA, so nothing needs to.
+	 *
+	 * Verified by filling nearly all of RAM with a known pattern and
+	 * checksumming it, which covers this range specifically.  If a future
+	 * change makes something write here, that test is how it will be
+	 * caught.
+	 */
 
 	peripheral_clk: clock-155mhz {
 		compatible = "fixed-clock";
