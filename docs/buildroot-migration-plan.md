@@ -156,6 +156,7 @@ the `pre-buildroot` build.
 | Check | Expected |
 |---|---|
 | Boots to shell over TFTP | BusyBox prompt on the serial console |
+| Memory | `MemTotal` ~513,148 kB (~501 MiB); boot line reads `/524288K` |
 | Both cores | `/proc/cpuinfo` reports 2; IPI counters advance on CPU1 |
 | Ethernet | link up at 1 Gbps; 20000-packet flood at 0% loss |
 | SATA | port multiplier enumerates; `sda` with 4 partitions |
@@ -190,7 +191,7 @@ not two. The `pre-buildroot` tag still contains it if it is ever wanted, and
    export.
 
 Size is **not** a reason either way, contrary to an earlier claim in this
-document. The board has 224 MiB usable, the current image is about 4 MiB, and
+document. The board has 501 MiB usable, the current image is about 4 MiB, and
 the Stage 4 tools plausibly add 8-12 MiB compressed. There is no pressure at
 this scale, and the fast-iteration benefit is largely already banked: NFS is
 mounted at `/mnt` and modules are pushed over it today.
