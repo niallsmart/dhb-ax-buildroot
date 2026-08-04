@@ -115,7 +115,8 @@ configuring the kernel.
 ### Stage 3 — kernel from Buildroot
 
 Move the kernel config, DTS and patches under `board/`. Configure the
-appended-DTB uImage with the load and entry address `0x80008000`.
+appended-DTB uImage with the load and entry address `0x80008000`. One
+defconfig only — see Decisions taken.
 
 *Acceptance:* the produced `uImage` boots to a shell over TFTP and passes the
 full check list. Compare against the `pre-buildroot` build.
@@ -167,6 +168,33 @@ the `pre-buildroot` build.
 | Serial rescue | BREAK then a sysrq key responds |
 | Boot log | no `WARNING`, `BUG:` or `Oops` |
 
+## Decisions taken
+
+**The `minimal` variant is dropped.** It was the original proof that the board
+boots and nothing has used it since Ethernet worked. One Buildroot defconfig,
+not two. The `pre-buildroot` tag still contains it if it is ever wanted, and
+`kernel-port/` on `main` keeps building it until Stage 6.
+
+**NFS root is deferred, not rejected.** Three reasons:
+
+1. *One variable at a time.* Each stage validates against `pre-buildroot`
+   numbers. Changing the root filesystem model during the migration would mean
+   a failed check has two possible causes.
+2. *It changes the failure model.* The board currently boots a self-contained
+   RAM image, so a network failure still leaves a usable shell. With NFS root
+   a network failure is a dead system -- and the thing needing debugging is
+   the network.
+3. *Deferring costs nothing.* Buildroot assembles `target/` and then packages
+   it, so the directory is available for NFS export whether or not an
+   initramfs is built. Adding NFS root later is a boot-argument change plus an
+   export.
+
+Size is **not** a reason either way, contrary to an earlier claim in this
+document. The board has 224 MiB usable, the current image is about 4 MiB, and
+the Stage 4 tools plausibly add 8-12 MiB compressed. There is no pressure at
+this scale, and the fast-iteration benefit is largely already banked: NFS is
+mounted at `/mnt` and modules are pushed over it today.
+
 ## Risks
 
 **The migration stalls half-done.** Mitigated by staging: every stage leaves a
@@ -192,10 +220,5 @@ exact known-good tree. Nothing on this branch touches the DVR.
   vendor U-Boot expects — zImage with DTB appended, wrapped in a legacy uImage
   at `0x80008000`? If not, a post-image script reproduces what
   `build-in-container.sh` does today.
-- Should the two variants (`minimal`, `ethernet`) remain? The minimal variant
-  was the original proof the board boots and is now a fallback that nothing
-  uses. Two Buildroot defconfigs would carry it forward; dropping it removes a
-  maintenance burden and a safety net at the same time.
-- Is an NFS-mounted root worth adding alongside the initramfs, now that
-  networking is reliable? It would remove the size pressure that currently
-  argues against including larger tools.
+- Does the pinned Buildroot need a post-image script to match the vendor
+  U-Boot's expectations, or do the built-in options suffice?
