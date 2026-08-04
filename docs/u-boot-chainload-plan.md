@@ -4,8 +4,9 @@ Status: **plan only.** Nothing here has been built or run, and nothing has
 been written to the DVR. Last updated 2026-08-04.
 
 Companion to `investigation.md`, which holds the hardware survey, flash
-layout and backup record, and to `../kernel-port/README.md`, which holds the
-Linux 6.18 bring-up.
+layout and backup record; to `binwalk-notes.md`, which covers the inspection
+tooling used to build the flash map below and where it misleads; and to
+`../kernel-port/README.md`, which holds the Linux 6.18 bring-up.
 
 The board boots vendor U-Boot 2010.06, built 2012-11-01, from SPI NOR. This
 plan reaches a current U-Boot without replacing it: the vendor bootloader
@@ -64,9 +65,10 @@ verified cold backup by counting non-`0xFF` bytes per erase block.
 | `0x050000-0x07FFFF` | 192 KB | Erased | Free |
 | `0x080000-0x09FFFF` | 128 KB | U-Boot environment | Stage 3 only |
 | `0x0A0000-0x0AFFFF` | 64 KB | Erased | Free |
-| `0x0B0000-0x0DFFFF` | 192 KB | **Vendor data — do not touch** | No |
+| `0x0B0000-0x0BFFFF` | 64 KB | Config record at `0x0BFC20` — **do not touch** | No |
+| `0x0C0000-0x0DFFFF` | 128 KB | Boot splash JPEG + zero padding — **do not touch** | No |
 | `0x0E0000-0x0EFFFF` | 64 KB | Erased | Free |
-| `0x0F0000-0x0FFFFF` | 64 KB | Vendor data (336 bytes used) | No |
+| `0x0F0000-0x0FFFFF` | 64 KB | Backup config record at `0x0FFC20` — **do not touch** | No |
 | `0x100000-0x1FFFFF` | **1 MiB** | Erased, contiguous | **Target** |
 
 The 1 MiB at `0x100000` is the staging area. A trimmed ARM U-Boot is
@@ -74,13 +76,17 @@ typically 500-800 KB, so this is sufficient with margin.
 
 ### The vendor data area
 
-`0x0B0000-0x0DFFFF` is not padding. `strings` over those blocks finds:
+Two distinct structures, both of which must survive.
+
+**Config record, `0x0BFC20`.** A 1 KB record near the end of block 11, not at
+its start — which is why a per-block occupancy count reports only 336 used
+bytes for that block:
 
 ```text
 00:18:ae:3c:a2:49      the board's real MAC address
 v1.2                   matches the board revision, DHB_AX V1.2
-0008, 1156f            product/config strings
-Exif ... www.meitu.com a JPEG, almost certainly the boot splash
+0008                   unidentified
+1156f                  0x1156F = 71,023: the splash image's length
 ```
 
 This resolves an open question in `investigation.md`. The stored U-Boot
@@ -88,9 +94,19 @@ This resolves an open question in `investigation.md`. The stored U-Boot
 uses `00:18:AE:3C:A2:49`. The real address lives here, in vendor data read by
 the application rather than by U-Boot.
 
-Overwriting this region would lose the board's identity. It is present in the
-verified backup, so the loss is recoverable, but there is no reason to go
-near it.
+**The record is duplicated.** An identical copy sits at `0x0FFC20` in block
+15; the two 1 KB ranges have matching SHA-1. A redundant pair is what you
+write when the data must survive a power cut mid-update, which is a further
+argument for leaving both alone.
+
+**Boot splash, `0x0C0000-0x0D156E`.** A 71,023-byte Exif JPEG, 480x300,
+`software=www.meitu.com`. The remainder of blocks 12-13 is padded with `0x00`
+rather than erased to `0xFF`, so an occupancy count reports those blocks as
+nearly full.
+
+Overwriting any of this would lose the board's identity and its logo. All of
+it is present in the verified backup, so the loss is recoverable, but there is
+no reason to go near it.
 
 ## Mechanism
 
@@ -198,7 +214,18 @@ case from terminal to inconvenient.
 
 ## How the flash map was measured
 
-Read-only, from the backup, on the Mac. Reproducible:
+Read-only, from the backup, on the Mac. Tooling caveats are in
+`binwalk-notes.md`; the one that matters here:
+
+> The binwalk in `PATH` (Rust 3.1.0) **did not find the splash JPEG** in this
+> image. It reports one result for the whole 2 MiB. A region that a signature
+> scanner calls empty is not thereby empty — this map was built by counting
+> non-`0xFF` bytes, not by asking a tool what it recognised.
+
+Before erasing anything, verify the target range with the occupancy loop below
+and confirm by eye with `hexdump`. Do not rely on a scanner's silence.
+
+Reproducible:
 
 ```sh
 cd backups/2026-08-03/spi-nor

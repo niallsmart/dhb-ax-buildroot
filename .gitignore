@@ -18,3 +18,9 @@ backups/
 rootfs/
 pcb/
 vm-assets/
+
+# Content extracted from vendor firmware. Kept locally for analysis, not
+# redistributed: it is the manufacturer's copyrighted material, the same
+# reason backups/ and rootfs/ are excluded.
+logo.jpeg
+*.bin
