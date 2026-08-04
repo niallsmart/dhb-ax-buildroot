@@ -483,6 +483,68 @@ resume link` for the four empty multiplier slots, which are expected.
 
 Nothing in this tree has written to the disk.
 
+### Populating the unused drive bays — notes, not yet acted on
+
+The board has ten SATA positions and two fitted connectors. Whether the other
+three ports on the *fitted* multiplier could be brought into use was assessed
+from photographs (`pcb/PCB.heic`); this records the conclusion so it does not
+have to be re-derived.
+
+**What is missing.** Every unpopulated position lacks *both* the connector and
+its AC coupling capacitors. The cap pads are bare throughout: `C539`, `C542`,
+`C546`, `C561` at SATA1/2; `C359`, `C360` at SATA5/6; `C242`, `C243`, `C249`,
+`C251`, `C549`, `C550`, `C560`, `C562` at SATA7/8; `C541`, `C544`, `C552`,
+`C563`, `C543`, `C547`, `C556`, `C558` at SATA9/10. The capacitors are not
+optional — SATA requires series AC coupling on the differential pairs, and a
+link will not train without them.
+
+Two useful negatives: nothing *else* around those footprints is unpopulated —
+no missing ESD arrays or termination networks — and the footprints are intact
+and tinned. The BOM difference between board variants looks like exactly
+"connectors plus capacitors".
+
+Each position appears to carry four capacitor pads in two groups of two,
+implying both differential pairs are coupled. Confirm by counting the caps on
+a fitted port rather than trusting a photograph; likewise read the value off a
+fitted one, though SATA coupling caps are typically 10 nF.
+
+**So the work would be** roughly three connectors and twelve capacitors, all
+standard hand-solderable parts — *if* two assumptions hold.
+
+**Assumption 1: the port mapping.** SATA *n* maps to multiplier port *n-1*.
+This reproduces every link-up and link-down libata reports, but it is an
+inference. A plausible alternative is that the two multipliers were intended
+to split the positions odd/even, in which case some of SATA1, SATA2 and SATA5
+belong to the multiplier that is *not* fitted, and populating them would
+achieve nothing.
+
+*Test, and it is free:* put a drive in the empty fitted connector, SATA4. If
+it enumerates as `ata2.03` the mapping is confirmed. This uses hardware
+already to hand and needs no rework.
+
+**Assumption 2: the differential pairs are routed.** Pads and silkscreen
+exist, which strongly suggests a shared PCB across variants with only the BOM
+differing — the usual arrangement — but the traces are on inner layers and no
+photograph can settle it.
+
+*Test:* because the capacitors sit in series, check continuity in two hops —
+JMB321 pin to the near-side cap pad, then the far-side cap pad to the matching
+connector pin. Both continuous means the port is wired and only components are
+missing. The first hop failing means that port was never routed.
+
+**Payoff, and its ceiling.** All five ports share one link to the SoC,
+currently negotiated at 1.5 Gbps, so roughly 150 MB/s across every drive
+attached. Ample for sequential recording, a real constraint otherwise. Note
+this port hardcodes 1.5 Gbps only because the vendor does; their source
+carries 3 Gbps constants behind a `mode_3g` parameter
+(`CONFIG_HI_SATA_PHY0_CTLL_3G_VAL`, `CONFIG_HI_SATA_3G_PHY_CONFIG`), so
+doubling the link is a two-constant change testable on its own, without any
+soldering.
+
+Adding the *second* multiplier to reach ten drives is a different and much
+larger job: a whole additional chip plus its support circuitry, which is why
+`ata1` reports link down today. Not assessed.
+
 ### Filesystem
 
 The four partitions really are FAT32, not just the type byte: the boot
@@ -846,5 +908,12 @@ assumed:
 - **What are the DMA and hardware-I2C blocks?** Both read as all zeros, which
   means clock-gated or not PrimeCell; the ID probe cannot distinguish.
 - **Does TX checksum offload work?** Forced off, because nothing confirms the
-  engine exists. Enabling it also flips the driver to store-and-forward, which
+  engine exists.
+- **Does the SATA link run at 3 Gbps?** The PHY is programmed for 1.5 Gbps
+  because the vendor programs it that way, but their source carries 3 Gbps
+  constants behind a `mode_3g` parameter. Two constants in
+  `drivers/ahci_hi3531.c`; would double the bandwidth shared by every drive.
+- **Does the empty fitted SATA connector work?** Putting a drive in SATA4
+  would confirm the multiplier port mapping, which is currently inferred. Free
+  — see the drive-bay notes above. Enabling it also flips the driver to store-and-forward, which
   is the vendor's own pairing — see the TX wedge section.

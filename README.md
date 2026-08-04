@@ -315,6 +315,10 @@ Cheap and worthwhile alongside the above:
   engine exists.
 - Whether `CON1`, an unpopulated 2x10 header with a square pin-1 pad, is ARM
   JTAG. The footprint matches, nothing confirms it.
+- Whether the three unused ports on the fitted SATA multiplier could be
+  populated. Assessed from photographs: they need connectors and coupling
+  capacitors, and two assumptions want checking first. Notes in
+  `kernel-port/README.md`.
 
 ## Recommended next session
 
