@@ -331,6 +331,14 @@ In order of value per unit of work:
 2. **Read-only SPI NOR and NAND.** Mainline has `hisi-sfc` and `hisi504_nand`;
    whether they match this SoC's `hisfc350` and `hinfc300` is the first
    question. Read-only only: this flash holds the only factory system.
+
+   The userspace side of this is now done. `mtdinfo`, `nanddump` and
+   `mtd_debug` are on the image, and `flash_erase`, `flashcp` and `nandwrite`
+   are deliberately *not* — see `br2-external/board/dhb_ax/post-build.sh`,
+   which fails the build if a writer reappears. `mtdinfo` currently reports
+   `MTD is not present in the system`, which is correct: only the kernel-side
+   driver is missing. Getting these tools was the main reason for the
+   Buildroot migration.
 3. **L2 cache** at `0x20700000`. Diagnosed: it is a HiSilicon proprietary
    controller, not a PL310, and mainline has no driver for it. Enabling it
    means porting the vendor's 385-line `cache-hil2v200.c`. The vendor does use
@@ -360,6 +368,11 @@ Cheap and worthwhile alongside the above:
   PrimeCell ID probe cannot distinguish from absent.
 - Whether TX checksum offload works. Forced off, because nothing confirms the
   engine exists.
+  `ethtool` is now on the image and gives the first real datapoint:
+  `ethtool -k eth0` reports `rx-checksumming: off [requested on]`, so the
+  driver asked for RX checksum and the hardware refused — matching the boot
+  line `RX IPC Checksum Offload disabled`. That is evidence about RX, not TX,
+  but it is the first time either has been observable.
 - Whether `CON1`, an unpopulated 2x10 header with a square pin-1 pad, is ARM
   JTAG. The footprint matches, nothing confirms it.
 - Whether the three unused ports on the fitted SATA multiplier could be

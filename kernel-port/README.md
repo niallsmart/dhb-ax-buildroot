@@ -1102,6 +1102,11 @@ assumed:
   means clock-gated or not PrimeCell; the ID probe cannot distinguish.
 - **Does TX checksum offload work?** Forced off, because nothing confirms the
   engine exists.
+  `ethtool` is now on the image and gives the first real datapoint:
+  `ethtool -k eth0` reports `rx-checksumming: off [requested on]`, so the
+  driver asked for RX checksum and the hardware refused — matching the boot
+  line `RX IPC Checksum Offload disabled`. That is evidence about RX, not TX,
+  but it is the first time either has been observable.
 - **Does the SATA link run at 3 Gbps?** The PHY is programmed for 1.5 Gbps
   because the vendor programs it that way, but their source carries 3 Gbps
   constants behind a `mode_3g` parameter. Two constants in
