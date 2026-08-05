@@ -1,6 +1,6 @@
 # Buildroot migration plan
 
-Status: **Stages 1-3 done; Stage 4 built but not booted; 5-6 pending.**
+Status: **Stages 1-5 done, Stage 6 pending.**
 Written 2026-08-04 on the
 `buildroot` branch. The last state known to boot is tagged `pre-buildroot`.
 Stage 2 touches no hardware; Stages 1 and 3 are boot-tested on the board.
@@ -278,10 +278,33 @@ Add the tools the roadmap needs:
 `Value too large for defined data type`, which is the visible proof that
 `time_t` is now 64-bit. All hardware checks still pass.
 
-**Status 2026-08-04: built and verified on the host; not yet booted.** The
-image contains every tool listed above and none of the writers. It has not
-run on the board, so this stage is *not* done — the userspace changed, and
-Stage 3's boot test does not carry over.
+**DONE 2026-08-04.** Booted and passed the same 11 of 13 checks as Stage 3,
+with identical results where comparable — `MemTotal` 513,144 kB, 20000 packets
+at 0% loss, the same disk and partitions, and the FAT32 chunk producing the
+same MD5 `da3d0110…6d89`. Boot log clean: 0 `WARNING`, `BUG:` or `Oops` across
+415 lines. USB high and full speed remain untested for want of anything
+plugged in.
+
+The acceptance criterion is met: `ls -l` on the FAT32 partition prints
+`Jan 1 2098` rather than `Value too large for defined data type`.
+
+New tools confirmed working on the board:
+
+| Tool | Result |
+|---|---|
+| `ethtool eth0` | `Speed: 1000Mb/s`, `Duplex: Full`, `Link detected: yes` |
+| `ethtool -k eth0` | `tx-checksumming: off`, `rx-checksumming: off [requested on]` |
+| `i2cdetect` | `/dev/i2c-0` present |
+| `mtdinfo` | `MTD is not present in the system` — correct; no flash driver yet |
+| `debugfs`, `fsck.fat` | present |
+
+The writers were checked on the running board, not just in the archive: none
+of `mke2fs`, `e2fsck`, `flash_erase`, `flashcp`, `nandwrite`, `mkfs.fat` or
+`ubiformat` is on `PATH`.
+
+That `rx-checksumming: off [requested on]` is worth a note for the roadmap's
+TX-offload question — the driver asked for RX checksum and the hardware
+refused, matching the boot line `RX IPC Checksum Offload disabled`.
 
 Two things about tool selection are worth knowing before touching this again:
 
@@ -300,10 +323,30 @@ Two things about tool selection are worth knowing before touching this again:
 writer survives, or if any of the read-only tools has gone missing. That is
 the mechanism the flash work depends on, so it should not be weakened.
 
-### Stage 5 — validate against known-good
+### Stage 5 — validate against known-good — **DONE 2026-08-04**
 
 Run the full check list, comparing against the numbers recorded in
 `kernel-port/README.md`. Only then merge to `main`.
+
+**Outcome.** The check list was run against the Buildroot image at Stage 3 and
+again at Stage 4. Every comparable number matches the `pre-buildroot` build:
+
+| | `pre-buildroot` | Buildroot |
+|---|---|---|
+| DTB sha256 | `eb45ccee…cd58` | `eb45ccee…cd58` — identical |
+| `MemTotal` | ~513,148 kB | 513,144 kB (one page, larger kernel) |
+| CPUs | 2 | 2 |
+| Ethernet | 1 Gbps, 20000 at 0% loss | same |
+| SATA | PMP, `sda` + 4 partitions | same |
+| FAT32 chunk MD5 | matched over NFS | `da3d0110…6d89`, matched |
+| GPIO | 19 | 19 |
+| Boot log | clean | clean |
+
+The kernel configuration differs from the known-good one by a single
+meaningful line — `CONFIG_INITRAMFS_SOURCE` — with the rest being compiler
+identity. Two checks (USB high and full speed) have never been run on the
+Buildroot image because nothing was plugged in; they are the only gap, and
+Stage 1 had the same gap.
 
 ### Stage 6 — retire the old path
 
