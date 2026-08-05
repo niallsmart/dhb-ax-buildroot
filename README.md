@@ -122,10 +122,30 @@ confirm whether it is a shell or picocom connected directly to the DVR.
 
 ### Shared tmux sessions on the Mac
 
-- `dhb_ax:0.0`: SSH connection to `raspberrypi.local`, running picocom on the
-  DVR serial console. Keystrokes sent here go to the DVR.
-- `raspberrypi:0.0`: interactive unprivileged shell on the Pi.
-- `raspberrypi:1.0`: unprivileged Pi monitoring shell.
+- `dhb_ax:0.0`: SSH connection to the Pi, running picocom on the DVR serial
+  console. Keystrokes sent here go to the DVR.
+- `raspberrypi:0.0`: **not a shell.** As of 2026-08-04 this pane runs an
+  interactive Python TUI, unrelated to this project. There is no
+  `raspberrypi:1.0`.
+
+**Check what a pane is actually running before sending anything to it.** Not
+just the DVR pane — any pane. `tmux list-panes -a -F
+'#{session_name}:#{window_index}.#{pane_index} #{pane_current_command}'`
+answers it in one command. A shell command line typed into a full-screen TUI
+is not inert: every character is a key binding, and the trailing Enter
+commits whatever the last one opened. This happened — a status query intended
+for a Pi shell went into the TUI in `raspberrypi:0.0`, whose footer offers
+single-key `l` and `t` actions, and the command text contains both many
+times.
+
+To reach the Pi non-interactively, SSH to it directly rather than typing into
+a pane:
+
+```sh
+ssh 192.168.4.34 'ls -l /srv/tftp/'
+```
+
+Note `raspberrypi.local` does not resolve from the Mac; use the IP.
 
 Use the shared tmux sessions for visible work. Do not restart or kill the tmux
 server; the sessions contain long-lived SSH and serial connections.
@@ -208,8 +228,15 @@ and `insmod`ed on the running board, so iterating on a driver needs no reboot
 and no TFTP. Bulk output is written to the share and read on the Pi at full
 fidelity rather than scraped from the serial console.
 
-The Pi's SD card had about 580 MB free at the time of writing, so the share
-cannot absorb a disk image.
+**The Pi's SD card is full.** It had about 580 MB free when this was first
+written; on 2026-08-04 it hit 0 and picocom died mid-session with
+`FATAL: write to logfile failed: No space left on device`, taking the serial
+console with it. `sudo apt-get clean` recovered 87 MB, which is enough to keep
+logging but not a fix.
+
+If the console dies unexpectedly, check `df -h /` on the Pi first. `/srv/tftp`
+holds about 99 MB of accumulated `uImage-*` files from past sessions, all
+regenerable, and is the obvious place to reclaim space.
 
 ### Mac workspace
 

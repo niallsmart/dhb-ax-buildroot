@@ -1,9 +1,12 @@
 # Buildroot migration plan
 
-Status: **Stages 1 and 2 done, Stages 3-6 pending.** Written 2026-08-04 on the
-`buildroot` branch. The last state known to boot is tagged `pre-buildroot`;
-Stage 1 has since been boot-tested on hardware in its own right. Stage 2
-touches no hardware.
+Status: **Stages 1-3 done, Stages 4-6 pending.** Written 2026-08-04 on the
+`buildroot` branch. The last state known to boot is tagged `pre-buildroot`.
+Stage 2 touches no hardware; Stages 1 and 3 are boot-tested on the board.
+
+Buildroot now produces a kernel that boots and passes the check list, so the
+migration's central risk is retired. `kernel-port/build.sh` still works and
+still produces the reference image.
 
 Companion to `../kernel-port/README.md`, which holds the current build and the
 hardware evidence this plan is validated against.
@@ -185,7 +188,7 @@ Not done here, deliberately: no DTS, no patch queue, no appended-DTB uImage.
 The image this stage produces is not bootable on the board and was never
 sent to it.
 
-### Stage 3 — kernel from Buildroot
+### Stage 3 — kernel from Buildroot — **DONE 2026-08-04**
 
 Move the DTS and the patch queue under `br2-external/board/dhb_ax/`; the
 kernel config is already there. Configure the appended-DTB uImage with the
@@ -200,11 +203,69 @@ defconfig fed through that would enable a great deal, silently.
 *Acceptance:* the produced `uImage` boots to a shell over TFTP and passes the
 full check list. Compare against the `pre-buildroot` build.
 
+**Outcome.** Boots to a shell and passes every check that the attached
+hardware allows — 11 of 13. The two skipped are the same two Stage 1 skipped:
+no USB stick and no FTDI adapter were plugged in.
+
+| Check | Result |
+|---|---|
+| Boots to shell over TFTP | BusyBox prompt on the serial console |
+| Memory | `MemTotal` 513,144 kB — 4 kB under the reference, one page, from a slightly larger kernel |
+| Both cores | `Brought up 2 CPUs`; `/proc/cpuinfo` reports 2 |
+| Ethernet | `Link is Up - 1Gbps/Full`; 20000 packets, 0% loss |
+| SATA | JMicron `0x197b:0x0325` multiplier enumerated; `sda` with 4 partitions |
+| FAT32 | read-only mount; 8 MiB chunk MD5 `da3d0110…6d89` matched over NFS |
+| USB high speed | **not tested** — nothing attached |
+| USB full speed | **not tested** — nothing attached |
+| GPIO | 19 `/dev/gpiochip*` |
+| Wall clock | real date from the DS1307, not 1970 |
+| Reset | `echo b > /proc/sysrq-trigger` returned to U-Boot |
+| Serial rescue | BREAK then `b` — used for real, to recover from the panic below |
+| Boot log | 0 `WARNING`, `BUG:` or `Oops` |
+
+**The device tree is byte-identical to the old build's**
+(`eb45cceec28d4ae5034177cdd342bbafa0e0e97ded56a207e7353e7bb5ebcd58`), and the
+kernel config differs from the known-good one by a single meaningful line —
+`CONFIG_INITRAMFS_SOURCE`, which Buildroot points at its own cpio. Everything
+else is compiler identity.
+
+Three things had to be solved that the plan did not anticipate:
+
+1. **Patch 0002 was broken** and the old build's patch fuzz was hiding it.
+   See *Decisions taken*.
+2. **`BR2_LINUX_KERNEL_APPENDED_UIMAGE` cannot be used.** Its
+   `LINUX_APPEND_DTB` runs two loops over `LINUX_DTS_NAME`: the `cat` loop
+   applies `basename`, the `mkimage` loop does not. With device trees in a
+   `hisilicon/` subdirectory — which they must be, so patch 0001 keeps
+   working — mkimage is handed `uImage.hisilicon/hi3531-dhb-ax`, a path whose
+   directory does not exist. The kernel is built as a plain zImage and
+   `board/dhb_ax/post-image.sh` does the append and wrap instead, with the
+   same arguments the old build used. This is the post-image script the plan
+   allowed for, needed for a different reason than expected.
+3. **Buildroot's BusyBox omits `cttyhack`.** `/init` ends with
+   `setsid cttyhack sh`; without it the exec failed, `/init` exited, and the
+   kernel panicked with `Attempted to kill init!` — leaving the board wedged
+   and needing BREAK plus sysrq to recover. Fixed with a BusyBox config
+   fragment. `/init` no longer uses `exec` for the shell either, so a future
+   failure of this kind leaves a usable console instead of a panic.
+
+Also note: `ls -l` on the FAT32 partition now shows dates past 2038 with no
+`Value too large for defined data type`, which is **Stage 4's acceptance
+criterion, already met** — and met with `BR2_TIME_BITS_64` still unset. Set it
+explicitly at Stage 4 anyway rather than relying on a default.
+
+Modules now ship inside the initramfs, all 17 of them including
+`ahci_hi3531.ko`. The old build needed them pushed over NFS before SATA could
+be probed.
+
 ### Stage 4 — userspace from Buildroot
 
-BusyBox from source, replacing the Debian binary. Build with 64-bit `time_t`,
-which requires 64-bit file offsets alongside it — glibc rejects `_TIME_BITS=64`
-without `_FILE_OFFSET_BITS=64`. Add the tools the roadmap needs:
+BusyBox from source is already done — it arrived at Stage 2 and has been
+running on the board since Stage 3. What remains is `BR2_TIME_BITS_64` (set it
+explicitly, even though the symptom it targets has already gone) and the
+packages below.
+
+Add the tools the roadmap needs:
 
 - `mtd-utils` — required for the flash work
 - `ethtool` — TX checksum offload, PHY master/slave state
@@ -311,6 +372,22 @@ involved.
 `make linux-rebuild` stays quick; rootfs changes are slower. Worth measuring
 at Stage 4 rather than assuming.
 
+**The old build tolerated a broken patch; Buildroot does not.** Buildroot
+applies patches with `patch -F0` — zero fuzz. `build-in-container.sh` used
+GNU patch's default fuzz of 2, which had been silently absorbing a defect in
+patch 0002 for the whole life of the port: one space too many on a context
+line, and a hunk header pointing one line early. With fuzz, patch slid over
+both; with `-F0` the hunk was rejected outright.
+
+Regenerated 2026-08-04 against pristine 6.18.42, and the result verified
+byte-identical to the tree the working kernel was built from. All nine
+patches now apply at zero fuzz — checked, not assumed. This is a real defect
+found by the migration, not a Buildroot quirk to work around.
+
+Consequence for anyone with an existing tree: the regenerated patch will not
+reverse-apply against a tree carrying the old revision, so
+`bootstrap-sources.sh --reset-build` is required once.
+
 **A defconfig setting can go missing without a word.** kconfig drops any line
 whose symbol does not exist or whose dependencies are unmet, and prints
 nothing. That is how the first Stage 2 toolchain selection vanished — the
@@ -342,11 +419,15 @@ this is a code reading, not yet a built artifact.
 
 ## Open questions
 
-- Whether `BR2_LINUX_KERNEL_CUSTOM_DTS_DIR` plus the existing patch 0001
-  builds the DTBs, or whether `LINUX_DTS_NAME` picking up the `hisilicon/`
-  prefix needs handling.
-- Whether the gcc 14 toolchain changes anything on the board. The working
-  kernel was built with Debian's gcc 12; Stage 3 is the first time a gcc 14
-  kernel runs on the hardware. Most likely a non-event, but it is a second
-  variable arriving alongside the build-system change, so a Stage 3 failure
-  has two candidate causes rather than one.
+Both of Stage 3's questions are answered. `BR2_LINUX_KERNEL_CUSTOM_DTS_DIR`
+plus patch 0001 builds the DTBs correctly, and the `hisilicon/` prefix does
+need handling — but in the uImage wrapping, not the DTB build, hence
+`post-image.sh`. The gcc 14 toolchain proved to be a non-event: the kernel
+boots and passes every check, with a byte-identical device tree.
+
+- USB high speed and USB full speed remain unverified under Buildroot. They
+  need a USB stick and an FTDI adapter plugged in; nothing was attached.
+  These are the only two acceptance checks never exercised on this build.
+- The Pi's SD card is full, which is now a working constraint rather than a
+  footnote — picocom died mid-session when its logfile could not be written.
+  See `../README.md`.

@@ -8,6 +8,11 @@ set -eu
 variant=${1:-ethernet}
 kernel_src=${KERNEL_SRC:-/src}
 port_dir=${PORT_DIR:-/work/kernel-port}
+# The device trees and the patch queue moved under the Buildroot external tree
+# at Stage 3 of docs/buildroot-migration-plan.md.  Both builds read the same
+# copy rather than each carrying its own, which is the drift Stage 1 removed
+# for the drivers.  This script goes away at Stage 6.
+board_dir=${BOARD_DIR:-/work/br2-external/board/dhb_ax}
 # Build in the container's own filesystem.  A kernel build writes tens of
 # thousands of small files, which is slow through a bind-mounted host
 # directory; only the finished artifacts are copied back.
@@ -67,13 +72,13 @@ ln -sfn ../bin/busybox "$initramfs_dir/sbin/modprobe"
 # -- each one is added by its own patch, alongside the Kconfig and Makefile
 # hunks that reference it, so a driver and the entries that build it cannot
 # drift apart.
-install -m 0644 "$port_dir/dts/hi3531-dhb-ax.dtsi" "$kernel_src/$dts_dir/"
-install -m 0644 "$port_dir/dts/hi3531-dhb-ax.dts" "$kernel_src/$dts_dir/"
-install -m 0644 "$port_dir/dts/hi3531-dhb-ax-ethernet.dts" "$kernel_src/$dts_dir/"
+install -m 0644 "$board_dir/dts/hisilicon/hi3531-dhb-ax.dtsi" "$kernel_src/$dts_dir/"
+install -m 0644 "$board_dir/dts/hisilicon/hi3531-dhb-ax.dts" "$kernel_src/$dts_dir/"
+install -m 0644 "$board_dir/dts/hisilicon/hi3531-dhb-ax-ethernet.dts" "$kernel_src/$dts_dir/"
 
 # Apply the queue in order.  A patch that reverse-applies cleanly is already
 # in the tree, which keeps repeat builds against the same source working.
-for p in "$port_dir"/patches/*.patch; do
+for p in "$board_dir"/patches/linux/*.patch; do
 	if patch --batch --dry-run --reverse --force -d "$kernel_src" -p1 \
 		< "$p" >/dev/null 2>&1; then
 		echo "already applied: $(basename "$p")"

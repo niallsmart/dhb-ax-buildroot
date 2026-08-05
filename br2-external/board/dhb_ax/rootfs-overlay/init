@@ -1,0 +1,39 @@
+#!/bin/sh
+# RAM-only bring-up shell for the DHB-AX board.
+#
+# The kernel command line carries rdinit=/init (CONFIG_CMDLINE_FORCE), so this
+# runs instead of Buildroot's /sbin/init.  Deliberate: this image exists to
+# exercise hardware from a shell, not to bring up services.
+#
+# Buildroot's fs/cpio only installs its own /init when one is absent, so
+# placing this in the rootfs overlay is enough to take over.
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+
+echo
+echo "DHB-AX Linux 6.18 RAM-only Ethernet bring-up shell (Buildroot)"
+echo "No flash filesystems have been mounted."
+uname -a
+if [ -d /sys/class/net/eth0 ]; then
+	echo "Ethernet probe created eth0; it remains administratively down."
+	# Plain `link show`: BusyBox's ip has no -details, and passing it makes
+	# the applet print its usage instead.
+	ip link show dev eth0
+else
+	echo "No eth0 device was created. Check dmesg for probe diagnostics."
+fi
+echo
+
+# Not `exec`: if the shell cannot start, or is exited, /init returning would
+# panic the kernel with "Attempted to kill init!" and leave the board needing
+# a BREAK plus sysrq to recover.  Staying alive as PID 1 keeps the console
+# usable instead.
+setsid cttyhack sh || sh
+
+echo "init: shell exited -- holding PID 1 so the kernel does not panic."
+echo "Reset with: BREAK then b, or power cycle."
+while : ; do sleep 3600; done

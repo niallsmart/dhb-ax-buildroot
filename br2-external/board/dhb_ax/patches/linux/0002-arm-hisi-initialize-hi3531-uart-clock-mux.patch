@@ -1,7 +1,20 @@
+From: DHB-AX local port <local@invalid>
+Subject: [LOCAL ONLY] ARM: hisi: initialize the Hi3531 UART clock mux
+
+U-Boot leaves the UART on its 3 MHz source.  Clear CRG bit 13 during OF
+clock initialization so the full console runs at the rate the device tree
+describes.
+
+Regenerated 2026-08-04 against pristine 6.18.42.  The previous revision
+carried one space too many on a context line and a hunk header one line
+early; GNU patch's default fuzz of 2 hid both.  Buildroot applies patches
+with -F0, which does not.
+---
 --- a/arch/arm/mach-hisi/hisilicon.c
 +++ b/arch/arm/mach-hisi/hisilicon.c
-@@ -8,7 +8,11 @@
-  */
+@@ -8,8 +8,12 @@
+  * Author: Haojian Zhuang <haojian.zhuang@linaro.org>
+ */
  
 +#include <linux/bitops.h>
 +#include <linux/clk-provider.h>
@@ -12,11 +25,10 @@
  
  #include <asm/mach/arch.h>
  #include <asm/mach/map.h>
-@@ -16,6 +20,29 @@
- #define HI3620_SYSCTRL_PHYS_BASE		0xfc802000
+@@ -18,6 +22,29 @@
  #define HI3620_SYSCTRL_VIRT_BASE		0xfe802000
  
-+/*
+ /*
 + * U-Boot leaves the Hi3531 UART on its 3 MHz clock source. The vendor
 + * platform code clears CRG bit 13 before registering PL011, selecting the
 + * 155 MHz APB clock instead. Do this during OF clock initialization so the
@@ -39,6 +51,7 @@
 +CLK_OF_DECLARE(hi3531_uart_mux, "hisilicon,hi3531-uart-mux",
 +	       hi3531_uart_mux_init);
 +
- /*
++/*
   * This table is only for optimization. Since ioremap() could always share
   * the same mapping if it's defined as static IO mapping.
+  *
