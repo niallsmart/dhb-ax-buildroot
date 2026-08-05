@@ -1,6 +1,7 @@
 # Buildroot migration plan
 
-Status: **Stages 1-3 done, Stages 4-6 pending.** Written 2026-08-04 on the
+Status: **Stages 1-3 done; Stage 4 built but not booted; 5-6 pending.**
+Written 2026-08-04 on the
 `buildroot` branch. The last state known to boot is tagged `pre-buildroot`.
 Stage 2 touches no hardware; Stages 1 and 3 are boot-tested on the board.
 
@@ -277,6 +278,28 @@ Add the tools the roadmap needs:
 `Value too large for defined data type`, which is the visible proof that
 `time_t` is now 64-bit. All hardware checks still pass.
 
+**Status 2026-08-04: built and verified on the host; not yet booted.** The
+image contains every tool listed above and none of the writers. It has not
+run on the board, so this stage is *not* done — the userspace changed, and
+Stage 3's boot test does not carry over.
+
+Two things about tool selection are worth knowing before touching this again:
+
+- **`mtd`'s sub-options default to `y`.** Selecting `BR2_PACKAGE_MTD` alone
+  installs `flash_erase`, `flashcp`, `nandwrite`, `ubiformat` and the rest.
+  Naming the three read-only tools we wanted achieved nothing, because they
+  were already on; the writers have to be switched off by name. The same is
+  true of `e2fsprogs`, and `mke2fs` has no symbol at all — it ships with the
+  base package regardless.
+- **Deselecting a package does not remove what it already installed.**
+  `target/` keeps the old binaries, so a config change alone leaves them in
+  the image. `post-build.sh` deleted thirteen such files on the first run
+  after the writers were switched off.
+
+`post-build.sh` therefore both prunes and *asserts*: it fails the build if any
+writer survives, or if any of the read-only tools has gone missing. That is
+the mechanism the flash work depends on, so it should not be weakened.
+
 ### Stage 5 — validate against known-good
 
 Run the full check list, comparing against the numbers recorded in
@@ -394,7 +417,20 @@ nothing. That is how the first Stage 2 toolchain selection vanished — the
 build ran on happily with a completely different toolchain. Guarded now:
 `scripts/buildroot-in-container.sh` diffs the defconfig against the resulting
 `.config` after every `dhb_ax_defconfig` and fails on any line that did not
-survive.
+survive. It has caught three real problems since: the Bootlin toolchain, then
+`BR2_PACKAGE_I2C_TOOLS` (hidden behind `BR2_PACKAGE_BUSYBOX_SHOW_OTHERS`), then
+an `is not set` assertion on a symbol kconfig had dropped entirely. The check
+treats `# BR2_FOO is not set` as an assertion rather than a comment, which is
+what made the third catch possible.
+
+**A missing host tool surfaces only at the end.** `post-image.sh` needs
+`mkimage`, and Buildroot selects `host-uboot-tools` automatically only for the
+uImage kernel targets — which we deliberately do not use. Nothing warns; the
+build runs to completion and then exits 127. Fixed by naming
+`BR2_PACKAGE_HOST_UBOOT_TOOLS` explicitly, and `post-image.sh` now says so if
+it ever happens again. Worth noting this was invisible until a *clean* build:
+the incremental tree still had `mkimage` left over from the earlier
+appended-uImage configuration.
 
 **Rollback:** `git checkout main`, or `git checkout pre-buildroot` for the
 exact known-good tree. Nothing on this branch touches the DVR.

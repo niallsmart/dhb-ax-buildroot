@@ -24,6 +24,13 @@ mkimage=${HOST_DIR:-/output/host}/bin/mkimage
 
 test -f "$images/zImage"
 
+if [ ! -x "$mkimage" ]; then
+	echo "post-image: no mkimage at $mkimage" >&2
+	echo "set BR2_PACKAGE_HOST_UBOOT_TOOLS=y -- Buildroot only pulls it in" >&2
+	echo "automatically for the uImage kernel targets, which we do not use" >&2
+	exit 1
+fi
+
 for dtb in "$images"/*.dtb; do
 	[ -f "$dtb" ] || continue
 	stem=$(basename "$dtb" .dtb)

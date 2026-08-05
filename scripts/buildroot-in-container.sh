@@ -52,6 +52,11 @@ check_defconfig() {
 	missing=
 	while IFS= read -r line; do
 		case $line in
+		# "# BR2_FOO is not set" is an assertion, not prose: kconfig
+		# writes it for a symbol that is off, and several of ours are
+		# deliberately off because their default is on.  Check those
+		# too, and skip only genuine comments.
+		'# BR2_'*' is not set') : ;;
 		'' | \#*) continue ;;
 		esac
 		grep -qxF "$line" "$output/.config" || missing="$missing$line
