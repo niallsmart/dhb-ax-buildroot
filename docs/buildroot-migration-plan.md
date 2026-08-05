@@ -1,13 +1,13 @@
 # Buildroot migration plan
 
-Status: **Stages 1-5 done, Stage 6 pending.**
+Status: **Complete. All six stages done 2026-08-04.**
 Written 2026-08-04 on the
 `buildroot` branch. The last state known to boot is tagged `pre-buildroot`.
 Stage 2 touches no hardware; Stages 1 and 3 are boot-tested on the board.
 
 Buildroot now produces a kernel that boots and passes the check list, so the
-migration's central risk is retired. `kernel-port/build.sh` still works and
-still produces the reference image.
+migration is complete: Buildroot produces the image that boots, and the old
+build machinery has been removed.
 
 Companion to `../kernel-port/README.md`, which holds the current build and the
 hardware evidence this plan is validated against.
@@ -112,7 +112,7 @@ suits a project that will be picked up intermittently.
 ## Stages
 
 Each stage is independently verifiable and leaves a working build behind.
-`kernel-port/build.sh` keeps working until the final stage removes it.
+`kernel-port/build.sh` kept working until the final stage removed it.
 
 ### Stage 1 — convert the drivers to patches — **DONE 2026-08-04**
 
@@ -348,11 +348,24 @@ identity. Two checks (USB high and full speed) have never been run on the
 Buildroot image because nothing was plugged in; they are the only gap, and
 Stage 1 had the same gap.
 
-### Stage 6 — retire the old path
+### Stage 6 — retire the old path — **DONE 2026-08-04**
 
 Remove `build-in-container.sh` and the parts of `bootstrap-sources.sh`
 Buildroot has taken over. Rewrite the build sections of both READMEs. Separate
 commit, after the merge, so a revert is clean.
+
+**Outcome.** Removed: `kernel-port/build.sh`,
+`kernel-port/scripts/build-in-container.sh`, `kernel-port/Dockerfile`,
+`kernel-port/configs/` and `kernel-port/initramfs/`. `bootstrap-sources.sh`
+moved to `scripts/` alongside the build it feeds, and lost the derived build
+tree and `--reset-build` — Buildroot extracts and patches its own copy every
+time, so neither has anything left to do.
+
+`kernel-port/` now holds documentation and evidence only. Both READMEs'
+build sections are rewritten against the Buildroot flow, and the boot
+instructions gained the two recovery details this migration needed for real:
+interrupt autoboot *densely* or the vendor system wins, and a serial BREAK
+followed by `b` still resets a panicked kernel.
 
 ## Acceptance checks
 
@@ -428,7 +441,7 @@ mounted at `/mnt` and modules are pushed over it today.
 ## Risks
 
 **The migration stalls half-done.** Mitigated by staging: every stage leaves a
-working build, and `kernel-port/build.sh` keeps working until Stage 6.
+working build, and `kernel-port/build.sh` kept working until Stage 6.
 
 **Buildroot's kernel handling differs subtly** — patch order, config fragment
 merging, or DTS placement. Stage 3 exists to surface that before userspace is

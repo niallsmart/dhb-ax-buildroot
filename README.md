@@ -33,11 +33,10 @@ computer, not a working DVR.**
 
 | Path | What it is |
 |---|---|
-| `kernel-port/` | the port: device trees, glue drivers, patch queue, build. **Start here.** |
-| `kernel-port/README.md` | the authority on anything port-related |
+| `kernel-port/README.md` | the authority on anything port-related. **Start here.** |
 | `kernel-port/reference/` | evidence: vendor runtime probe, chip survey, hardware write-up |
-| `br2-external/` | Buildroot board support: defconfig, kernel config, patches (migration in progress) |
-| `scripts/` | the containerised Buildroot build |
+| `br2-external/` | board support: defconfig, kernel config, device trees, patch queue, overlay |
+| `scripts/` | fetch the sources, and the containerised Buildroot build |
 | `docs/buildroot-migration-plan.md` | why Buildroot, what it replaces, stage by stage |
 | `docs/investigation.md` | the reverse-engineering phase and backup procedures |
 | `docs/memory-map.md` | address space, the two DRAM banks, what the vendor reserves |
@@ -51,22 +50,24 @@ computer, not a working DVR.**
 ## Building and booting
 
 ```sh
-kernel-port/scripts/bootstrap-sources.sh    # fetch sources, once
-kernel-port/build.sh ethernet               # or: minimal
+scripts/bootstrap-sources.sh    # fetch sources, once
+scripts/buildroot.sh            # configure and build
 ```
 
-This is still the build that produces bootable images. A Buildroot-based
-replacement is being brought up alongside it in `br2-external/` and
-`scripts/`; see `docs/buildroot-migration-plan.md` for where that has got to.
+The build is Buildroot 2026.02.3, pinned by checksum, running in a container.
+Board support lives in `br2-external/`. The migration from the previous
+hand-rolled build is finished; `docs/buildroot-migration-plan.md` records what
+changed and why.
 
-Then stage the image in the Pi's TFTP root and, from the DVR's U-Boot prompt:
+The image lands in `kernel-port/build/buildroot-artifacts/`. Stage it in the
+Pi's TFTP root and, from the DVR's U-Boot prompt:
 
 ```text
 setenv ipaddr 192.168.7.241
 setenv netmask 255.255.252.0
 setenv serverip 192.168.4.34
 setenv ethaddr 00:18:AE:3C:A2:49
-tftp 0x82000000 uImage-6.18.42-dhb-ax-ethernet
+tftp 0x82000000 uImage-hi3531-dhb-ax-ethernet
 bootm 0x82000000
 ```
 
@@ -246,17 +247,18 @@ regenerable, and is the obvious place to reclaim space.
 
 Layout:
 
-- `kernel-port/` — the mainline Linux port: device trees, glue drivers, patch
-  queue, build scripts, and its own README. **Start here for port work.**
+- `kernel-port/` — the port's documentation and evidence. Its README is the
+  authority on anything port-related. **Start here for port work.** The build
+  machinery it used to hold was retired once Buildroot took over.
+- `br2-external/` — board support: the defconfig, kernel config, device trees,
+  patch queue, rootfs overlay, and the post-build and post-image scripts.
 - `kernel-port/reference/` — evidence captured from the machine and the board:
   the vendor runtime probe, the chip survey from PCB photographs, and a
   beginner-oriented write-up of the hardware survey.
 - `kernel/`, `vendor/` and `buildroot/` — source trees, regenerable by
-  `kernel-port/scripts/bootstrap-sources.sh`. **Not worth backing up**: about
+  `scripts/bootstrap-sources.sh`. **Not worth backing up**: about
   4 GB derived from three pinned inputs.
-- `br2-external/` — the Buildroot `BR2_EXTERNAL` tree, and `scripts/` — the
-  containerised Buildroot build. Both are the in-progress replacement for
-  `kernel-port/`'s build machinery, not yet the thing that produces images.
+- `scripts/` — source bootstrap and the containerised Buildroot build.
 - `rootfs/` — the extracted vendor root filesystem, used constantly as a
   reference for what the vendor drives and how.
 - `backups/` — the verified flash images described below. **The irreplaceable
@@ -371,7 +373,7 @@ Cheap and worthwhile alongside the above:
    pane may be at U-Boot (`hisilicon #`), at our kernel's shell (`/ #`), or at
    the vendor system's login prompt — the vendor root password is `1001chin`.
 2. For port work, read `kernel-port/README.md` first, then run
-   `kernel-port/scripts/bootstrap-sources.sh` if `kernel/` is missing.
+   `scripts/bootstrap-sources.sh` if `kernel/` is missing.
 3. Preserve a second copy of `backups/` on another host or storage device.
    That directory is the only irreplaceable content here.
 4. Optionally derive main-area-only images on the Pi from one validated

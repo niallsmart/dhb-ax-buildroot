@@ -162,12 +162,19 @@ had a working soft reset.
   firmware's `/proc`, and the authoritative record of what this board runs.
 - `reference/board-chips.md`: part numbers read off the PCB, and the
   authoritative record of what is physically fitted.
-- `configs/dhb_ax_minimal.config`, `configs/dhb_ax_ethernet.config`: Kconfig seeds.
-- `initramfs/init`, `initramfs/init-ethernet`: RAM-only bring-up shell inits.
-- `Dockerfile`: Debian Bookworm ARM cross-build environment.
-- `scripts/build-in-container.sh`: builds one variant, packages the image.
-- `scripts/bootstrap-sources.sh`: fetches and derives the source trees.
-- `build.sh`: macOS wrapper around the Docker build.
+
+The build machinery that used to live here was retired at Stage 6 of
+`../docs/buildroot-migration-plan.md`. What it did is now Buildroot's job:
+
+| Was | Is now |
+|---|---|
+| `configs/dhb_ax_*.config` | `../br2-external/board/dhb_ax/linux.config` |
+| `initramfs/init*` | `../br2-external/board/dhb_ax/rootfs-overlay/init` |
+| `Dockerfile`, `build.sh`, `scripts/build-in-container.sh` | `../scripts/` |
+| `scripts/bootstrap-sources.sh` | `../scripts/bootstrap-sources.sh` |
+| the device trees and the patch queue | `../br2-external/board/dhb_ax/` |
+
+This directory now holds documentation and evidence only.
 
 Patch queue, applied in numeric order:
 
@@ -192,60 +199,59 @@ broke the second build against the same source.
 
 ## Build
 
-Fetch the sources once:
-
 ```sh
-kernel-port/scripts/bootstrap-sources.sh
-kernel-port/build.sh ethernet     # or: minimal
+scripts/bootstrap-sources.sh    # fetch sources, once
+scripts/buildroot.sh            # configure and build
 ```
 
-Bootstrapping is idempotent and safe to re-run; it only fetches what is
-missing. It produces four things under the workspace, none of which needs
-backing up because all of it is reproducible from two pinned inputs:
+Bootstrapping is idempotent and only fetches what is missing. It produces
+four things under the workspace, none needing backup because all of it is
+reproducible from three pinned inputs:
 
 ```text
 kernel/linux-6.18.42.tar.xz      official upstream tarball
 kernel/linux-6.18.42-pristine/   never modified; the patch queue is diffed
                                  against this
-kernel/linux-6.18.42-build/      pristine + the patch queue; what gets compiled
 vendor/openipc-linux-3.0.8/      vendor 3.0.8 tree at the pinned commit
+buildroot/buildroot-2026.02.3/   verified against its signed sha256
 ```
 
-The build tree is a copy-on-write clone of pristine where the filesystem
-supports it, so it is near-instant to create and costs almost no extra disk.
+Buildroot extracts and patches its own copy of the kernel every build, so
+there is no persistent build tree and no reverse-apply idempotency check. A
+tree carrying a superseded patch is no longer a failure mode that exists.
 
-The queue is applied to the build tree in place. Repeat builds are fine —
-each patch is skipped when it already reverse-applies — but a tree carrying a
-*superseded* revision of the queue cannot be repaired that way, because a
-patch that has since been deleted can no longer be detected or reversed. The
-cure is:
+Patches are applied with `patch -F0`, zero fuzz. Anything that only applies
+with fuzz is a broken patch, and will be rejected rather than quietly slid
+into place — which is how a real defect in patch 0002 was found.
 
-```sh
-kernel-port/scripts/bootstrap-sources.sh --reset-build
-```
+Object files and the whole Buildroot output tree live in Docker named
+volumes, not the bind-mounted workspace, which on macOS is much faster. The
+volumes persist between runs: a rebuild after no change takes seconds rather
+than rebuilding the toolchain. `scripts/buildroot.sh --clean` discards them.
 
-`KERNEL_SRC=/another/path` still overrides the tree if you want one elsewhere.
-
-Nothing lives in `/tmp`: it is cleared on reboot, and a stale tree there was
-previously the default, which is a quiet way to lose an hour.
-
-Object files are written inside the container, which is much faster than the
-bind-mounted workspace. Only finished artifacts land in
-`kernel-port/build/artifacts/`:
+Finished artifacts land in `kernel-port/build/buildroot-artifacts/`:
 
 ```text
-uImage-6.18.42-dhb-ax-ethernet          U-Boot-ready image
-zImage-6.18.42-dhb-ax-ethernet          bare zImage
+uImage-hi3531-dhb-ax-ethernet           U-Boot-ready image
+zImage                                  bare zImage
 hi3531-dhb-ax-ethernet.dtb              device tree blob
-config-6.18.42-dhb-ax-ethernet          the .config it was built from
-System.map-6.18.42-dhb-ax-ethernet      for decoding oops output
+rootfs.cpio, rootfs.tar                 the initramfs, and the same content
+                                        as a tarball for NFS export
 ```
 
 The U-Boot-ready result is a legacy ARM `uImage` loaded and entered at
 `0x80008000`. Its payload is an ARM `zImage` with the DTB appended, allowing
 the old U-Boot to continue passing ATAGs without needing explicit FDT
-commands. Whole-file hashes are not reproducible: the legacy image header
-carries a build timestamp.
+commands. `br2-external/board/dhb_ax/post-image.sh` does that wrapping;
+Buildroot's own `BR2_LINUX_KERNEL_APPENDED_UIMAGE` cannot be used here, for
+reasons recorded in that script. Whole-file hashes are not reproducible: the
+legacy image header carries a build timestamp. The DTB is reproducible, and
+has been `eb45cceec28d4ae5034177cdd342bbafa0e0e97ded56a207e7353e7bb5ebcd58`
+across every build since the port worked.
+
+To change a driver or the device tree, edit it under
+`br2-external/board/dhb_ax/` and rebuild. To change a patch, regenerate it
+against `kernel/linux-6.18.42-pristine/`.
 
 ## Verified RAM boot
 
@@ -287,10 +293,12 @@ setenv ipaddr 192.168.7.241
 setenv netmask 255.255.252.0
 setenv serverip 192.168.4.34
 setenv ethaddr 00:18:AE:3C:A2:49
-ping 192.168.4.34
-tftp 0x82000000 uImage-6.18.42-dhb-ax-ethernet
+tftp 0x82000000 uImage-hi3531-dhb-ax-ethernet
 bootm 0x82000000
 ```
+
+`ping` is deliberately absent from that sequence: it has crashed this U-Boot
+mid-session. Go straight to `tftp`, which reports its own errors.
 
 On this vendor U-Boot, the two-argument `tftp <address> <filename>` form is the
 normal download; the three-argument form with an explicit size is the vendor's
@@ -301,7 +309,14 @@ Do not use `saveenv`, `nand write`, `nand erase`, `sf write`, `sf erase`, or any
 other persistent-write command.
 
 To get back to U-Boot for another image, `echo b > /proc/sysrq-trigger` and
-interrupt autoboot.
+interrupt autoboot. Autoboot has to be interrupted *densely* — Enter every
+0.2 s from the moment of reset — or the vendor system boots instead. If it
+does, log in as `root` / `1001chin` on the console (or over telnet) and
+`reboot`.
+
+If the kernel panics rather than reaching a shell, sysrq over the serial
+console still works: send a BREAK, then `b`. In picocom that is `C-a C-\`
+followed by `b`.
 
 ## Verified Ethernet bring-up
 
