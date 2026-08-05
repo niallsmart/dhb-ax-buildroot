@@ -1,0 +1,11 @@
+#
+# BR2_EXTERNAL Kconfig for the DHB-AX board.
+#
+# Nothing here yet.  Board-specific packages, if any are ever needed, get
+# sourced from this file:
+#
+#	source "$BR2_EXTERNAL_DHB_AX_PATH/package/foo/Config.in"
+#
+# The tools the roadmap needs -- mtd-utils, ethtool, i2c-tools -- are all in
+# Buildroot proper, so they are selected in configs/dhb_ax_defconfig rather
+# than packaged here.

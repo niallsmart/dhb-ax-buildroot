@@ -16,6 +16,10 @@
 #   kernel/linux-6.18.42-build/      pristine + the patch queue; what
 #                                    build.sh compiles
 #
+# and, for the Buildroot path:
+#
+#   buildroot/buildroot-2026.02.3/   extracted from a checksum-pinned tarball
+#
 # --reset-build discards the build tree and re-derives it from pristine, which
 # is the cure for a tree carrying a superseded revision of the patch queue.
 set -eu
@@ -23,6 +27,7 @@ set -eu
 workspace=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 kernel_dir=$workspace/kernel
 vendor_dir=$workspace/vendor
+buildroot_dir=$workspace/buildroot
 
 version=6.18.42
 tarball=$kernel_dir/linux-$version.tar.xz
@@ -34,10 +39,19 @@ vendor_repo=https://github.com/OpenIPC/linux.git
 vendor_commit=a3bfde54cdcf641cc061206f5d2ba6e9ddbad324
 vendor=$vendor_dir/openipc-linux-3.0.8
 
+# 2026.02 is the LTS line, which suits a project picked up intermittently.
+# The checksum is the one in the release's PGP-signed manifest at
+# https://buildroot.org/downloads/buildroot-2026.02.3.tar.xz.sign
+br_version=2026.02.3
+br_tarball=$buildroot_dir/buildroot-$br_version.tar.xz
+br_tarball_url=https://buildroot.org/downloads/buildroot-$br_version.tar.xz
+br_sha256=5a59e7501b0b4ec52c41f4bfa79412320e0b37eae5f719605a258e8d0c6fc7fb
+br_src=$buildroot_dir/buildroot-$br_version
+
 reset_build=no
 [ "${1:-}" = "--reset-build" ] && reset_build=yes
 
-mkdir -p "$kernel_dir" "$vendor_dir"
+mkdir -p "$kernel_dir" "$vendor_dir" "$buildroot_dir"
 
 if [ ! -f "$tarball" ]; then
 	echo "fetching $tarball_url"
@@ -75,8 +89,35 @@ if [ ! -d "$vendor/.git" ]; then
 	git -C "$vendor" checkout -q FETCH_HEAD
 fi
 
+if [ ! -f "$br_tarball" ]; then
+	echo "fetching $br_tarball_url"
+	curl --fail --location "$br_tarball_url" --output "$br_tarball"
+fi
+
+# The tarball is unpacked into a tree the build then treats as read-only, so
+# verify it once here rather than trusting whatever is on disk.
+if command -v sha256sum >/dev/null 2>&1; then
+	got=$(sha256sum "$br_tarball" | cut -d' ' -f1)
+else
+	got=$(shasum -a 256 "$br_tarball" | cut -d' ' -f1)
+fi
+if [ "$got" != "$br_sha256" ]; then
+	echo "checksum mismatch for $br_tarball" >&2
+	echo "  expected $br_sha256" >&2
+	echo "  got      $got" >&2
+	echo "delete the file and re-run to fetch it again" >&2
+	exit 1
+fi
+
+if [ ! -f "$br_src/Makefile" ]; then
+	echo "extracting Buildroot $br_version"
+	rm -rf "$br_src"
+	tar -xJf "$br_tarball" -C "$buildroot_dir"
+fi
+
 echo
 echo "ready:"
 printf '  %-34s %s\n' "kernel source (build)" "$build"
 printf '  %-34s %s\n' "kernel source (patch reference)" "$pristine"
 printf '  %-34s %s\n' "vendor 3.0.8 reference" "$vendor"
+printf '  %-34s %s\n' "buildroot $br_version" "$br_src"

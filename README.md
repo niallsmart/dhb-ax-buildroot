@@ -36,6 +36,9 @@ computer, not a working DVR.**
 | `kernel-port/` | the port: device trees, glue drivers, patch queue, build. **Start here.** |
 | `kernel-port/README.md` | the authority on anything port-related |
 | `kernel-port/reference/` | evidence: vendor runtime probe, chip survey, hardware write-up |
+| `br2-external/` | Buildroot board support: defconfig, kernel config, patches (migration in progress) |
+| `scripts/` | the containerised Buildroot build |
+| `docs/buildroot-migration-plan.md` | why Buildroot, what it replaces, stage by stage |
 | `docs/investigation.md` | the reverse-engineering phase and backup procedures |
 | `docs/memory-map.md` | address space, the two DRAM banks, what the vendor reserves |
 | `docs/video.md` | display path, framebuffer format, putting an image on HDMI |
@@ -51,6 +54,10 @@ computer, not a working DVR.**
 kernel-port/scripts/bootstrap-sources.sh    # fetch sources, once
 kernel-port/build.sh ethernet               # or: minimal
 ```
+
+This is still the build that produces bootable images. A Buildroot-based
+replacement is being brought up alongside it in `br2-external/` and
+`scripts/`; see `docs/buildroot-migration-plan.md` for where that has got to.
 
 Then stage the image in the Pi's TFTP root and, from the DVR's U-Boot prompt:
 
@@ -217,9 +224,12 @@ Layout:
 - `kernel-port/reference/` — evidence captured from the machine and the board:
   the vendor runtime probe, the chip survey from PCB photographs, and a
   beginner-oriented write-up of the hardware survey.
-- `kernel/` and `vendor/` — source trees, regenerable by
+- `kernel/`, `vendor/` and `buildroot/` — source trees, regenerable by
   `kernel-port/scripts/bootstrap-sources.sh`. **Not worth backing up**: about
-  4 GB derived from two pinned inputs.
+  4 GB derived from three pinned inputs.
+- `br2-external/` — the Buildroot `BR2_EXTERNAL` tree, and `scripts/` — the
+  containerised Buildroot build. Both are the in-progress replacement for
+  `kernel-port/`'s build machinery, not yet the thing that produces images.
 - `rootfs/` — the extracted vendor root filesystem, used constantly as a
   reference for what the vendor drives and how.
 - `backups/` — the verified flash images described below. **The irreplaceable
@@ -236,10 +246,13 @@ the SPI NOR image lives in `backups/`, and the vendor Ethernet module in
 
 - Vendor/family: Shenzhen TVT, four-channel analog DVR.
 - SoC: HiSilicon Hi3531.
-- DRAM: **512 MiB** (two Nanya NT5CB128M16, U1 and U2). The vendor kernel
-  uses only 224 MiB; this port uses all 512, giving about 501 MiB after
-  kernel overhead. U-Boot's `DRAM: 256 MiB` is a hardcoded constant, not a
-  measurement.
+- DRAM: **1 GiB in two banks** — DDR0 at `0x80000000` and DDR1 at
+  `0xc0000000`, 512 MiB each, on separate controllers. This port declares
+  DDR0 only, giving about 501 MiB after kernel overhead; DDR1 is where
+  U-Boot's framebuffers live and is not claimed. The vendor kernel caps
+  Linux at 224 MiB and gives the rest to its media allocator. U-Boot's
+  `DRAM: 256 MiB` is a hardcoded constant, not a measurement. Full detail
+  in `docs/memory-map.md`.
 - Bootloader: vendor U-Boot 2010.06, built 2012-11-01.
 - U-Boot prompt: `hisilicon #`.
 - Kernel: Linux 3.0.8 for ARM, uncompressed legacy uImage, built 2013-03-11.

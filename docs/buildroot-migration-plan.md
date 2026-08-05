@@ -1,8 +1,9 @@
 # Buildroot migration plan
 
-Status: **Stage 1 done, Stages 2-6 pending review.** Written 2026-08-04 on the
+Status: **Stages 1 and 2 done, Stages 3-6 pending.** Written 2026-08-04 on the
 `buildroot` branch. The last state known to boot is tagged `pre-buildroot`;
-Stage 1 has since been boot-tested on hardware in its own right.
+Stage 1 has since been boot-tested on hardware in its own right. Stage 2
+touches no hardware.
 
 Companion to `../kernel-port/README.md`, which holds the current build and the
 hardware evidence this plan is validated against.
@@ -44,10 +45,14 @@ real but minor, and would not on their own justify this.
 | Initramfs hand-assembled with `ln -s` per applet | `BR2_TARGET_ROOTFS_CPIO` plus a rootfs overlay |
 | `mkimage` invoked by hand, DTB appended with `cat` | `BR2_LINUX_KERNEL_APPENDED_UIMAGE` |
 | Module tarball built by a shell loop | Standard |
-| Debian `busybox-static` unpacked from a `.deb` | BusyBox built from source, with our flags |
+| ~~Debian `busybox-static` unpacked from a `.deb`~~ | BusyBox 1.37.0 from source; already working as of Stage 2 |
 
-Option names above are from memory and must be confirmed against the pinned
-Buildroot release before being relied on.
+Option names above were written from memory. All four kernel ones were checked
+against 2026.02.3 at Stage 2 and are correct as written:
+`BR2_LINUX_KERNEL_CUSTOM_TARBALL`, `BR2_LINUX_KERNEL_CUSTOM_DTS_PATH`,
+`BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE`, `BR2_LINUX_KERNEL_APPENDED_UIMAGE`.
+The DTS one has a companion, `BR2_LINUX_KERNEL_CUSTOM_DTS_DIR`, which is the
+better fit here — see *Target layout*.
 
 ## What stays
 
@@ -58,10 +63,8 @@ Buildroot release before being relied on.
   They move and change form, not content.
 - **`kernel-port/reference/`.** The vendor runtime probe, the chip survey and
   the hardware write-up are evidence, not build machinery.
-- **The external toolchain.** Point Buildroot at the Debian
-  `arm-linux-gnueabihf` cross-compiler already in the container rather than
-  building one from source. This is the difference between a few minutes and
-  most of an hour on first build.
+- ~~**The external toolchain.**~~ Reversed at Stage 2 after testing — see
+  *The toolchain* below. Buildroot builds its own.
 
 ## Target layout
 
@@ -69,19 +72,35 @@ Buildroot's own mechanism for out-of-tree board support is a `BR2_EXTERNAL`
 tree. Buildroot itself is fetched and pinned, never vendored or forked.
 
 ```text
-board/                          BR2_EXTERNAL tree
+br2-external/                   BR2_EXTERNAL tree
   external.desc                 names the tree
   external.mk
   Config.in
   configs/
     dhb_ax_defconfig            the Buildroot configuration
-  dhb_ax/
+  board/dhb_ax/
     linux.config                kernel configuration
-    patches/linux/              the twelve patches
-    dts/                        hi3531-dhb-ax*.dts, .dtsi
+    patches/linux/              the nine patches
+    dts/hisilicon/              hi3531-dhb-ax*.dts, .dtsi
     rootfs-overlay/             /init and anything hand-placed
-    post-build.sh               if needed
+scripts/                        the containerised build
+  Dockerfile
+  buildroot.sh                  macOS wrapper
+  buildroot-in-container.sh
+buildroot/                      fetched source; gitignored
 ```
+
+Two departures from the sketch above, both settled at Stage 2:
+
+- The external tree is `br2-external/`, not `board/`. Buildroot's own
+  convention puts `board/<device>/` *inside* the external tree, so naming the
+  root `board/` would have produced `board/dhb_ax/` meaning something
+  different from `board/` in every Buildroot example.
+- `dts/` has a `hisilicon/` subdirectory because
+  `BR2_LINUX_KERNEL_CUSTOM_DTS_DIR` rsyncs the tree into
+  `arch/arm/boot/dts/` preserving structure — and patch 0001 already adds
+  the DTBs to `arch/arm/boot/dts/hisilicon/Makefile`. Matching the kernel's
+  own layout means the patch needs no change.
 
 Pin Buildroot at **2026.02.3** — the `.02` releases are the LTS line, which
 suits a project that will be picked up intermittently.
@@ -120,20 +139,63 @@ Verified:
   needing hardware that was not attached (USB full speed) or not exercised
   (serial rescue)
 
-### Stage 2 — Buildroot skeleton, no output yet
+### Stage 2 — Buildroot skeleton — **DONE 2026-08-04**
 
 Fetch and pin Buildroot in `bootstrap-sources.sh`. Create the `BR2_EXTERNAL`
-tree, the defconfig, and the external toolchain wiring. Add Buildroot's
-download cache and output directory to `.gitignore`.
+tree, the defconfig, and the toolchain wiring. Add Buildroot's download cache
+and output directory to `.gitignore`.
 
 *Acceptance:* `make dhb_ax_defconfig` succeeds and `make` gets as far as
 configuring the kernel.
 
+**Outcome.** Overshot the acceptance criterion — the build ran to completion,
+producing an ARM `zImage` and a BusyBox `rootfs.tar`. Buildroot 2026.02.3 is
+pinned by SHA-256 (`5a59e750…c7fb`, checked against the release's PGP-signed
+manifest) and extracted by `bootstrap-sources.sh`.
+
+Verified:
+
+- `make dhb_ax_defconfig` succeeds and every setting survives into `.config`
+- toolchain built from source: gcc 14.3.0, glibc 2.42, binutils 2.44,
+  headers from the same 6.18.42 tarball the kernel is built from
+- kernel configures and compiles with `arm-buildroot-linux-gnueabihf-`;
+  output is a valid `Linux kernel ARM boot executable zImage`
+- BusyBox 1.37.0 builds from source, which Stage 4 wanted anyway
+- **the produced kernel config differs from the known-good one by 23 lines,
+  all accounted for** — see below
+- a second `make` takes 7.7 s and reproduces a byte-identical `zImage`, so
+  the Docker named volume genuinely persists the toolchain
+
+The 23-line config difference, in full: compiler identity and the
+`CONFIG_CC_HAS_*` capability symbols derived from it (gcc 14.3 rather than
+Debian's 12.2 — which incidentally clears
+`CONFIG_GCC_ASM_GOTO_OUTPUT_BROKEN`); four `CONFIG_INITRAMFS_*` sub-options
+that vanish because `CONFIG_INITRAMFS_SOURCE` was blanked; `CONFIG_GCC_PLUGINS`,
+which Buildroot disables deliberately in `LINUX_BUILD_CMDS`; and
+`CONFIG_AHCI_HI3531`, `CONFIG_DWMAC_HI3531` and `CONFIG_PHY_HI3531_USB`,
+which do not yet exist because the patch queue is not applied. That last
+group is precisely Stage 3's job.
+
+Nothing was enabled unexpectedly. The concern recorded under *Open questions*
+— that `olddefconfig` would silently turn on a great deal — does not
+materialise **provided a full `.config` is fed in rather than a
+`savedefconfig`**. Keep it that way.
+
+Not done here, deliberately: no DTS, no patch queue, no appended-DTB uImage.
+The image this stage produces is not bootable on the board and was never
+sent to it.
+
 ### Stage 3 — kernel from Buildroot
 
-Move the kernel config, DTS and patches under `board/`. Configure the
-appended-DTB uImage with the load and entry address `0x80008000`. One
-defconfig only — see Decisions taken.
+Move the DTS and the patch queue under `br2-external/board/dhb_ax/`; the
+kernel config is already there. Configure the appended-DTB uImage with the
+load and entry address `0x80008000`. One defconfig only — see Decisions taken.
+
+Keep `linux.config` a **full `.config`**, not a `savedefconfig`. Buildroot
+copies it into place and runs `olddefconfig`, which fills any absent symbol
+with its Kconfig default — the opposite of the `KCONFIG_ALLCONFIG` plus
+`allnoconfig` the old build uses, where absent means *no*. A minimal
+defconfig fed through that would enable a great deal, silently.
 
 *Acceptance:* the produced `uImage` boots to a shell over TFTP and passes the
 full check list. Compare against the `pre-buildroot` build.
@@ -193,6 +255,29 @@ boots and nothing has used it since Ethernet worked. One Buildroot defconfig,
 not two. The `pre-buildroot` tag still contains it if it is ever wanted, and
 `kernel-port/` on `main` keeps building it until Stage 6.
 
+**The toolchain is built from source, not reused.** The plan originally
+assumed Buildroot could point at the Debian `arm-linux-gnueabihf` compiler
+already in the container. It cannot. Both external options were tried at
+Stage 2 and both are closed:
+
+- Debian's compiler is **rejected by design**. Buildroot inspects `gcc -v`
+  for `--with-sysroot=/` and refuses any toolchain configured that way:
+  *"Distribution toolchains are unsuitable for use by Buildroot"*
+  (`toolchain/helpers.mk:458`). Getting that far also needs
+  `libc6-dev-armhf-cross`, without which sysroot detection — which resolves
+  `gcc -print-file-name=libc.a` — returns a path relative to the working
+  directory. Neither point is a missing dependency; the block is deliberate.
+- **Bootlin's prebuilt toolchains are x86_64 binaries.**
+  `BR2_TOOLCHAIN_EXTERNAL_BOOTLIN` carries `depends on BR2_HOSTARCH =
+  "x86_64"`, and the container is aarch64 on an Apple Silicon host. The
+  symbol does not exist, so selecting it does nothing — silently, which is
+  the trap described under *Risks*.
+
+Building the toolchain costs time once. The output tree lives in a Docker
+named volume that survives between runs, so it is not paid again. glibc is
+the C library, because `BR2_TIME_BITS_64` — the 64-bit `time_t` that Stage 4
+needs — depends on it.
+
 **NFS root is deferred, not rejected.** Three reasons:
 
 1. *One variable at a time.* Each stage validates against `pre-buildroot`
@@ -226,17 +311,42 @@ involved.
 `make linux-rebuild` stays quick; rootfs changes are slower. Worth measuring
 at Stage 4 rather than assuming.
 
+**A defconfig setting can go missing without a word.** kconfig drops any line
+whose symbol does not exist or whose dependencies are unmet, and prints
+nothing. That is how the first Stage 2 toolchain selection vanished — the
+build ran on happily with a completely different toolchain. Guarded now:
+`scripts/buildroot-in-container.sh` diffs the defconfig against the resulting
+`.config` after every `dhb_ax_defconfig` and fails on any line that did not
+survive.
+
 **Rollback:** `git checkout main`, or `git checkout pre-buildroot` for the
 exact known-good tree. Nothing on this branch touches the DVR.
 
+## Questions answered at Stage 2
+
+**Does Buildroot accept the Debian `gcc-arm-linux-gnueabihf`?** No, and not
+for a fixable reason. See *The toolchain* under Decisions taken.
+
+**Does `BR2_LINUX_KERNEL_APPENDED_UIMAGE` produce what the vendor U-Boot
+expects?** Yes. Reading `linux/linux.mk:503-530`, it does exactly what
+`build-in-container.sh` does by hand: `cat zImage <dtb> > zImage.<name>`, then
+`mkimage -A arm -O linux -T kernel -C none`, reusing the load address, entry
+point and image name read back from the kernel's own uImage. It also forces
+`CONFIG_ARM_APPENDED_DTB` on. Set `BR2_LINUX_KERNEL_UIMAGE_LOADADDR` to
+`0x80008000` and the result should match; the output is named
+`uImage.hi3531-dhb-ax-ethernet` rather than the current filename.
+
+**Is a post-image script needed?** Not for the image layout, on the above
+reading. Confirm at Stage 3 by comparing against the `pre-buildroot` build —
+this is a code reading, not yet a built artifact.
+
 ## Open questions
 
-- Does the pinned Buildroot's external-toolchain support accept the Debian
-  `gcc-arm-linux-gnueabihf` in the container as-is, or does it want a
-  self-contained toolchain directory?
-- Does `BR2_LINUX_KERNEL_APPENDED_UIMAGE` produce exactly the layout the
-  vendor U-Boot expects — zImage with DTB appended, wrapped in a legacy uImage
-  at `0x80008000`? If not, a post-image script reproduces what
-  `build-in-container.sh` does today.
-- Does the pinned Buildroot need a post-image script to match the vendor
-  U-Boot's expectations, or do the built-in options suffice?
+- Whether `BR2_LINUX_KERNEL_CUSTOM_DTS_DIR` plus the existing patch 0001
+  builds the DTBs, or whether `LINUX_DTS_NAME` picking up the `hisilicon/`
+  prefix needs handling.
+- Whether the gcc 14 toolchain changes anything on the board. The working
+  kernel was built with Debian's gcc 12; Stage 3 is the first time a gcc 14
+  kernel runs on the hardware. Most likely a non-event, but it is a second
+  variable arriving alongside the build-system change, so a Stage 3 failure
+  has two candidate causes rather than one.

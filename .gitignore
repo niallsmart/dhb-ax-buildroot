@@ -8,6 +8,14 @@
 # Recreate with kernel-port/scripts/bootstrap-sources.sh
 kernel/
 vendor/
+buildroot/
+
+# Buildroot's output tree and download cache live in Docker named volumes
+# (dhb-ax-br-output, dhb-ax-br-dl), not here -- see scripts/buildroot.sh.
+# These two exist only if someone runs Buildroot outside the container.
+# Anchored, so a directory called "output" elsewhere is not swallowed.
+/output/
+/dl/
 
 # Build outputs. Recreate with kernel-port/build.sh
 kernel-port/build/
