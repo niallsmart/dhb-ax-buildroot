@@ -1,12 +1,18 @@
 #!/bin/sh
-# RAM-only bring-up shell for the DHB-AX board.
+# dvr-extract bring-up for the DHB-AX board.
+#
+# This is the dvr-extract branch's /init.  It differs from the plain bring-up
+# shell on main: after the same hardware bring-up, it brings the network up,
+# mounts the DVR's four recording partitions READ-ONLY, and starts lighttpd so
+# the containers can be browsed from another machine with tools/dvr-browser/.
+# See docs/dvr-extract.md.
 #
 # The kernel command line carries rdinit=/init (CONFIG_CMDLINE_FORCE), so this
-# runs instead of Buildroot's /sbin/init.  Deliberate: this image exists to
-# exercise hardware from a shell, not to bring up services.
+# runs instead of Buildroot's /sbin/init.  Buildroot's fs/cpio only installs its
+# own /init when one is absent, so placing this in the overlay takes over.
 #
-# Buildroot's fs/cpio only installs its own /init when one is absent, so
-# placing this in the rootfs overlay is enough to take over.
+# Nothing here writes to the disk or to flash.  The partitions are mounted -o
+# ro, and lighttpd only serves static files.
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
@@ -15,23 +21,82 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 
 echo
-echo "DHB-AX Linux 6.18 RAM-only Ethernet bring-up shell (Buildroot)"
-echo "No flash filesystems have been mounted."
+echo "DHB-AX Linux 6.18 dvr-extract server (Buildroot)"
 uname -a
+echo
+
+# --- Network -----------------------------------------------------------------
+# udhcpc configures eth0 from the lab DHCP server, the same way the factory
+# firmware gets its address.  If there is no lease it gives up and drops to the
+# shell so an address can be set by hand; the server is no use without one but a
+# wedged boot is worse.
 if [ -d /sys/class/net/eth0 ]; then
-	echo "Ethernet probe created eth0; it remains administratively down."
-	# Plain `link show`: BusyBox's ip has no -details, and passing it makes
-	# the applet print its usage instead.
-	ip link show dev eth0
+	ip link set eth0 up
+	echo "eth0 up; requesting a DHCP lease..."
+	if udhcpc -i eth0 -f -q -n -t 8 -T 2; then
+		ip -4 addr show eth0 | sed -n 's/^[[:space:]]*inet /  address /p'
+	else
+		echo "  no DHCP lease -- set one by hand, e.g.:"
+		echo "    ip addr add 192.168.4.70/22 dev eth0"
+	fi
 else
 	echo "No eth0 device was created. Check dmesg for probe diagnostics."
 fi
 echo
 
+# --- Recording partitions, read-only -----------------------------------------
+# The SATA controller and vfat are modules (see linux.config).  Load the
+# controller, wait for the disk to enumerate -- it sits behind a port
+# multiplier and takes a moment -- then mount each partition read-only.
+# sda1..sda4 map to /srv/rec/00..03, matching the factory /mnt/00..03 layout.
+echo "Loading SATA and vfat, waiting for the disk..."
+modprobe ahci_hi3531 2>/dev/null
+modprobe vfat 2>/dev/null
+
+n=0
+while [ ! -b /dev/sda1 ] && [ "$n" -lt 15 ]; do
+	sleep 1
+	n=$((n + 1))
+done
+
+if [ -b /dev/sda1 ]; then
+	# A short settle so the later partitions finish appearing before we mount.
+	sleep 1
+	mounted=0
+	for i in 1 2 3 4; do
+		dev=/dev/sda$i
+		mp=/srv/rec/0$((i - 1))
+		[ -b "$dev" ] || continue
+		mkdir -p "$mp"
+		if mount -t vfat -o ro "$dev" "$mp"; then
+			echo "  $dev -> $mp (ro)"
+			mounted=$((mounted + 1))
+		else
+			echo "  $dev failed to mount"
+		fi
+	done
+	[ "$mounted" -eq 0 ] && echo "  no partitions mounted"
+else
+	echo "  no /dev/sda1 after 15s -- is a disk attached? Check dmesg."
+fi
+echo
+
+# --- lighttpd ----------------------------------------------------------------
+# Serves /srv/rec read-only.  It daemonises, so control returns here and the
+# diagnostic shell below stays available.
+mkdir -p /var/log/lighttpd /var/run
+if lighttpd -f /etc/lighttpd/lighttpd.conf; then
+	echo "lighttpd serving /srv/rec on port 80."
+	echo "From another machine: tools/dvr-browser/browser.py --dvr http://<address>/"
+else
+	echo "lighttpd failed to start; see /var/log/lighttpd/error.log"
+fi
+echo
+
 # Not `exec`: if the shell cannot start, or is exited, /init returning would
-# panic the kernel with "Attempted to kill init!" and leave the board needing
-# a BREAK plus sysrq to recover.  Staying alive as PID 1 keeps the console
-# usable instead.
+# panic the kernel with "Attempted to kill init!" and leave the board needing a
+# BREAK plus sysrq to recover.  Staying alive as PID 1 keeps the console usable
+# and lighttpd running.
 setsid cttyhack sh || sh
 
 echo "init: shell exited -- holding PID 1 so the kernel does not panic."

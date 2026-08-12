@@ -45,7 +45,7 @@ computer, not a working DVR.**
 | `rootfs/` | extracted vendor root filesystem, used constantly as reference |
 | `vendor/`, `kernel/` | source trees; regenerable, not worth backing up |
 | `pcb/` | photographs of the board and individual chips |
-| `tools/` | raw NAND reader and validator, USB benchmark, framebuffer converter |
+| `tools/` | raw NAND reader and validator, USB benchmark, framebuffer converter, DVR clip browser (`dvr-browser/`) |
 
 ## Building and booting
 

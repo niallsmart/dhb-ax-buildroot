@@ -65,8 +65,10 @@ if [ -n "$still_there" ]; then
 fi
 
 # The read-only tools this image exists to provide.  Losing one silently would
-# be its own kind of surprise.
-for tool in mtdinfo nanddump mtd_debug ethtool i2cdetect debugfs fsck.fat; do
+# be its own kind of surprise.  lighttpd is here on the dvr-extract branch: the
+# image's reason to exist is serving the recordings, so a build that quietly
+# dropped it should fail.
+for tool in mtdinfo nanddump mtd_debug ethtool i2cdetect debugfs fsck.fat lighttpd; do
 	found=
 	for dir in bin sbin usr/bin usr/sbin; do
 		[ -e "$target/$dir/$tool" ] && found=yes
@@ -77,4 +79,13 @@ for tool in mtdinfo nanddump mtd_debug ethtool i2cdetect debugfs fsck.fat; do
 	fi
 done
 
-echo "post-build: writers absent, read-only tools present"
+# mod_webdav is the one lighttpd module that can write into the served tree.
+# The defconfig does not select it, so it should never be built -- assert that,
+# because the read-only guarantee is only as good as its weakest surprise.
+webdav=$(find "$target" -name 'mod_webdav.so' 2>/dev/null)
+if [ -n "$webdav" ]; then
+	echo "post-build: lighttpd mod_webdav present, must not be:$webdav" >&2
+	exit 1
+fi
+
+echo "post-build: writers absent, read-only tools present, no mod_webdav"
