@@ -1,8 +1,10 @@
 # macOS
 .DS_Store
 
-# Claude Code session state
+# machine local files
 .claude/
+logs
+__pycache__
 
 # Regenerable source trees, ~4 GB.
 # Recreate with kernel-port/scripts/bootstrap-sources.sh
@@ -37,8 +39,8 @@ vm-assets/
 # boot.jpg / logo.jpeg are the same asset -- the boot splash at offset
 # 0xC0000 in SPI NOR. It is a reseller's logo, not the manufacturer's, so
 # it belongs to a third party twice over.
-logo.jpeg
-boot.jpg
+*.jpeg
+*.jpg
 *.bin
 
 # Personal images used as framebuffer test material, and the raw ARGB1555
@@ -47,3 +49,4 @@ IMG_*.png
 IMG_*.jpg
 IMG_*.jpeg
 *.raw
+
