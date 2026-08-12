@@ -178,10 +178,14 @@ BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/post-buil
 # The base package is deliberately bare.  It pulls only libxcrypt (glibc) and
 # xxhash, both selected automatically.  Static file serving and byte-range
 # requests -- the two things the browser needs -- are in lighttpd's core, so
-# none of the sub-options are set.  In particular WEBDAV is left off: it is the
-# one lighttpd module that can write to the served tree, and the read-only
-# guarantee is easier to keep if the code to break it was never built in.
-# post-build.sh asserts the binary is present and that mod_webdav is absent.
+# none of the sub-options are set.
+#
+# The WEBDAV sub-option is off, but that alone does not keep WebDAV out:
+# lighttpd builds and installs mod_webdav.so regardless, and the sub-option
+# only gates its libxml2/sqlite property and lock features.  The bare module
+# still does PUT and DELETE.  post-build.sh deletes mod_webdav.so from the image
+# so the served tree cannot be written no matter what lighttpd.conf loads, and
+# asserts the lighttpd binary itself is present.
 BR2_PACKAGE_LIGHTTPD=y
 # BR2_PACKAGE_LIGHTTPD_OPENSSL is not set
 # BR2_PACKAGE_LIGHTTPD_WEBDAV is not set

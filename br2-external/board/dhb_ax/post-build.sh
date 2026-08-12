@@ -80,11 +80,18 @@ for tool in mtdinfo nanddump mtd_debug ethtool i2cdetect debugfs fsck.fat lightt
 done
 
 # mod_webdav is the one lighttpd module that can write into the served tree.
-# The defconfig does not select it, so it should never be built -- assert that,
-# because the read-only guarantee is only as good as its weakest surprise.
-webdav=$(find "$target" -name 'mod_webdav.so' 2>/dev/null)
-if [ -n "$webdav" ]; then
-	echo "post-build: lighttpd mod_webdav present, must not be:$webdav" >&2
+# lighttpd builds and installs it regardless of the WebDAV sub-option -- that
+# option only gates the libxml2/sqlite property and lock features, not the
+# module, which still does PUT and DELETE.  So disabling it in the defconfig is
+# not enough; the build puts mod_webdav.so on the image anyway.  Delete it, the
+# same way the writers above are deleted, so the read-only guarantee holds no
+# matter what lighttpd.conf loads.
+for wd in $(find "$target" -name 'mod_webdav.so' 2>/dev/null); do
+	rm -f "$wd"
+	echo "post-build: removed lighttpd module: ${wd#"$target"}"
+done
+if find "$target" -name 'mod_webdav.so' 2>/dev/null | grep -q .; then
+	echo "post-build: mod_webdav.so survived removal" >&2
 	exit 1
 fi
 
