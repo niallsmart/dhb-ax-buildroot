@@ -60,11 +60,43 @@ stamped 06:27:08 in New York (EDT, UTC-4) has index timestamp 10:27:08Z. This
 was the confirmation the parse was right: the decoded overlay and the index
 timestamp agree once the 4-hour offset is applied.
 
-Not yet decoded: which physical camera a container belongs to. Nothing here
-depends on it; identify the camera from the burnt-in overlay for now. The
-per-partition `reclog.bin` is the likely place it is recorded.
+There is only one camera. The board is a four-channel DVR but only channel 1
+was ever wired up (confirmed by the owner, and visible in the factory dmesg:
+the nvp1108 video-input decoder initialises only at i2c address 0x60 and fails
+at 0x62/0x64/0x66 — three inputs are not fitted). So a container is never
+ambiguous as to camera, and the recordings are a single stream.
 
 The parser lives in `tools/dvr-browser/ftvt.py` with this layout at the top.
+
+## reclog.bin: the segment index and the ring buffer
+
+Each partition has a `reclog.bin` — a table of 24-byte records, one per
+container, that the DVR uses to find footage by time without opening every
+file:
+
+```
+offset  size  field
+0x00    4     record type (always 4)
+0x04    4     (always 0)
+0x08    4     segment start, Unix seconds UTC
+0x0c    4     segment end,   Unix seconds UTC
+0x10    4     (always 2)
+0x14    4     (a constant, same on every partition)
+```
+
+The records are contiguous in time, and the partitions chain: partition 00's
+last segment ends at the exact second partition 01's first begins. The four
+partitions are one time-ordered **ring buffer**, filled 03 → 00 → 01 → 02, ~2.3
+days each, ~9 days total retention. No field identifies a camera, consistent
+with there being only one.
+
+`browser.py` reads `reclog.bin` to build its timeline: it parses every
+partition's records, maps each to its container (record i is `0000000i.dat`),
+and sorts them all by start time, so the left panel is the whole ~9-day ring in
+wall-clock order rather than a per-file list. A partition whose `reclog.bin` is
+missing falls back to a bare `.dat` listing with no times, so nothing is hidden.
+Playback still comes from each container's own FHDR index, which stays ground
+truth for the keyframes — reclog only supplies the ordering and the labels.
 
 ## Building the image
 

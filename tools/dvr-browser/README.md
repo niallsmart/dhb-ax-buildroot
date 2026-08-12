@@ -16,9 +16,11 @@ The DVR, booted into the `dvr-extract` Buildroot image, runs lighttpd serving
 its four recording partitions read-only with HTTP range support (see
 [docs/dvr-extract.md](../../docs/dvr-extract.md)). This program:
 
-1. lists the `.dat` containers on each partition,
-2. range-fetches only each container's 256 KiB header+index to build a
-   keyframe timeline with real timestamps,
+1. reads each partition's `reclog.bin` to build one chronological timeline of
+   every recording across the whole disk (the four partitions are a
+   time-ordered ring buffer),
+2. when you pick a recording, range-fetches only its 256 KiB header+index to
+   build a keyframe timeline with real timestamps,
 3. when you click a time, range-fetches just that keyframe's byte span, remuxes
    it to fragmented MP4 with ffmpeg (no re-encode), and streams it into the
    page's `<video>`.
@@ -50,6 +52,8 @@ DVR.
 - Playback runs from the chosen keyframe to the end of that container. Real
   capture rate is ~30 fps; raw H.264 carries no timing, so `browser.py` hands
   ffmpeg that rate when remuxing (the `FPS` constant).
-- The DVR's `.dat` files are ~512 MB each and hold one continuous span (~11
-  min) of one camera. Which physical camera is not yet decoded from the
-  container; identify it from the burnt-in overlay for now.
+- The DVR's `.dat` files are ~512 MB each and hold one continuous span (~7 min)
+  of video. There is only one camera (the board is four-channel but only
+  channel 1 was wired), so a recording is never ambiguous. The four partitions
+  form one time-ordered ring buffer, ~9 days total; the timeline stitches them
+  into a single chronological list.

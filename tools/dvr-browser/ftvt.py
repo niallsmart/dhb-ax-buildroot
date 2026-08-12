@@ -40,6 +40,32 @@ import struct
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+# --- reclog.bin: the per-partition segment index --------------------------------
+#
+# Each partition carries a reclog.bin: a table of fixed 24-byte records, one per
+# recorded container, that the DVR uses to find footage by time without opening
+# every .dat.  Records start at 0x40 and run contiguously until an unused slot.
+#
+#   offset  size  field
+#   0x00    4     record type (always 4 for a real record)
+#   0x04    4     (always 0)
+#   0x08    4     segment start, Unix seconds UTC
+#   0x0c    4     segment end,   Unix seconds UTC
+#   0x10    4     (always 2)
+#   0x14    4     (a constant, identical on every partition)
+#
+# Record i maps positionally to the container 0000000i.dat on that partition.
+# The records are time-contiguous, and the four partitions chain end to end into
+# one ring buffer, so a chronological timeline across the whole disk is just
+# every partition's segments sorted by start time.  No field names a camera --
+# this DVR has only one.
+RECLOG_BASE = 0x40
+RECLOG_REC = 24
+_RECLOG_TYPE = 4
+# Sanity bound on the start-time field: Unix seconds within [2000, 2038], which
+# rejects zero/uninitialised slots and misalignment without hard-coding a year.
+_TS_MIN, _TS_MAX = 946_684_800, 2_145_916_800
+
 FHDR_MAGIC = b"FHDR"
 FTVT_TAG = b"FTVT"
 REC_TAG = b"00db"
@@ -107,6 +133,50 @@ class Container:
     def span_from(self, i: int, file_size: int) -> tuple[int, int]:
         """Byte range from keyframe i to the end of the file (play to end)."""
         return self.keyframes[i].offset, file_size
+
+
+@dataclass(frozen=True)
+class Segment:
+    index: int          # positional: this is container {index:08d}.dat
+    start_s: int        # Unix seconds, UTC
+    end_s: int
+
+    @property
+    def name(self) -> str:
+        return f"{self.index:08d}.dat"
+
+    @property
+    def start(self) -> datetime:
+        return datetime.fromtimestamp(self.start_s, tz=timezone.utc)
+
+    @property
+    def end(self) -> datetime:
+        return datetime.fromtimestamp(self.end_s, tz=timezone.utc)
+
+
+# The records occupy only the first ~11 KiB even on a full partition; this is a
+# generous cap on how much of reclog.bin a caller needs to fetch.
+RECLOG_SPAN = 64 * 1024
+
+
+def parse_reclog(buf: bytes) -> list[Segment]:
+    """Parse a reclog.bin into its list of segments, in on-disk (time) order.
+
+    Scans records from RECLOG_BASE until the first unused or malformed slot.
+    buf need only contain the populated head of the file (RECLOG_SPAN bytes is
+    always enough).  Returns [] if the table is empty.
+    """
+    segs = []
+    off = RECLOG_BASE
+    i = 0
+    while off + RECLOG_REC <= len(buf):
+        rtype, _zero, start, end = struct.unpack_from("<IIII", buf, off)
+        if rtype != _RECLOG_TYPE or not (_TS_MIN <= start <= _TS_MAX) or start > end:
+            break
+        segs.append(Segment(index=i, start_s=start, end_s=end))
+        off += RECLOG_REC
+        i += 1
+    return segs
 
 
 def parse_header(buf: bytes) -> Container:

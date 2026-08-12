@@ -95,6 +95,15 @@ class DVR:
                 names.add(href.rsplit("/", 1)[-1])
         return sorted(names)
 
+    def get_reclog(self, directory: str) -> bytes | None:
+        """The head of a partition's reclog.bin, or None if absent."""
+        try:
+            return self.get_range(directory + "reclog.bin", 0, ftvt.RECLOG_SPAN)
+        except urllib.error.HTTPError as e:
+            if e.code in (404, 416):  # missing, or smaller than the range
+                return None
+            raise
+
 
 def stream_mp4(dvr: DVR, path: str, start: int, end: int):
     """Yield fragmented-MP4 bytes for the container span [start, end).
@@ -176,6 +185,8 @@ class App(http.server.BaseHTTPRequestHandler):
         try:
             if route == "/":
                 self._send(200, INDEX_HTML.encode(), "text/html; charset=utf-8")
+            elif route == "/api/timeline":
+                self._api_timeline()
             elif route == "/api/containers":
                 self._api_containers()
             elif route == "/api/index":
@@ -194,6 +205,37 @@ class App(http.server.BaseHTTPRequestHandler):
             self._send(500, f"{type(e).__name__}: {e}".encode())
 
     # -- endpoints -------------------------------------------------------------
+
+    def _api_timeline(self):
+        """One chronological timeline across all partitions, from reclog.bin.
+
+        Each partition's reclog gives its segments' start/end times; segment i
+        maps to container 0000000i.dat.  The four partitions are a ring buffer,
+        so merging every partition's segments and sorting by start time yields
+        the whole disk in wall-clock order.  A partition with no reclog falls
+        back to a bare .dat listing with null times, so nothing is hidden just
+        because its index is missing.
+        """
+        entries = []
+        for p in self.partitions:
+            directory = f"/{p}/"
+            raw = self.dvr.get_reclog(directory)
+            if raw:
+                for seg in ftvt.parse_reclog(raw):
+                    entries.append({
+                        "partition": p, "name": seg.name,
+                        "path": directory + seg.name,
+                        "start_utc": seg.start.isoformat(),
+                        "end_utc": seg.end.isoformat(),
+                    })
+            else:
+                for name in self.dvr.list_dats(directory):
+                    entries.append({"partition": p, "name": name,
+                                    "path": directory + name,
+                                    "start_utc": None, "end_utc": None})
+        # Sort by start time; the timeless fallback entries sort last.
+        entries.sort(key=lambda e: (e["start_utc"] is None, e["start_utc"] or ""))
+        self._json(entries)
 
     def _api_containers(self):
         """List every container across the partitions, with size and path."""
@@ -255,7 +297,10 @@ INDEX_HTML = r"""<!doctype html>
   #left { border-right: 1px solid #8884; overflow: auto; padding: 8px; }
   #right { display: flex; flex-direction: column; min-width: 0; }
   h1 { font-size: 14px; margin: 4px 8px; }
-  .c { padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .day { position: sticky; top: 0; background: Canvas; font-weight: 700;
+         padding: 6px 8px 2px; opacity: .85; }
+  .c { padding: 5px 8px; border-radius: 6px; cursor: pointer;
+       font-variant-numeric: tabular-nums; }
   .c:hover { background: #8882; }
   .c.sel { background: #3b82f680; }
   .c .t { font-weight: 600; }
@@ -269,7 +314,7 @@ INDEX_HTML = r"""<!doctype html>
   #hint { opacity: .6; padding: 8px; }
   #err { color: #e11; padding: 8px; white-space: pre-wrap; }
 </style>
-<div id="left"><h1>Containers</h1><div id="list">loading…</div></div>
+<div id="left"><h1>Recordings (oldest → newest)</h1><div id="list">loading…</div></div>
 <div id="right">
   <video id="v" controls></video>
   <div id="hint">Pick a container, then a time to play from.</div>
@@ -285,17 +330,33 @@ const dur = s => { s=Math.round(s); const m=Math.floor(s/60);
     return m+'m'+String(s%60).padStart(2,'0')+'s'; };
 
 let cur = null;
+const hms = iso => new Date(iso).toLocaleTimeString(undefined, {hour12:false});
+const day = iso => new Date(iso).toLocaleDateString(undefined,
+    {weekday:'short', year:'numeric', month:'short', day:'2-digit'});
 
-async function loadContainers() {
-  const r = await fetch('/api/containers');
+async function loadTimeline() {
+  const r = await fetch('/api/timeline');
   const cs = await r.json();
   const list = $('#list'); list.innerHTML = '';
-  if (!cs.length) { list.textContent = 'no containers found'; return; }
+  if (!cs.length) { list.textContent = 'no recordings found'; return; }
+  let lastDay = null;
   for (const c of cs) {
+    if (c.start_utc) {
+      const dk = day(c.start_utc);
+      if (dk !== lastDay) {
+        const h = document.createElement('div');
+        h.className = 'day'; h.textContent = dk;
+        list.appendChild(h); lastDay = dk;
+      }
+    }
     const d = document.createElement('div');
     d.className = 'c';
-    d.innerHTML = `<div class="t">part ${c.partition} · ${c.name}</div>`
-                + `<div class="s">${(c.size/1048576|0)} MiB</div>`;
+    const label = c.start_utc
+      ? `<span class="t">${hms(c.start_utc)}</span>`
+        + `<span class="s"> – ${hms(c.end_utc)} · part ${c.partition}</span>`
+      : `<span class="t">${c.name}</span>`
+        + `<span class="s"> · part ${c.partition} (no index)</span>`;
+    d.innerHTML = label;
     d.onclick = () => selectContainer(c, d);
     list.appendChild(d);
   }
@@ -330,7 +391,7 @@ function play(path, kf) {
   v.play().catch(()=>{});
 }
 
-loadContainers().catch(e => $('#list').textContent = e);
+loadTimeline().catch(e => $('#list').textContent = e);
 </script>
 """
 
