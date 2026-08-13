@@ -5,7 +5,7 @@ verified flash backups it produced. This is a historical record: the
 procedures here were used to understand the hardware and to capture every
 flash layer before any of the porting work began.
 
-For current work see the top-level `README.md` and `kernel-port/README.md`.
+For current work see the top-level `README.md` and `docs/porting.md`.
 
 ## Boot and flash layout
 
@@ -385,7 +385,7 @@ PID from this document.
 
 This is the **vendor** kernel with its application bypassed, from the
 investigation phase. It remains useful as a reference — it is how the runtime
-probe in `kernel-port/reference/vendor-runtime-probe.md` was captured, and the
+probe in `docs/reference/vendor-runtime-probe.md` was captured, and the
 only way to see the vendor's own drivers running. For the mainline port, boot
 a `uImage-*` from the Pi's TFTP root instead.
 

@@ -24,11 +24,9 @@ fi
 buildroot=${BUILDROOT:-/buildroot}
 output=${BR_OUTPUT:-/output}
 external=${BR2_EXTERNAL:-/work/br2-external}
-# Deliberately *not* kernel-port/build/artifacts.  Both builds produce a
-# zImage, and while the two paths coexist an image from one landing beside an
-# image from the other is a trap.  Stage 5 compares them; Stage 6 makes this
-# the only one.  The parent is already gitignored.
-artifacts=/work/kernel-port/build/buildroot-artifacts
+# Keep finished images outside the Buildroot output volume so they are easy to
+# stage and survive container recreation. The parent is gitignored.
+artifacts=/work/artifacts/buildroot
 
 test -f "$buildroot/Makefile"
 test -f "$external/external.desc"
@@ -91,7 +89,7 @@ fi
 # the images directory empty, which is not an error.
 if [ -d "$output/images" ] && [ -n "$(ls -A "$output/images" 2>/dev/null)" ]; then
 	echo
-	echo "artifacts -> kernel-port/build/buildroot-artifacts/"
+	echo "artifacts -> artifacts/buildroot/"
 	for f in "$output"/images/*; do
 		[ -f "$f" ] || continue
 		install -m 0644 "$f" "$artifacts/"

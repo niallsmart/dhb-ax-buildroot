@@ -9,8 +9,12 @@ Buildroot now produces a kernel that boots and passes the check list, so the
 migration is complete: Buildroot produces the image that boots, and the old
 build machinery has been removed.
 
-Companion to `../kernel-port/README.md`, which holds the current build and the
+Companion to `porting.md`, which holds the current build and the
 hardware evidence this plan is validated against.
+
+References below to `kernel-port/` preserve the paths that existed while the
+migration was performed; that directory was retired after the documentation
+moved under `docs/` and build outputs moved under `artifacts/`.
 
 ## Why
 
@@ -65,7 +69,7 @@ better fit here — see *Target layout*.
   script.
 - **The patches and drivers themselves.** These are the actual work product.
   They move and change form, not content.
-- **`kernel-port/reference/`.** The vendor runtime probe, the chip survey and
+- **`docs/reference/`.** The vendor runtime probe, the chip survey and
   the hardware write-up are evidence, not build machinery.
 - ~~**The external toolchain.**~~ Reversed at Stage 2 after testing — see
   *The toolchain* below. Buildroot builds its own.
@@ -326,7 +330,7 @@ the mechanism the flash work depends on, so it should not be weakened.
 ### Stage 5 — validate against known-good — **DONE 2026-08-04**
 
 Run the full check list, comparing against the numbers recorded in
-`kernel-port/README.md`. Only then merge to `main`.
+`docs/porting.md`. Only then merge to `main`.
 
 **Outcome.** The check list was run against the Buildroot image at Stage 3 and
 again at Stage 4. Every comparable number matches the `pre-buildroot` build:
@@ -361,8 +365,9 @@ moved to `scripts/` alongside the build it feeds, and lost the derived build
 tree and `--reset-build` — Buildroot extracts and patches its own copy every
 time, so neither has anything left to do.
 
-`kernel-port/` now holds documentation and evidence only. Both READMEs'
-build sections are rewritten against the Buildroot flow, and the boot
+`docs/porting.md` and `docs/reference/` now hold the documentation and
+evidence. The overview and porting build sections were rewritten against the
+Buildroot flow, and the boot
 instructions gained the two recovery details this migration needed for real:
 interrupt autoboot *densely* or the vendor system wins, and a serial BREAK
 followed by `b` still resets a panicked kernel.

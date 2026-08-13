@@ -14,7 +14,7 @@
 #            No such file or directory
 #
 # So the kernel is built as a plain zImage and wrapped here instead.  The
-# arguments below match what kernel-port/scripts/build-in-container.sh used.
+# arguments below match what the retired pre-Buildroot build used.
 #
 # $1 is BINARIES_DIR, which already holds zImage and the built DTBs.
 set -eu

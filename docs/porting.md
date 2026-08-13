@@ -1,6 +1,6 @@
 # Linux 6.18 LTS bring-up for the DHB_AX V1.2 DVR
 
-This directory contains a Linux 6.18.42 LTS port for the Shenzhen TVT DVR's
+This document records the Linux 6.18.42 LTS port for the Shenzhen TVT DVR's
 HiSilicon Hi3531 (`godnet`) SoC, replacing the vendor's Linux 3.0.8.
 
 The board identifies itself as **`DHB_AX V1.2`**, silkscreened on the PCB.
@@ -53,7 +53,7 @@ Important confirmed values used by the device trees:
 | Block | Physical address | Interrupt/rate |
 |---|---:|---:|
 | RAM (DDR0) | `0x80000000` | 512 MiB; all of it used |
-| RAM (DDR1) | `0xc0000000` | 512 MiB; **not declared**, see `docs/memory-map.md` |
+| RAM (DDR1) | `0xc0000000` | 512 MiB; **not declared**, see `memory-map.md` |
 | GIC CPU interface | `0x20300100` | — |
 | GIC distributor | `0x20301000` | — |
 | SP804 timer pair | `0x20000000` | GIC SPI 3 / 155 MHz |
@@ -145,26 +145,28 @@ had a working soft reset.
 
 ## Files
 
-- `dts/hi3531-dhb-ax.dtsi`: shared board description.
-- `dts/hi3531-dhb-ax.dts`: minimal variant.
-- `dts/hi3531-dhb-ax-ethernet.dts`: minimal plus GMAC1.
-- `patches/`: the patch queue, applied in order. Three of them add a glue
-  driver as a new file alongside the Kconfig and Makefile entries that build
-  it, so a driver and its build wiring cannot drift apart:
+- `../br2-external/board/dhb_ax/dts/hi3531-dhb-ax.dtsi`: shared board
+  description.
+- `../br2-external/board/dhb_ax/dts/hi3531-dhb-ax.dts`: minimal variant.
+- `../br2-external/board/dhb_ax/dts/hi3531-dhb-ax-ethernet.dts`: minimal plus
+  GMAC1.
+- `../br2-external/board/dhb_ax/patches/linux/`: the patch queue, applied in
+  order. Three patches add a glue driver as a new file alongside the Kconfig
+  and Makefile entries that build it, so a driver and its build wiring cannot
+  drift apart:
   - `0003`: `dwmac-hi3531.c`, DWMAC glue for the shared MDIO/DMA integration.
   - `0007`: `ahci_hi3531.c`, AHCI glue; clock, reset and PHY bring-up.
   - `0009`: `phy-hi3531-usb.c`, USB 2.0 PHY; clock and reset bring-up.
 
   To change a driver, edit it in the kernel build tree and regenerate the
-  patch; do not add a separate copy under `kernel-port/`, which is what this
-  arrangement replaced.
+  patch; do not add a separate source copy outside the patch queue.
 - `reference/vendor-runtime-probe.md`: read-only capture of the stock
   firmware's `/proc`, and the authoritative record of what this board runs.
 - `reference/board-chips.md`: part numbers read off the PCB, and the
   authoritative record of what is physically fitted.
 
-The build machinery that used to live here was retired at Stage 6 of
-`../docs/buildroot-migration-plan.md`. What it did is now Buildroot's job:
+The pre-Buildroot build machinery was retired at Stage 6 of
+`buildroot-migration-plan.md`. What it did is now Buildroot's job:
 
 | Was | Is now |
 |---|---|
@@ -174,7 +176,8 @@ The build machinery that used to live here was retired at Stage 6 of
 | `scripts/bootstrap-sources.sh` | `../scripts/bootstrap-sources.sh` |
 | the device trees and the patch queue | `../br2-external/board/dhb_ax/` |
 
-This directory now holds documentation and evidence only.
+Port documentation and evidence now live under `docs/`; maintained board
+support lives under `../br2-external/`.
 
 Patch queue, applied in numeric order:
 
@@ -229,7 +232,7 @@ volumes, not the bind-mounted workspace, which on macOS is much faster. The
 volumes persist between runs: a rebuild after no change takes seconds rather
 than rebuilding the toolchain. `scripts/buildroot.sh --clean` discards them.
 
-Finished artifacts land in `kernel-port/build/buildroot-artifacts/`:
+Finished artifacts land in the repository-root `artifacts/buildroot/`:
 
 ```text
 uImage-hi3531-dhb-ax-ethernet           U-Boot-ready image
@@ -321,7 +324,7 @@ followed by `b`.
 ## Verified Ethernet bring-up
 
 The Ethernet image booted from DRAM on 2026-08-03 and passed traffic. Full
-console log in `build/artifacts/boot-log-ethernet-r2.txt`. What the hardware
+console log in `../artifacts/legacy/boot-log-ethernet-r2.txt`. What the hardware
 confirmed:
 
 ```text

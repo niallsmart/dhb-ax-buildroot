@@ -1,8 +1,5 @@
 # Host environment for Buildroot.
 #
-# Separate from kernel-port/Dockerfile, which stays in place until the old
-# build path is retired at Stage 6 of docs/buildroot-migration-plan.md.
-#
 # No cross-compiler here.  Buildroot builds its own -- Debian's is rejected by
 # design, see the toolchain section of br2-external/configs/dhb_ax_defconfig.
 FROM debian:12

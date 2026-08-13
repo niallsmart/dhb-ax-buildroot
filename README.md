@@ -33,10 +33,11 @@ computer, not a working DVR.**
 
 | Path | What it is |
 |---|---|
-| `kernel-port/README.md` | the authority on anything port-related. **Start here.** |
-| `kernel-port/reference/` | evidence: vendor runtime probe, chip survey, hardware write-up |
+| `docs/porting.md` | the authority on anything port-related. **Start here.** |
+| `docs/reference/` | evidence: vendor runtime probe, chip survey, hardware write-up |
 | `br2-external/` | board support: defconfig, kernel config, device trees, patch queue, overlay |
 | `scripts/` | fetch the sources, and the containerised Buildroot build |
+| `artifacts/buildroot/` | ignored Buildroot images, recreated by the build |
 | `docs/buildroot-migration-plan.md` | why Buildroot, what it replaces, stage by stage |
 | `docs/investigation.md` | the reverse-engineering phase and backup procedures |
 | `docs/memory-map.md` | address space, the two DRAM banks, what the vendor reserves |
@@ -59,7 +60,7 @@ Board support lives in `br2-external/`. The migration from the previous
 hand-rolled build is finished; `docs/buildroot-migration-plan.md` records what
 changed and why.
 
-The image lands in `kernel-port/build/buildroot-artifacts/`. Stage it in the
+The image lands in `artifacts/buildroot/`. Stage it in the
 Pi's TFTP root and, from the DVR's U-Boot prompt:
 
 ```text
@@ -72,7 +73,7 @@ bootm 0x82000000
 ```
 
 Never `saveenv`. Full detail, including recovery when the board wedges, is in
-`kernel-port/README.md`.
+`docs/porting.md`.
 
 ## How the hardware was worked out
 
@@ -93,7 +94,7 @@ others catch:
 
 Disagreements between them were where the interesting findings came from. A
 worked example, written for a general audience, is in
-`kernel-port/reference/silicon-survey.html`.
+`docs/reference/silicon-survey.html`.
 
 ## Safety rule
 
@@ -204,7 +205,7 @@ The TFTP daemon is normally stopped when not in use. It serves `/srv/tftp`,
 which holds the port's `uImage-*` files; the DVR downloads from there with
 `tftp 0x82000000 <name>`.
 
-### NFS share for kernel-port work
+### NFS share for port work
 
 `/srv/dhb-ax` is exported read-write to `192.168.7.240` only — the address the
 DVR takes under our kernel:
@@ -247,18 +248,19 @@ regenerable, and is the obvious place to reclaim space.
 
 Layout:
 
-- `kernel-port/` — the port's documentation and evidence. Its README is the
-  authority on anything port-related. **Start here for port work.** The build
-  machinery it used to hold was retired once Buildroot took over.
+- `docs/porting.md` — the authority on anything port-related. **Start here for
+  port work.**
 - `br2-external/` — board support: the defconfig, kernel config, device trees,
   patch queue, rootfs overlay, and the post-build and post-image scripts.
-- `kernel-port/reference/` — evidence captured from the machine and the board:
+- `docs/reference/` — evidence captured from the machine and the board:
   the vendor runtime probe, the chip survey from PCB photographs, and a
   beginner-oriented write-up of the hardware survey.
 - `kernel/`, `vendor/` and `buildroot/` — source trees, regenerable by
   `scripts/bootstrap-sources.sh`. **Not worth backing up**: about
   4 GB derived from three pinned inputs.
 - `scripts/` — source bootstrap and the containerised Buildroot build.
+- `artifacts/buildroot/` — ignored Buildroot images; `artifacts/legacy/` keeps
+  the older pre-Buildroot outputs for comparison.
 - `rootfs/` — the extracted vendor root filesystem, used constantly as a
   reference for what the vendor drives and how.
 - `backups/` — the verified flash images described below. **The irreplaceable
@@ -294,7 +296,7 @@ the SPI NOR image lives in `backups/`, and the vendor Ethernet module in
 - Stored U-Boot `ethaddr`: placeholder `00:00:23:34:45:66`.
 
 Established later, from the vendor's running kernel and from the board itself
-(details and evidence in `kernel-port/reference/`):
+(details and evidence in `docs/reference/`):
 
 - The SoC is **dual-core**; the vendor schedules both Cortex-A9s.
 - The board carries **three** Hi3531 chips: the main SoC plus two more on
@@ -317,7 +319,7 @@ Important names include `td3531`, `XDVRStart.hisi`, `libhi3531.so`, `boot.sh`,
 ## Roadmap
 
 The port carries nine local patches, two glue drivers and one PHY driver.
-Full detail in `kernel-port/README.md`; status is the table at the top of this
+Full detail in `docs/porting.md`; status is the table at the top of this
 file.
 
 ### Planned next steps
@@ -345,7 +347,7 @@ In order of value per unit of work:
    it (`CONFIG_CACHE_HIL2V200=y`). Riskier than anything else remaining,
    because cache maintenance bugs corrupt data silently rather than failing
    visibly, and the size of the win has never been measured. Notes in
-   `kernel-port/README.md`.
+   `docs/porting.md`.
 4. **DMA engine** at `0x100d0000`, SPI 29. Real and heavily used by the
    vendor, but clock-gated, unidentifiable by ID probe, and with no vendor
    source — only a binary module. Low value: Ethernet, SATA and USB all have
@@ -378,14 +380,14 @@ Cheap and worthwhile alongside the above:
 - Whether the three unused ports on the fitted SATA multiplier could be
   populated. Assessed from photographs: they need connectors and coupling
   capacitors, and two assumptions want checking first. Notes in
-  `kernel-port/README.md`.
+  `docs/porting.md`.
 
 ## Recommended next session
 
 1. Attach to both tmux sessions and inspect every pane before typing. The DVR
    pane may be at U-Boot (`hisilicon #`), at our kernel's shell (`/ #`), or at
    the vendor system's login prompt — the vendor root password is `1001chin`.
-2. For port work, read `kernel-port/README.md` first, then run
+2. For port work, read `docs/porting.md` first, then run
    `scripts/bootstrap-sources.sh` if `kernel/` is missing.
 3. Preserve a second copy of `backups/` on another host or storage device.
    That directory is the only irreplaceable content here.

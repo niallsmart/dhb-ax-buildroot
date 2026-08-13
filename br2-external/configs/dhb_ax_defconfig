@@ -22,7 +22,7 @@ BR2_ARM_FPU_VFPV3D16=y
 # building one costs most of an hour.  Both external options were tried and
 # neither works on this host:
 #
-#   Debian's gcc-arm-linux-gnueabihf, the compiler kernel-port/ uses, is
+#   Debian's gcc-arm-linux-gnueabihf, used by the retired pre-Buildroot build, is
 #   rejected outright.  Buildroot checks `gcc -v` for --with-sysroot=/ and
 #   refuses any toolchain configured that way -- "Distribution toolchains are
 #   unsuitable for use by Buildroot" (toolchain/helpers.mk:458).  It is a

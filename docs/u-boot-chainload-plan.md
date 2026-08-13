@@ -6,7 +6,7 @@ been written to the DVR. Last updated 2026-08-04.
 Companion to `investigation.md`, which holds the hardware survey, flash
 layout and backup record; to `binwalk-notes.md`, which covers the inspection
 tooling used to build the flash map below and where it misleads; and to
-`../kernel-port/README.md`, which holds the Linux 6.18 bring-up.
+`porting.md`, which holds the Linux 6.18 bring-up.
 
 The board boots vendor U-Boot 2010.06, built 2012-11-01, from SPI NOR. This
 plan reaches a current U-Boot without replacing it: the vendor bootloader
@@ -174,7 +174,7 @@ prompt. Capture the current environment first regardless.
    at `0x080000` it will overwrite the vendor's. Build with the environment in
    RAM only, or give it its own sector in free space.
 4. **Board support.** PL011 serial at `0x20080000`, timer, SPI, and the
-   GMAC1 Ethernet described in `../kernel-port/README.md`. The device trees
+   GMAC1 Ethernet described in `porting.md`. The device trees
    there are the reference for addresses and interrupts.
 
 Note the UART clock trap documented in the kernel port: U-Boot leaves UART0

@@ -327,7 +327,7 @@ around 760 MiB, so a second bank needs either `CONFIG_HIGHMEM` or
 The DRAM parts are Nanya `NT5CB128M16` — 128M × 16 bits = 256 MB each. U1 and
 U2 are visible on the top side; the electrical evidence above requires four,
 so two more are presumably on the underside, which has not been photographed.
-See `../kernel-port/reference/board-chips.md`.
+See `reference/board-chips.md`.
 
 Memory above 256 MiB was proven real in U-Boot before any kernel change, and
 the first attempt at this was unsound. Writing a four-word pattern and reading
@@ -350,7 +350,7 @@ were identical across repeats with memory under pressure.
 
 ## Related
 
-- `../kernel-port/reference/board-chips.md` — what is physically fitted
-- `../kernel-port/reference/vendor-runtime-probe.md` — what the vendor kernel
+- `reference/board-chips.md` — what is physically fitted
+- `reference/vendor-runtime-probe.md` — what the vendor kernel
   reports at runtime
 - `investigation.md` — the bring-up narrative

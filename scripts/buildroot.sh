@@ -28,7 +28,7 @@ fi
 
 if [ ! -f "$buildroot_dir/Makefile" ]; then
 	echo "no Buildroot source at $buildroot_dir" >&2
-	echo "run kernel-port/scripts/bootstrap-sources.sh first" >&2
+	echo "run scripts/bootstrap-sources.sh first" >&2
 	exit 1
 fi
 
