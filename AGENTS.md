@@ -81,8 +81,24 @@ Facts that affect low-level work:
 
 ## Talking to the DVR
 
-The board's serial console is a picocom session running under tmux, started by
-`just dvr`. Drive it with:
+The UART is a single-reader resource. Repository tools serialize direct access
+with `flock -n /tmp/dvr-uart.lock` on the Pi; use the same lock for any manual
+reader. Never open a second picocom, screen or other reader while the `dvr`
+console or a boot script owns the UART.
+
+Choose the tool according to the operation:
+
+- For ordinary commands at an existing Linux shell, use
+  `tools/dvr-console.sh`. It drives the persistent picocom session under the
+  local `dvr` tmux session.
+- For rebooting, interrupting autoboot and TFTP-booting a kernel, use
+  `tools/dvr-boot.exp`. Expect owns the state transitions and prompt matching;
+  fixed sleeps and tmux scrollback are not reliable enough for this sequence.
+- For interactive investigation, attach to the `dvr` tmux session. Direct SSH
+  plus picocom is a manual fallback only: first release the tmux console and
+  acquire the UART lock.
+
+Start the persistent console with `just dvr`, then run ordinary commands with:
 
 ```sh
 tools/dvr-console.sh 'cat /proc/mtd'
@@ -93,18 +109,19 @@ command in start/end markers and prints only the text between the last pair, so
 the result cannot be confused with stale scrollback. It polls for completion
 rather than sleeping a fixed interval, so slow commands are not truncated.
 
-For interactive serial work, including interrupting autoboot and operating at
-the U-Boot prompt, access the `dvr` tmux session directly. It is acceptable to
-use `tmux capture-pane`; limit the requested history (for example with
-`-S -80`) and account for stale output when interpreting it.
+For interactive serial work, access the `dvr` tmux session directly. It is
+acceptable to use `tmux capture-pane`; limit the requested history (for
+example with `-S -80`) and account for stale output when interpreting it. Do
+not automate reboot or boot-prompt detection by scraping this pane.
 
 Alternatively, SSH to the Raspberry Pi and access `/dev/serial0` directly,
-bypassing tmux. Do not run two serial-console readers at once: first make sure
-the existing picocom session is not using the device, and retain the
-`/proc/consoles` check below before reopening it.
+bypassing tmux. First gracefully quit the existing picocom with its `Ctrl-A`,
+`Ctrl-Q` sequence, verify the device is unused, retain the `/proc/consoles`
+check below, and take `/tmp/dvr-uart.lock`. Do not kill or restart the shared
+tmux server.
 
-`SESSION` and `TIMEOUT` are environment overrides; the defaults are `dvr` and 20
-seconds.
+For `dvr-console.sh`, `SESSION` and `TIMEOUT` are environment overrides; the
+defaults are `dvr` and 20 seconds.
 
 The console might be at U-Boot (`hisilicon #`), the mainline shell (`/ #`), or
 the vendor login prompt (vendor root password: `1001chin`). Confirm which
@@ -136,6 +153,19 @@ ssh raspberrypi 'sudo install -m0644 /tmp/img /srv/tftp/uImage-hi3531-dhb-ax-eth
 
 Then, at the DVR's U-Boot prompt (`hisilicon #`), over the serial console:
 
+```sh
+tools/dvr-boot.exp --check uImage-hi3531-dhb-ax-ethernet
+tools/dvr-boot.exp uImage-hi3531-dhb-ax-ethernet
+```
+
+The Expect tool verifies the staged image and TFTP service, gracefully
+releases the `dvr` tmux console, opens the UART directly through SSH, handles
+login/reboot/U-Boot/TFTP/Linux prompt transitions, and restores the persistent
+tmux console afterward. It does not stage the image, call `saveenv`, or write
+board storage. Use `--transcript PATH` when a durable boot log is needed.
+
+For manual recovery, the equivalent commands at the DVR's U-Boot prompt are:
+
 ```text
 setenv ipaddr 192.168.7.241
 setenv netmask 255.255.252.0
@@ -145,17 +175,20 @@ tftp 0x82000000 uImage-hi3531-dhb-ax-ethernet
 bootm 0x82000000
 ```
 
-**`bootdelay` is 1 second.** To catch U-Boot you have to reboot the board
-(`reboot` from Linux, or power-cycle) and spam a key on the serial line through
-the whole reset — reacting to "Hit any key to stop autoboot" is too slow. Send a
-space every ~0.25 s for 30 s, then look for `hisilicon #`.
+**`bootdelay` is 1 second.** The RAM-only bring-up image needs `reboot -f`
+because its custom PID 1 does not handle BusyBox's normal reboot signal; the
+Expect tool selects that path automatically. It sends a key every 0.25 seconds
+through reset and stops only after matching a new `hisilicon #` prompt. For
+manual recovery, do the same; reacting to "Hit any key to stop autoboot" is too
+slow.
 
-### The TFTP gotcha: start tftpd-hpa first
+### The TFTP gotcha: ensure tftpd-hpa is running
 
 `tftpd-hpa` on the Pi is not enabled at boot, so after the Pi restarts it is
 **inactive** and every transfer stalls at `Downloading: *` with no data — the
-board looks broken but the server simply is not listening. Start it before
-booting:
+board looks broken but the server simply is not listening. `dvr-boot.exp`
+starts the service and verifies the staged image during preflight. Before a
+manual boot, start it explicitly:
 
 ```sh
 ssh raspberrypi 'sudo systemctl start tftpd-hpa'

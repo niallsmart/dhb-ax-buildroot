@@ -16,7 +16,7 @@
 set -eu
 
 SESSION=${SESSION:-dvr}     # tmux session holding the picocom console
-TIMEOUT=${TIMEOUT:-200}      # seconds to wait for the command to finish
+TIMEOUT=${TIMEOUT:-20}      # seconds to wait for the command to finish
 
 if [ $# -eq 0 ]; then
 	echo "usage: ${0##*/} 'command to run on the DVR'" >&2
@@ -51,7 +51,8 @@ tmux send-keys -t "$SESSION" "echo $start; $cmd; echo $end" Enter
 # Poll for the closing marker rather than sleeping a fixed amount: a slow
 # command should not be truncated, and a fast one should not cost 20 seconds.
 waited=0
-while [ "$waited" -lt "$TIMEOUT" ]; do
+limit=$((TIMEOUT * 10))
+while [ "$waited" -lt "$limit" ]; do
 	if tmux capture-pane -p -S - -t "$SESSION" | tr -d '\r' |
 		grep -qx "==END-$nonce=="; then
 		break
@@ -70,7 +71,7 @@ tmux capture-pane -p -S - -t "$SESSION" | tr -d '\r' |
 		END      {if (inside) out = buf; printf "%s", out}
 	'
 
-if [ "$waited" -ge "$TIMEOUT" ]; then
+if [ "$waited" -ge "$limit" ]; then
 	echo "${0##*/}: timed out after ${TIMEOUT}s; output above may be partial" >&2
 	exit 1
 fi

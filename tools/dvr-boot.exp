@@ -1,0 +1,328 @@
+#!/usr/bin/expect -f
+# Reliably RAM-boot a staged kernel on the DVR through the Raspberry Pi UART.
+#
+# The image argument is a filename beneath /srv/tftp on the Pi. This tool does
+# not stage images and never saves the U-Boot environment or writes board
+# storage.
+
+proc usage {{status 0}} {
+    set stream stdout
+    if {$status != 0} { set stream stderr }
+    puts $stream {usage: dvr-boot.exp [options] TFTP_IMAGE
+
+Options:
+  --check                 Run preflight checks only; do not access the UART
+  --host HOST             Pi SSH host (default: raspberrypi)
+  --session NAME          tmux console to release/restore (default: dvr)
+  --transcript PATH       Append serial output to PATH
+  --load-address ADDRESS  U-Boot load address (default: 0x82000000)
+  --ipaddr ADDRESS        DVR address used by U-Boot (default: 192.168.7.241)
+  --netmask ADDRESS       U-Boot network mask (default: 255.255.252.0)
+  --serverip ADDRESS      TFTP server address (default: 192.168.4.34)
+  --ethaddr ADDRESS       Temporary U-Boot MAC (default: 00:18:AE:3C:A2:49)
+  --boot-timeout SECONDS  Linux prompt timeout (default: 120)
+  --help                  Show this help
+
+The named tmux session is gracefully released before direct UART access and
+restored afterward. If it does not exist, the UART must already be unused.}
+    exit $status
+}
+
+proc option_value {argv_name index_name option} {
+    upvar 1 $argv_name args $index_name index
+    incr index
+    if {$index >= [llength $args]} {
+        puts stderr "error: $option requires a value"
+        usage 2
+    }
+    return [lindex $args $index]
+}
+
+set host raspberrypi
+set session dvr
+set transcript ""
+set load_address 0x82000000
+set ipaddr 192.168.7.241
+set netmask 255.255.252.0
+set serverip 192.168.4.34
+set ethaddr 00:18:AE:3C:A2:49
+set boot_timeout 120
+set check_only 0
+set image ""
+
+for {set i 0} {$i < [llength $argv]} {incr i} {
+    set arg [lindex $argv $i]
+    switch -- $arg {
+        --check { set check_only 1 }
+        --host { set host [option_value argv i $arg] }
+        --session { set session [option_value argv i $arg] }
+        --transcript { set transcript [option_value argv i $arg] }
+        --load-address { set load_address [option_value argv i $arg] }
+        --ipaddr { set ipaddr [option_value argv i $arg] }
+        --netmask { set netmask [option_value argv i $arg] }
+        --serverip { set serverip [option_value argv i $arg] }
+        --ethaddr { set ethaddr [option_value argv i $arg] }
+        --boot-timeout { set boot_timeout [option_value argv i $arg] }
+        --help - -h { usage 0 }
+        default {
+            if {[string match "--*" $arg]} {
+                puts stderr "error: unknown option: $arg"
+                usage 2
+            }
+            if {$image ne ""} {
+                puts stderr "error: only one TFTP image may be specified"
+                usage 2
+            }
+            set image $arg
+        }
+    }
+}
+
+if {$image eq ""} { usage 2 }
+if {![regexp {^[A-Za-z0-9_.@-]+$} $host]} {
+    puts stderr "error: unsafe SSH host: $host"
+    exit 2
+}
+if {![regexp {^[A-Za-z0-9_.-]+$} $session]} {
+    puts stderr "error: unsafe tmux session name: $session"
+    exit 2
+}
+if {![regexp {^[A-Za-z0-9][A-Za-z0-9._/-]*$} $image] ||
+    [lsearch -exact [split $image /] ..] >= 0} {
+    puts stderr "error: image must be a safe relative path below /srv/tftp"
+    exit 2
+}
+if {![regexp {^0x[0-9A-Fa-f]+$} $load_address]} {
+    puts stderr "error: load address must be hexadecimal"
+    exit 2
+}
+foreach {name value} [list ipaddr $ipaddr netmask $netmask serverip $serverip] {
+    if {![regexp {^[0-9]{1,3}(\.[0-9]{1,3}){3}$} $value]} {
+        puts stderr "error: invalid $name: $value"
+        exit 2
+    }
+}
+if {![regexp -nocase {^([0-9a-f]{2}:){5}[0-9a-f]{2}$} $ethaddr]} {
+    puts stderr "error: invalid Ethernet address: $ethaddr"
+    exit 2
+}
+if {![string is integer -strict $boot_timeout] || $boot_timeout < 1} {
+    puts stderr "error: boot timeout must be a positive integer"
+    exit 2
+}
+
+proc ssh_command {host command} {
+    if {[catch {exec ssh -o BatchMode=yes $host $command} output options]} {
+        if {$output ne ""} { puts stderr $output }
+        return 0
+    }
+    return 1
+}
+
+puts "Preflight: $host:/srv/tftp/$image"
+if {![ssh_command $host {if grep -q '^ttyAMA0' /proc/consoles; then echo 'error: ttyAMA0 is a Pi console'; exit 1; fi}]} {
+    exit 3
+}
+
+if {$check_only} {
+    if {![ssh_command $host {systemctl is-active --quiet tftpd-hpa}]} {
+        puts stderr "error: tftpd-hpa is not active"
+        exit 3
+    }
+} else {
+    if {![ssh_command $host {sudo systemctl start tftpd-hpa && systemctl is-active --quiet tftpd-hpa}]} {
+        puts stderr "error: could not start tftpd-hpa"
+        exit 3
+    }
+}
+
+set image_check "test -r /srv/tftp/$image"
+if {![ssh_command $host $image_check]} {
+    puts stderr "error: image is not readable beneath /srv/tftp: $image"
+    exit 3
+}
+
+set had_session [expr {![catch {exec tmux has-session -t $session}]}]
+if {$had_session} {
+    set pane_command [string trim [exec tmux display-message -p -t $session {#{pane_current_command}}]]
+    if {$pane_command ne "ssh"} {
+        puts stderr "error: tmux session '$session' runs '$pane_command', not the expected SSH console"
+        exit 3
+    }
+}
+
+if {$check_only} {
+    if {$had_session} {
+        puts "Preflight passed; tmux session '$session' will be released and restored during a boot."
+    } elseif {![ssh_command $host {test -z "$(fuser /dev/serial0 2>/dev/null)"}]} {
+        puts stderr "error: /dev/serial0 is already in use and no managed tmux session was found"
+        exit 3
+    } else {
+        puts "Preflight passed; /dev/serial0 is free."
+    }
+    exit 0
+}
+
+set serial_active 0
+set serial_spawn_id ""
+set restore_session $had_session
+
+proc restore_console {} {
+    global serial_active serial_spawn_id restore_session session host
+
+    if {$serial_active} {
+        catch {send -i $serial_spawn_id -- "\001\021"}
+        set old_timeout $::timeout
+        set ::timeout 3
+        catch {expect -i $serial_spawn_id eof}
+        set ::timeout $old_timeout
+        # Closing and reaping the SSH pty is harmless after EOF and guarantees
+        # the remote flock has been released before restoring picocom.
+        catch {close -i $serial_spawn_id}
+        catch {wait -i $serial_spawn_id}
+        set serial_active 0
+    }
+
+    if {$restore_session && [catch {exec tmux has-session -t $session}]} {
+        after 250
+        set command "ssh -tt $host 'flock -n /tmp/dvr-uart.lock picocom -b 115200 --omap crcrlf --logfile dvr.log /dev/serial0'"
+        if {[catch {exec tmux new-session -d -s $session $command} output]} {
+            puts stderr "warning: could not restore tmux session '$session': $output"
+        } else {
+            puts "Restored tmux console '$session'."
+        }
+    }
+}
+
+proc abort_boot {message code} {
+    puts stderr "error: $message"
+    restore_console
+    exit $code
+}
+
+trap {abort_boot "interrupted" 130} {SIGINT SIGTERM SIGHUP}
+
+if {$had_session} {
+    puts "Releasing tmux console '$session'..."
+    if {[catch {exec tmux send-keys -t $session C-a C-q} output]} {
+        abort_boot "could not ask picocom to quit: $output" 4
+    }
+    set released 0
+    for {set i 0} {$i < 50} {incr i} {
+        if {[catch {exec tmux has-session -t $session}]} {
+            set released 1
+            break
+        }
+        after 100
+    }
+    if {!$released} {
+        abort_boot "tmux console '$session' did not release the UART" 4
+    }
+}
+
+if {![ssh_command $host {test -z "$(fuser /dev/serial0 2>/dev/null)"}]} {
+    abort_boot "/dev/serial0 is still in use" 4
+}
+
+if {$transcript ne ""} { log_file -a $transcript }
+log_user 1
+set timeout 5
+
+puts "Opening the DVR UART directly through $host..."
+spawn ssh -tt $host "flock -n /tmp/dvr-uart.lock picocom -q -b 115200 --omap crcrlf /dev/serial0"
+set serial_spawn_id $spawn_id
+set serial_active 1
+
+# Synchronize with U-Boot, a Linux shell, or a login prompt. The factory and
+# mainline systems use different prompts, so handle both without assuming
+# which kernel is currently running.
+send -- "\r"
+set shell_ready 0
+set uboot_ready 0
+for {set i 0} {$i < 12 && !$shell_ready && !$uboot_ready} {incr i} {
+    expect {
+        -re {hisilicon # *$} { set uboot_ready 1 }
+        -re {(~|/) # *$} { set shell_ready 1 }
+        -re {[^ \r\n]+ login: *$} { send -- "root\r" }
+        -re {Password: *$} { send -- "1001chin\r" }
+        timeout { send -- "\r" }
+        eof { abort_boot "serial connection closed while synchronizing" 5 }
+    }
+}
+if {!$shell_ready && !$uboot_ready} {
+    abort_boot "could not identify the current DVR console state" 5
+}
+
+if {!$uboot_ready} {
+    puts "Rebooting and interrupting autoboot..."
+    # The RAM-only image runs its shell beneath a custom PID 1 which does not
+    # implement BusyBox init's reboot signal handling.  -f performs the reboot
+    # syscall directly and also works from the factory BusyBox environment.
+    send -- "reboot -f\r"
+    set deadline [expr {[clock milliseconds] + 60000}]
+    set old_timeout $timeout
+    set timeout 0
+    while {[clock milliseconds] < $deadline && !$uboot_ready} {
+        send -- " "
+        after 250
+        expect {
+            -re {hisilicon # *$} { set uboot_ready 1 }
+            eof { abort_boot "serial connection closed during reboot" 6 }
+            timeout {}
+        }
+    }
+    set timeout $old_timeout
+}
+if {!$uboot_ready} {
+    abort_boot "did not reach the U-Boot prompt within 60 seconds" 6
+}
+
+proc uboot_command {command} {
+    global timeout
+    send -- "$command\r"
+    set old_timeout $timeout
+    set timeout 10
+    expect {
+        -re {hisilicon # *$} {}
+        eof { abort_boot "serial connection closed after: $command" 7 }
+        timeout { abort_boot "U-Boot command timed out: $command" 7 }
+    }
+    set timeout $old_timeout
+}
+
+puts "Configuring temporary U-Boot networking..."
+uboot_command "setenv ipaddr $ipaddr"
+uboot_command "setenv netmask $netmask"
+uboot_command "setenv serverip $serverip"
+uboot_command "setenv ethaddr $ethaddr"
+
+puts "Loading $image at $load_address..."
+send -- "tftp $load_address $image\r"
+set timeout 120
+expect {
+    -re {Bytes transferred = [0-9]+} {}
+    -re {(TFTP error|Retry count exceeded|Access violation|File not found)} {
+        abort_boot "TFTP reported a transfer failure" 8
+    }
+    eof { abort_boot "serial connection closed during TFTP" 8 }
+    timeout { abort_boot "TFTP did not complete within 120 seconds" 8 }
+}
+expect {
+    -re {hisilicon # *$} {}
+    eof { abort_boot "serial connection closed after TFTP" 8 }
+    timeout { abort_boot "U-Boot prompt did not return after TFTP" 8 }
+}
+
+puts "Booting from RAM..."
+send -- "bootm $load_address\r"
+set timeout $boot_timeout
+expect {
+    -re {(~|/) # *$} {}
+    -re {Kernel panic - not syncing} { abort_boot "kernel panic" 9 }
+    eof { abort_boot "serial connection closed during kernel boot" 9 }
+    timeout { abort_boot "Linux shell did not appear within $boot_timeout seconds" 9 }
+}
+
+puts "Linux shell reached successfully."
+restore_console
+exit 0
