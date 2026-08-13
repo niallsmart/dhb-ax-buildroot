@@ -41,6 +41,7 @@ vm-assets/
 *.jpeg
 *.jpg
 *.bin
+*.pdf
 
 # Personal images used as framebuffer test material, and the raw ARGB1555
 # buffers built from them. This repository is public.
