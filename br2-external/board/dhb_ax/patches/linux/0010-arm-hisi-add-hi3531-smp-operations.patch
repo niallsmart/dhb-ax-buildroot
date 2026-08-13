@@ -1,0 +1,86 @@
+From 7ec971cb47453bf9bfcbfa754ee6858010f8ad80 Mon Sep 17 00:00:00 2001
+From: Niall Smart <niall.smart@gmail.com>
+Date: Thu, 13 Aug 2026 17:00:00 -0400
+Subject: ARM: hisi: add Hi3531 SMP operations
+
+Vendor U-Boot has already released CPU1 and left it polling
+SYS_CTRL + 0x134 for an entry point.  Starting it therefore requires only
+enabling the Cortex-A9 SCU and writing secondary_startup to that register.
+
+The superficially similar Hi3620 method is not safe to reuse.  Before writing
+the entry point it issues Hi3620-specific core-enable, reset and WFI-mask
+writes through the generic sysctrl node, then sends an unnecessary wakeup IPI.
+Its hotplug callbacks likewise assume that the Hi3620 power sequence can stop
+and restart the core.
+
+Add a dedicated method which performs only the two operations established for
+Hi3531.  Deliberately provide no hotplug callbacks: after CPU1 leaves U-Boot's
+poll loop there is no validated way to put it back there.
+
+---
+ arch/arm/mach-hisi/platsmp.c | 44 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 44 insertions(+)
+
+diff --git a/arch/arm/mach-hisi/platsmp.c b/arch/arm/mach-hisi/platsmp.c
+--- a/arch/arm/mach-hisi/platsmp.c
++++ b/arch/arm/mach-hisi/platsmp.c
+@@ -98,6 +98,49 @@ static const struct smp_operations hi3xxx_smp_ops __initconst = {
+ #endif
+ };
+ 
++#define HI3531_SYSCTRL_CPU1_JUMP	0x134
++
++static void __iomem *hi3531_sysctrl;
++
++static void __init hi3531_smp_prepare_cpus(unsigned int max_cpus)
++{
++	struct device_node *np;
++
++	hisi_enable_scu_a9();
++
++	np = of_find_compatible_node(NULL, NULL,
++				     "hisilicon,hi3531-sysctrl");
++	if (!np) {
++		pr_err("failed to find hisilicon,hi3531-sysctrl node\n");
++		return;
++	}
++
++	hi3531_sysctrl = of_iomap(np, 0);
++	of_node_put(np);
++	if (!hi3531_sysctrl)
++		pr_err("failed to map Hi3531 sysctrl\n");
++}
++
++static int hi3531_boot_secondary(unsigned int cpu, struct task_struct *idle)
++{
++	if (!hi3531_sysctrl)
++		return -ENODEV;
++
++	/* U-Boot leaves CPU1 polling this word after releasing its reset. */
++	if (cpu_logical_map(cpu) != 1)
++		return -EINVAL;
++
++	writel_relaxed(__pa_symbol(secondary_startup),
++		       hi3531_sysctrl + HI3531_SYSCTRL_CPU1_JUMP);
++
++	return 0;
++}
++
++static const struct smp_operations hi3531_smp_ops __initconst = {
++	.smp_prepare_cpus	= hi3531_smp_prepare_cpus,
++	.smp_boot_secondary	= hi3531_boot_secondary,
++};
++
+ static void __init hisi_common_smp_prepare_cpus(unsigned int max_cpus)
+ {
+ 	hisi_enable_scu_a9();
+@@ -182,6 +225,7 @@ static const struct smp_operations hip01_smp_ops __initconst = {
+ 	.smp_boot_secondary     = hip01_boot_secondary,
+ };
+ 
++CPU_METHOD_OF_DECLARE(hi3531_smp, "hisilicon,hi3531-smp", &hi3531_smp_ops);
+ CPU_METHOD_OF_DECLARE(hi3xxx_smp, "hisilicon,hi3620-smp", &hi3xxx_smp_ops);
+ CPU_METHOD_OF_DECLARE(hix5hd2_smp, "hisilicon,hix5hd2-smp", &hix5hd2_smp_ops);
+ CPU_METHOD_OF_DECLARE(hip01_smp, "hisilicon,hip01-smp", &hip01_smp_ops);
+-- 
+2.50.1

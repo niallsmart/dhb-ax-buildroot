@@ -26,19 +26,17 @@
 	};
 
 	/*
-	 * Both cores.  The vendor releases CPU1 by writing the physical
-	 * address of the secondary entry point to SYS_CTRL + 0x134 and then
-	 * sending a soft interrupt, which the boot monitor is waiting for.
-	 * That is exactly what mainline's "hisilicon,hi3620-smp" method does,
-	 * so no new code is needed: it enables the Cortex-A9 SCU, finds the
-	 * sysctrl node below, and uses its smp-offset.  The CPU power-control
-	 * step in that method no-ops here because this board has no
-	 * "hisilicon,hi3620-cpu-ctrl" node.
+	 * Both cores.  U-Boot releases CPU1 from reset and leaves it polling
+	 * SYS_CTRL + 0x134.  The Hi3531 SMP method enables the Cortex-A9 SCU
+	 * and writes the physical address of secondary_startup to that word.
+	 * It deliberately performs no reset, power-control or wakeup-IPI
+	 * sequence and provides no CPU-hotplug callbacks: those operations
+	 * have not been established for this SoC.
 	 */
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
-		enable-method = "hisilicon,hi3620-smp";
+		enable-method = "hisilicon,hi3531-smp";
 
 		cpu0: cpu@0 {
 			compatible = "arm,cortex-a9";
@@ -129,12 +127,10 @@
 		 * needed.
 		 */
 		sysctrl: system-controller@20050000 {
-			compatible = "hisilicon,sysctrl";
+			compatible = "hisilicon,hi3531-sysctrl",
+				     "hisilicon,sysctrl";
 			reg = <0x20050000 0x1000>;
 			reboot-offset = <0x4>;
-			/* Where CPU1's entry point is written; SMP_COREX_START_ADDR_REG
-			 * in the vendor platsmp.h. */
-			smp-offset = <0x134>;
 		};
 
 		timer@20000000 {
