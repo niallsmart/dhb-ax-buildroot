@@ -9,7 +9,6 @@ __pycache__
 # Regenerable source trees, ~4 GB.
 # Recreate with scripts/bootstrap-sources.sh
 kernel/
-vendor/
 buildroot/
 
 # Buildroot's output tree and download cache live in Docker named volumes

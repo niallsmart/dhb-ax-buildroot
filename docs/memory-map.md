@@ -4,8 +4,8 @@ HiSilicon Hi3531 (`godnet`) as fitted to the LTS LTD2704XE-P's TVT
 `DHB_AX V1.2` motherboard. Written 2026-08-04, after the memory expansion from
 216 MiB to 501 MiB usable.
 
-Peripheral addresses are from
-`vendor/openipc-linux-3.0.8/arch/arm/mach-godnet/include/mach/platform.h`.
+Peripheral addresses are from the pinned OpenIPC
+[`mach-godnet` platform header](https://github.com/OpenIPC/linux/blob/a3bfde54cdcf641cc061206f5d2ba6e9ddbad324/arch/arm/mach-godnet/include/mach/platform.h).
 DRAM figures are measured on the board, not inferred — see *Evidence* at the
 end.
 

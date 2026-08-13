@@ -209,14 +209,13 @@ scripts/buildroot.sh            # configure and build
 ```
 
 Bootstrapping is idempotent and only fetches what is missing. It produces
-four things under the workspace, none needing backup because all of it is
-reproducible from three pinned inputs:
+three things under the workspace, none needing backup because all of it is
+reproducible from two pinned inputs:
 
 ```text
 kernel/linux-6.18.42.tar.xz      official upstream tarball
 kernel/linux-6.18.42-pristine/   never modified; the patch queue is diffed
                                  against this
-vendor/openipc-linux-3.0.8/      vendor 3.0.8 tree at the pinned commit
 buildroot/buildroot-2026.02.3/   verified against its signed sha256
 ```
 

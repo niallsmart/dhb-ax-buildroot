@@ -3,12 +3,11 @@
 #
 #   bootstrap-sources.sh
 #
-# Everything here is reproducible from three pinned inputs, so none of it needs
+# Everything here is reproducible from two pinned inputs, so none of it needs
 # backing up:
 #
 #   kernel/linux-6.18.42.tar.xz      official upstream tarball; what Buildroot
 #                                    unpacks and patches
-#   vendor/openipc-linux-3.0.8/      vendor 3.0.8 tree at a pinned commit
 #   buildroot/buildroot-2026.02.3/   extracted from a checksum-pinned tarball
 #
 # and one derived tree:
@@ -24,17 +23,12 @@ set -eu
 
 workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 kernel_dir=$workspace/kernel
-vendor_dir=$workspace/vendor
 buildroot_dir=$workspace/buildroot
 
 version=6.18.42
 tarball=$kernel_dir/linux-$version.tar.xz
 tarball_url=https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$version.tar.xz
 pristine=$kernel_dir/linux-$version-pristine
-
-vendor_repo=https://github.com/OpenIPC/linux.git
-vendor_commit=a3bfde54cdcf641cc061206f5d2ba6e9ddbad324
-vendor=$vendor_dir/openipc-linux-3.0.8
 
 # 2026.02 is the LTS line, which suits a project picked up intermittently.
 # The checksum is the one in the release's PGP-signed manifest at
@@ -45,7 +39,7 @@ br_tarball_url=https://buildroot.org/downloads/buildroot-$br_version.tar.xz
 br_sha256=5a59e7501b0b4ec52c41f4bfa79412320e0b37eae5f719605a258e8d0c6fc7fb
 br_src=$buildroot_dir/buildroot-$br_version
 
-mkdir -p "$kernel_dir" "$vendor_dir" "$buildroot_dir"
+mkdir -p "$kernel_dir" "$buildroot_dir"
 
 if [ ! -f "$tarball" ]; then
 	echo "fetching $tarball_url"
@@ -59,16 +53,6 @@ if [ ! -f "$pristine/Makefile" ]; then
 	rm -rf "$pristine"
 	mkdir -p "$pristine"
 	tar -xJf "$tarball" -C "$pristine" --strip-components=1
-fi
-
-if [ ! -d "$vendor/.git" ]; then
-	echo "cloning vendor tree at $vendor_commit"
-	rm -rf "$vendor"
-	mkdir -p "$vendor"
-	git -C "$vendor" init -q .
-	git -C "$vendor" remote add origin "$vendor_repo"
-	git -C "$vendor" fetch -q --depth 1 origin "$vendor_commit"
-	git -C "$vendor" checkout -q FETCH_HEAD
 fi
 
 if [ ! -f "$br_tarball" ]; then
@@ -101,7 +85,6 @@ echo
 echo "ready:"
 printf '  %-34s %s\n' "kernel tarball" "$tarball"
 printf '  %-34s %s\n' "kernel source (patch reference)" "$pristine"
-printf '  %-34s %s\n' "vendor 3.0.8 reference" "$vendor"
 printf '  %-34s %s\n' "buildroot $br_version" "$br_src"
 echo
 echo "build with: scripts/buildroot.sh"

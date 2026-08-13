@@ -31,9 +31,9 @@ deliberately out of scope.
 - `backups/` contains the only verified copies of the factory flash. It is the
   irreplaceable part of the workspace. Analyse copies; do not modify the
   verified originals.
-- `kernel/`, `vendor/` and `buildroot/` are derived source trees. They are
-  regenerated from pinned inputs by `scripts/bootstrap-sources.sh` and are not
-  worth backing up.
+- `kernel/` and `buildroot/` are derived source trees. They are regenerated
+  from pinned inputs by `scripts/bootstrap-sources.sh` and are not worth
+  backing up.
 - `pcb/` contains board/chip photographs; `tools/` contains the raw NAND reader
   and validator plus other investigation utilities.
 
