@@ -336,10 +336,12 @@
 	 * reg[0] spans the whole shared block: GMAC0 at +0x0, GMAC1 at
 	 * +0x4000, the three DMA channels at +0x1000/+0x1100/+0x1200, and
 	 * the TNK interrupt aggregator at +0x9000.  reg[1] is the CRG
-	 * window holding the GMAC interface reset and mode registers.
+	 * window holding the GMAC interface reset and mode registers.  The
+	 * Synopsys ID is 3.60, for which upstream has no exact compatible;
+	 * verified capabilities are selected explicitly by the Hi3531 glue.
 	 */
 	gmac1: ethernet@101c0000 {
-		compatible = "hisilicon,hi3531-dwmac", "snps,dwmac-3.40a";
+		compatible = "hisilicon,hi3531-dwmac", "snps,dwmac";
 		reg = <0x101c0000 0x00020000>,
 		      <0x20030000 0x00000100>;
 		reg-names = "stmmaceth", "syscfg";
