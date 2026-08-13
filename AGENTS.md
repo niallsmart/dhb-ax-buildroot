@@ -88,13 +88,20 @@ The board's serial console is a picocom session running under tmux, started by
 tools/dvr-console.sh 'cat /proc/mtd'
 ```
 
-**Do not use `tmux capture-pane` directly.** It returns the entire scrollback,
-so each read pulls in hundreds of lines of stale output from earlier commands —
-it wastes context and makes it easy to read an old result as a new one. The
-script brackets the command in start/end markers and prints only the text
-between the last pair, so you get exactly one command's output. It polls for
-completion rather than sleeping a fixed interval, so slow commands are not
-truncated.
+For ordinary Linux commands, prefer `tools/dvr-console.sh`: it brackets the
+command in start/end markers and prints only the text between the last pair, so
+the result cannot be confused with stale scrollback. It polls for completion
+rather than sleeping a fixed interval, so slow commands are not truncated.
+
+For interactive serial work, including interrupting autoboot and operating at
+the U-Boot prompt, access the `dvr` tmux session directly. It is acceptable to
+use `tmux capture-pane`; limit the requested history (for example with
+`-S -80`) and account for stale output when interpreting it.
+
+Alternatively, SSH to the Raspberry Pi and access `/dev/serial0` directly,
+bypassing tmux. Do not run two serial-console readers at once: first make sure
+the existing picocom session is not using the device, and retain the
+`/proc/consoles` check below before reopening it.
 
 `SESSION` and `TIMEOUT` are environment overrides; the defaults are `dvr` and 20
 seconds.
