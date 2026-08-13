@@ -15,7 +15,7 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 
 echo
-echo "DHB-AX Linux 6.18 RAM-only Ethernet bring-up shell (Buildroot)"
+echo "LTS LTD2704XE-P Linux 6.18 RAM-only bring-up shell (TVT DHB_AX V1.2)"
 echo "No flash filesystems have been mounted."
 uname -a
 if [ -d /sys/class/net/eth0 ]; then

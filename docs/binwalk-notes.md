@@ -1,11 +1,11 @@
-# DHB_AX V1.2: binwalk and firmware-inspection notes
+# LTS LTD2704XE-P: binwalk and firmware-inspection notes
 
 Last updated: 2026-08-04.
 
-Working notes on the tools used to inspect the flash images in
-`../backups/`, and on where those tools mislead. Written after a session in
-which the default binwalk missed two of the three interesting things in these
-images.
+Working notes on the tools used to inspect flash images from the LTS
+LTD2704XE-P's TVT `DHB_AX V1.2` motherboard in `../backups/`, and on where
+those tools mislead. Written after a session in which the default binwalk
+missed two of the three interesting things in these images.
 
 ## Summary
 

@@ -371,16 +371,17 @@
 <div class="wrap">
 
   <header class="masthead">
-    <p class="eyebrow">DHB_AX V1.2 &middot; Hi3531 Port &middot; Field Notes</p>
+    <p class="eyebrow">LTS LTD2704XE-P &middot; DHB_AX V1.2 &middot; Field Notes</p>
     <h1>What else is in this chip?</h1>
     <p class="standfirst">
-      We are putting a modern Linux kernel on a 2012 security recorder. Networking and
-      storage now work. This is how we worked out what else is in there — using four
+      We are putting a modern Linux kernel on an LTS LTD2704XE-P security recorder.
+      Networking and storage now work. This is how we worked out what else is in there — using four
       sources that each catch the others' mistakes, and finding along the way that we
       had been using half the machine.
     </p>
     <dl class="facts">
-      <div><dt>Target</dt><dd>HiSilicon Hi3531</dd></div>
+      <div><dt>Product</dt><dd>LTS LTD2704XE-P</dd></div>
+      <div><dt>SoC</dt><dd>HiSilicon Hi3531</dd></div>
       <div><dt>CPU</dt><dd>Cortex-A9 &times;2, 32-bit</dd></div>
       <div><dt>Kernel</dt><dd>Linux 6.18.42 LTS</dd></div>
       <div><dt>Both cores</dt><dd>running</dd></div>
@@ -393,13 +394,13 @@
     <section>
       <h2>The program</h2>
       <p>
-        The device is a Shenzhen TVT digital video recorder, marked
-        <code>DHB_AX V1.2</code> on the circuit board &mdash; a detail worth knowing,
+        The device is an LTS LTD2704XE-P digital video recorder built on a Shenzhen TVT
+        motherboard marked <code>DHB_AX V1.2</code> &mdash; a detail worth knowing,
         because that string appears nowhere in the manufacturer's software. The board
-        revision is only discoverable by looking at the hardware. Inside is a HiSilicon
-        Hi3531: a <em>system-on-chip</em>, meaning one piece of silicon containing the
-        processor plus dozens of separate hardware blocks &mdash; network, storage, video,
-        serial ports and so on.
+        revision is only discoverable by looking at the hardware. Its platform is the
+        HiSilicon Hi3531: a <em>system-on-chip</em>, meaning one piece of silicon containing
+        the processor plus dozens of separate hardware blocks &mdash; network, storage,
+        video, serial ports and so on.
       </p>
       <p>
         It shipped running Linux 3.0.8, released in 2011. The goal is to run a current

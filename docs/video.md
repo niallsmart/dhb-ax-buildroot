@@ -1,7 +1,8 @@
 # Video output
 
-What we know about the Hi3531's display path on this board, and how to put an
-arbitrary image on the HDMI output from the U-Boot prompt.
+What we know about the Hi3531 display path on the LTS LTD2704XE-P's TVT
+`DHB_AX V1.2` motherboard, and how to put an arbitrary image on the HDMI
+output from the U-Boot prompt.
 
 Written 2026-08-04. Everything here is measured on the board; no vendor source
 exists for the VDP — the video drivers are proprietary blobs

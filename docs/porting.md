@@ -1,7 +1,8 @@
-# Linux 6.18 LTS bring-up for the DHB_AX V1.2 DVR
+# Linux 6.18 LTS bring-up for the LTS LTD2704XE-P DVR
 
-This document records the Linux 6.18.42 LTS port for the Shenzhen TVT DVR's
-HiSilicon Hi3531 (`godnet`) SoC, replacing the vendor's Linux 3.0.8.
+This document records the Linux 6.18.42 LTS port for the LTS LTD2704XE-P DVR,
+built on a Shenzhen TVT `DHB_AX V1.2` motherboard around the HiSilicon Hi3531
+(`godnet`) platform, replacing the vendor's Linux 3.0.8.
 
 The board identifies itself as **`DHB_AX V1.2`**, silkscreened on the PCB.
 That string appears nowhere in the vendor filesystem or kernel, so the board

@@ -1,4 +1,4 @@
-# DHB_AX V1.2: modern U-Boot by chainloading
+# LTS LTD2704XE-P: modern U-Boot by chainloading
 
 Status: **plan only.** Nothing here has been built or run, and nothing has
 been written to the DVR. Last updated 2026-08-04.
@@ -8,9 +8,9 @@ layout and backup record; to `binwalk-notes.md`, which covers the inspection
 tooling used to build the flash map below and where it misleads; and to
 `porting.md`, which holds the Linux 6.18 bring-up.
 
-The board boots vendor U-Boot 2010.06, built 2012-11-01, from SPI NOR. This
-plan reaches a current U-Boot without replacing it: the vendor bootloader
-stays where it is and hands control to a newer one.
+The DVR's TVT `DHB_AX V1.2` motherboard boots vendor U-Boot 2010.06, built
+2012-11-01, from SPI NOR. This plan reaches a current U-Boot without replacing
+it: the vendor bootloader stays where it is and hands control to a newer one.
 
 ## Why chainload rather than replace
 

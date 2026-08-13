@@ -9,7 +9,7 @@
 #include "hi3531-dhb-ax.dtsi"
 
 / {
-	model = "Shenzhen TVT DHB_AX V1.2 DVR";
+	model = "LTS LTD2704XE-P DVR (TVT DHB_AX V1.2)";
 
 	/*
 	 * The watchdog counts at about 3 MHz, measured on hardware as

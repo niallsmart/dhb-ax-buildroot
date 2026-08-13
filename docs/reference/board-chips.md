@@ -1,9 +1,9 @@
-# Chips on the board
+# Chips on the LTS LTD2704XE-P motherboard
 
-Read off the PCB from photographs in `pcb/`, 2026-08-04. This is a fifth
-evidence source alongside the four in the README, and the only one that can
-settle what is physically fitted — as opposed to what a chip family offers,
-what the vendor built for, or what a driver decided to call something.
+Read off the TVT motherboard from photographs in `pcb/`, 2026-08-04. This is
+a fifth evidence source alongside the four in the README, and the only one
+that can settle what is physically fitted — as opposed to what a chip family
+offers, what the vendor built for, or what a driver decided to call something.
 
 The board itself is silkscreened **`DHB_AX V1.2`**.
 

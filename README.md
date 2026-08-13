@@ -1,12 +1,13 @@
-# DHB_AX V1.2 DVR
+# Linux port for the LTS LTD2704XE-P DVR
 
-Running mainline Linux on a 2012 HiSilicon Hi3531 digital video recorder.
+Running mainline Linux on an LTS LTD2704XE-P four-channel HD-SDI digital
+video recorder.
 
-The board is a Shenzhen TVT four-channel analogue DVR, silkscreened
-**`DHB_AX V1.2`**. It shipped with Linux 3.0.8 and a stack of binary-only
-vendor modules. This project replaces that with Linux 6.18.42 LTS, booted
-from RAM over the network, driving as much of the hardware as can be
-supported without vendor blobs.
+The finished product is built on a Shenzhen TVT motherboard silkscreened
+**`DHB_AX V1.2`**, using the HiSilicon Hi3531 (`godnet`) platform. It shipped
+with Linux 3.0.8 and a stack of binary-only vendor modules. This project
+replaces that with Linux 6.18.42 LTS, booted from RAM over the network,
+driving as much of the hardware as can be supported without vendor blobs.
 
 **Nothing here writes to the DVR's flash or to an attached disk.** Every
 kernel is loaded into DRAM over TFTP; the factory system is untouched and
@@ -275,8 +276,9 @@ the SPI NOR image lives in `backups/`, and the vendor Ethernet module in
 
 ## DVR hardware and software
 
-- Vendor/family: Shenzhen TVT, four-channel analog DVR.
-- SoC: HiSilicon Hi3531.
+- Product: **LTS LTD2704XE-P**, four-channel HD-SDI DVR.
+- Motherboard: Shenzhen TVT **`DHB_AX V1.2`**.
+- SoC platform: HiSilicon **Hi3531** (`godnet`).
 - DRAM: **1 GiB in two banks** — DDR0 at `0x80000000` and DDR1 at
   `0xc0000000`, 512 MiB each, on separate controllers. This port declares
   DDR0 only, giving about 501 MiB after kernel overhead; DDR1 is where

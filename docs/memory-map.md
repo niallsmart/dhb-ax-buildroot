@@ -1,7 +1,8 @@
 # Memory and address space map
 
-Hi3531 (`godnet`) as fitted on DHB_AX V1.2. Written 2026-08-04, after the
-memory expansion from 216 MiB to 501 MiB usable.
+HiSilicon Hi3531 (`godnet`) as fitted to the LTS LTD2704XE-P's TVT
+`DHB_AX V1.2` motherboard. Written 2026-08-04, after the memory expansion from
+216 MiB to 501 MiB usable.
 
 Peripheral addresses are from
 `vendor/openipc-linux-3.0.8/arch/arm/mach-godnet/include/mach/platform.h`.

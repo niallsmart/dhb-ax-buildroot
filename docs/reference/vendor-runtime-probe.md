@@ -1,7 +1,8 @@
 # Vendor kernel runtime probe
 
-Captured 2026-08-04 from the stock TVT firmware (Linux 3.0.8, built 2013-03-11)
-booted from NAND. Read-only inspection; nothing was written.
+Captured 2026-08-04 from the LTS LTD2704XE-P's stock TVT firmware (Linux
+3.0.8, built 2013-03-11), booted from NAND. Read-only inspection; nothing was
+written.
 
 This is the authoritative record of what hardware **this board** (`DHB_AX V1.2`,
 per the PCB silkscreen) actually has

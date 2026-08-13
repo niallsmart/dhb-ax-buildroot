@@ -1,9 +1,10 @@
-# DHB_AX V1.2: investigation and backup record
+# LTS LTD2704XE-P: investigation and backup record
 
-The reverse-engineering phase of this project, completed 2026-08-03, plus the
-verified flash backups it produced. This is a historical record: the
-procedures here were used to understand the hardware and to capture every
-flash layer before any of the porting work began.
+The reverse-engineering phase of the LTS LTD2704XE-P project, completed
+2026-08-03, plus the verified flash backups it produced. The recorder uses a
+TVT `DHB_AX V1.2` motherboard. This is a historical record: the procedures
+here were used to understand the hardware and to capture every flash layer
+before any of the porting work began.
 
 For current work see the top-level `README.md` and `docs/porting.md`.
 

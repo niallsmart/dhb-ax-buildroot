@@ -4,11 +4,12 @@ Start with `README.md` for the project overview, and `docs/porting.md`
 for anything about the port itself. This file captures the repository and
 operational context needed to work on the code and board safely.
 
-The target is a Shenzhen TVT `DHB_AX V1.2` DVR built around a HiSilicon
-Hi3531. The factory system is Linux 3.0.8 with binary vendor modules; the port
-is Linux 6.18.42 LTS with Buildroot. The goal is a useful general-purpose ARM
-system. Video capture, encode/decode, scaling and HDMI are undocumented, have
-no mainline support, and are deliberately out of scope.
+The target is an LTS `LTD2704XE-P` DVR built on a Shenzhen TVT `DHB_AX V1.2`
+motherboard around the HiSilicon Hi3531 platform. The factory system is Linux
+3.0.8 with binary vendor modules; the port is Linux 6.18.42 LTS with Buildroot.
+The goal is a useful general-purpose ARM system. Video capture, encode/decode,
+scaling and HDMI are undocumented, have no mainline support, and are
+deliberately out of scope.
 
 ## Repository map and build
 
