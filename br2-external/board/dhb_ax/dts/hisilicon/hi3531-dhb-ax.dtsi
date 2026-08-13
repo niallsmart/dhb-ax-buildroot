@@ -54,19 +54,21 @@
 	};
 
 	/*
-	 * 512 MiB, not the 256 MiB the vendor declares.  Two Nanya
-	 * NT5CB128M16 at U1 and U2, 256 MB each, confirmed by reading the
-	 * packages and by probing: a pattern written at 0x9f000000 survives a
-	 * cache-evicting 512 KiB write elsewhere, so it is real DRAM rather
-	 * than a cache hit, and 0xa8000000 aliases onto 0x88000000, placing
-	 * the wrap at exactly 0x20000000.
+	 * Two independent 512 MiB banks.  With U-Boot's data cache evicted,
+	 * each bank retained distinct patterns 256 MiB apart and the words at
+	 * 0x9f000000 and 0xdf000000 retained different patterns near the top
+	 * of their respective banks.  A separate write confirmed that
+	 * 0xa8000000 aliases 0x88000000, but that address is in the unmapped
+	 * hole between the controllers; it does not imply that DDR1 at
+	 * 0xc0000000 aliases DDR0.
 	 *
 	 * The vendor's "DRAM: 256 MiB" is a hardcoded constant in their U-Boot
 	 * board file, not a measurement.
 	 */
 	memory@80000000 {
 		device_type = "memory";
-		reg = <0x80000000 0x20000000>;
+		reg = <0x80000000 0x20000000>,
+		      <0xc0000000 0x20000000>;
 	};
 
 	/*
@@ -80,16 +82,15 @@
 	 * And this port already claims 0x90000000-0x9fffffff, which is inside
 	 * that same vendor region, and has passed sustained DMA tests there.
 	 *
-	 * The reserve also protected the wrong place.  U-Boot's video buffers
-	 * sit at 0xc0000000 and 0xc1000000, which with the 512 MiB wrap alias
-	 * onto 0x80000000 and 0x81000000 -- the bottom of DRAM, where the
-	 * kernel itself loads.  Nothing has ever guarded those, and video
-	 * output is read-only DMA, so nothing needs to.
+	 * U-Boot's video buffers sit at 0xc0000000 and 0xc1000000 in DDR1.
+	 * They are not aliases of the kernel load area.  The display path only
+	 * reads those buffers and this port does not use it, so it cannot
+	 * corrupt RAM and does not justify withholding the bank from Linux.
 	 *
-	 * Verified by filling nearly all of RAM with a known pattern and
-	 * checksumming it, which covers this range specifically.  If a future
-	 * change makes something write here, that test is how it will be
-	 * caught.
+	 * DDR0 has also been verified by filling nearly all of it with a known
+	 * pattern and checksumming it.  If a future change makes an abandoned
+	 * media engine write either bank, that test should be extended across
+	 * DDR1 before the change is accepted.
 	 */
 
 	peripheral_clk: clock-155mhz {
