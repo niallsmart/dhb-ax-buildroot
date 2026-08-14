@@ -3,8 +3,9 @@
 #
 #   buildroot-in-container.sh [target ...]
 #
-# With no target: configure from the defconfig if the output tree has no
-# .config yet, then build everything.
+# With no target: always reapply and verify the maintained defconfig, then
+# build everything. This prevents removed packages and old local menuconfig
+# choices from leaking out of the persistent output volume into an image.
 set -eu
 
 # Buildroot cannot be built as root: several host packages -- GNU tar first --
@@ -39,6 +40,18 @@ mkdir -p "$output" /dl "$artifacts"
 br() {
 	make -C "$buildroot" O="$output" BR2_EXTERNAL="$external" \
 		BR2_DL_DIR=/dl "$@"
+}
+
+# Buildroot does not remove an old filesystem image when its format is later
+# disabled. Do not copy such stale outputs into artifacts/ where they can look
+# like products of the current configuration.
+prune_disabled_images() {
+	if ! grep -qx 'BR2_TARGET_ROOTFS_CPIO=y' "$output/.config"; then
+		rm -f "$output/images/rootfs.cpio" "$artifacts/rootfs.cpio"
+	fi
+	if ! grep -qx 'BR2_TARGET_ROOTFS_TAR=y' "$output/.config"; then
+		rm -f "$output/images/rootfs.tar" "$artifacts/rootfs.tar"
+	fi
 }
 
 # kconfig drops a defconfig line whose symbol does not exist, or whose
@@ -78,12 +91,12 @@ if [ "$#" -gt 0 ]; then
 	*" dhb_ax_defconfig "*) check_defconfig ;;
 	esac
 else
-	if [ ! -f "$output/.config" ]; then
-		br dhb_ax_defconfig
-		check_defconfig
-	fi
+	br dhb_ax_defconfig
+	check_defconfig
 	br -j"$(nproc)" all
 fi
+
+prune_disabled_images
 
 # Copy out whatever the build produced.  A configure-only invocation leaves
 # the images directory empty, which is not an error.

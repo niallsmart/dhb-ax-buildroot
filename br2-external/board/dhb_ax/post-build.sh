@@ -16,6 +16,29 @@
 set -eu
 
 target=${1:-$TARGET_DIR}
+local_ssh=${2:-}
+
+# SSH credentials are deliberately machine-local. The host private key must
+# survive rebuilds so clients see a stable identity, but it must never enter
+# source control. The authorized key is copied beside it for the same simple,
+# explicit build contract.
+if [ -z "$local_ssh" ]; then
+	echo "post-build: local SSH input directory argument is missing" >&2
+	exit 1
+fi
+for file in ssh_host_ed25519_key authorized_keys; do
+	if [ ! -f "$local_ssh/$file" ]; then
+		echo "post-build: missing local SSH input: $local_ssh/$file" >&2
+		exit 1
+	fi
+done
+
+install -d -m 0700 "$target/root/.ssh"
+install -m 0600 "$local_ssh/authorized_keys" \
+	"$target/root/.ssh/authorized_keys"
+install -d -m 0755 "$target/etc/ssh"
+install -m 0600 "$local_ssh/ssh_host_ed25519_key" \
+	"$target/etc/ssh/ssh_host_ed25519_key"
 
 # Anything here that survives to this point gets deleted.
 writers="
@@ -78,3 +101,4 @@ for tool in mtdinfo nanddump mtd_debug ethtool i2cdetect debugfs fsck.fat; do
 done
 
 echo "post-build: writers absent, read-only tools present"
+echo "post-build: installed durable OpenSSH host and root authorized keys"

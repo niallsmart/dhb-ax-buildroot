@@ -92,15 +92,33 @@ BR2_PACKAGE_HOST_UBOOT_TOOLS=y
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
 BR2_LINUX_KERNEL_CUSTOM_DTS_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/dts"
 
-# Userspace in an initramfs built into the kernel image, so a network failure
-# still leaves a usable shell.  See "NFS root is deferred" in the plan.
-BR2_TARGET_ROOTFS_CPIO=y
-BR2_TARGET_ROOTFS_INITRAMFS=y
+# Keep userspace outside the legacy uImage. Vendor U-Boot rejects the
+# OpenSSH-enabled initramfs because its 9.9 MiB payload crosses U-Boot's kernel
+# size guard. The kernel obtains the board's reserved address by DHCP and
+# mounts the Buildroot rootfs exported by the Raspberry Pi; Buildroot emits a
+# tar archive for scripts/publish-nfs-root.sh to publish there.
+BR2_TARGET_ROOTFS_TAR=y
+# BR2_TARGET_ROOTFS_CPIO is not set
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/rootfs-overlay"
+BR2_INIT_BUSYBOX=y
+BR2_TARGET_GENERIC_GETTY=y
+BR2_TARGET_GENERIC_HOSTNAME="dhb-ax"
 
-# Buildroot's BusyBox omits cttyhack, which /init needs to get a controlling
-# terminal.  Without it /init exits and the kernel panics.
-BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/busybox.config"
+# Early kernel DHCP is what makes the NFS root mount possible. Do not ask
+# Buildroot's init scripts to run DHCP a second time: deconfiguring eth0 under
+# a live NFS root can deadlock the system. OpenSSH starts through the normal
+# Buildroot init scripts. It is key-only: root remains available on the
+# physical serial console, but an empty root password must never grant network
+# access. Host and authorized keys are injected from ignored local inputs by
+# post-build.sh.
+BR2_SYSTEM_DHCP=""
+BR2_PACKAGE_OPENSSH=y
+# BR2_PACKAGE_OPENSSH_CLIENT is not set
+BR2_PACKAGE_OPENSSH_SERVER=y
+BR2_PACKAGE_OPENSSH_KEY_UTILS=y
+BR2_PACKAGE_OPENSSH_SANDBOX=y
+# BR2_PACKAGE_DROPBEAR is not set
+# BR2_PACKAGE_LIGHTTPD is not set
 
 # 64-bit time_t.  The symptom this was meant to cure -- `ls` on the DVR's
 # FAT32 partitions reporting "Value too large for defined data type" -- had
@@ -169,3 +187,4 @@ BR2_PACKAGE_DOSFSTOOLS_FSCK_FAT=y
 # package -- so it can only be removed after the fact.  post-build.sh does
 # that, and fails the build if anything on its list is still there.
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/post-build.sh"
+BR2_ROOTFS_POST_BUILD_SCRIPT_ARGS="$(BR2_EXTERNAL_DHB_AX_PATH)/../artifacts/local/ssh"

@@ -1,0 +1,18 @@
+# OpenSSH server policy for the NFS-root DHB-AX system.
+# Host and authorized keys are injected from artifacts/local/ssh at build time.
+
+Port 22
+HostKey /etc/ssh/ssh_host_ed25519_key
+
+PermitRootLogin prohibit-password
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+PasswordAuthentication no
+PermitEmptyPasswords no
+KbdInteractiveAuthentication no
+AuthenticationMethods publickey
+
+AllowUsers root
+X11Forwarding no
+PrintMotd no
+Subsystem sftp internal-sftp
