@@ -78,8 +78,8 @@ garbled output. Prefer individual reads and cross-check surprising values.
 Facts that affect low-level work:
 
 - The SoC has two Cortex-A9 cores and 1 GiB of DRAM in two 512 MiB banks:
-  DDR0 at `0x80000000`, DDR1 at `0xc0000000`. The port intentionally declares
-  DDR0 only; U-Boot framebuffers occupy DDR1. See `docs/memory-map.md`.
+  DDR0 at `0x80000000`, DDR1 at `0xc0000000`. The port declares both banks and
+  uses the ARM 2G/2G virtual split; runtime validation reports the full 1 GiB.
 - Vendor U-Boot is 2010.06, its prompt is `hisilicon #`, and the kernel load
   and entry address is `0x80008000`.
 - The runtime MAC is `00:18:AE:3C:A2:49`; the value stored in U-Boot is only a
