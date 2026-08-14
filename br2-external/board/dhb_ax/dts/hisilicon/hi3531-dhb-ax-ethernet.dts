@@ -277,9 +277,11 @@
 		#size-cells = <0>;
 
 		/*
-		 * Battery-backed clock.  This, not the on-chip PL031, is what
-		 * the vendor loads a driver for.  Address 0x68 is fixed for
-		 * the DS1307 family.
+		 * Battery-backed DS1307-compatible clock.  The vendor module's
+		 * default mode uses the DS1307 register map at 7-bit address 0x68;
+		 * its separate PCF8563 mode uses 0x51.  Mainline rtc-ds1307 reads
+		 * this device successfully and supplies rtc0/hctosys.  The exact
+		 * package manufacturer remains unidentified.
 		 */
 		rtc@68 {
 			compatible = "dallas,ds1307";
@@ -288,14 +290,16 @@
 	};
 
 	/*
-	 * No PL031 node.  The block is present at 0x20060000 and the mainline
-	 * driver binds to it, but the counter never advances and neither the
-	 * control nor the load register accepts a write, which is how a
-	 * clock-gated block behaves on this SoC.  The vendor ships hi_rtc.ko
-	 * for it but never loads it: their init loads ds1307.ko instead, so
-	 * real timekeeping on this board is an external DS1307 on the
-	 * bit-banged I2C bus.  Wall-clock time therefore depends on GPIO-based
-	 * I2C, not on this block.
+	 * No PL031 node.  The block at 0x20060000 has a valid PL031 identity,
+	 * but Hi3531 adds a write lock at offset 0x20.  It must receive
+	 * 0x1acce551 before RTC_CR or RTC_LR accepts a write; mainline rtc-pl031
+	 * has no such quirk, so a plain node binds but leaves the counter
+	 * stopped.  A volatile unlock/start test confirmed one-second ticks.
+	 * CRG + 0xe4 bit 2 is the reset control and was already deasserted.
+	 *
+	 * The vendor ships a driver with the required sequence but does not
+	 * load it on this board.  Keep the working battery-backed external RTC
+	 * as rtc0 rather than adding an incomplete on-chip node.
 	 */
 	/*
 	 * SP805 watchdog, WDG_BASE from the vendor platform.h.  Used as a
