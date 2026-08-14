@@ -74,14 +74,11 @@
 
 
 	/*
-	 * Nineteen GPIO banks.  Identified as ARM PL061 by reading the
-	 * PrimeCell ID registers on bank 0 (part 0x061), so the mainline
-	 * driver applies unchanged.  No interrupt is described: the vendor
-	 * registers none, and the driver simply logs "IRQ support disabled"
-	 * and continues to allow reads and writes.
-	 *
-	 * Banks whose clock is gated will fail to identify on the AMBA bus and
-	 * will not bind, which is a useful way of finding out which are live.
+	 * Nineteen GPIO banks.  The PID and CID registers on every bank return
+	 * the native PL061 identity 0x00041061 and PrimeCell signature, so no
+	 * arm,primecell-periphid override is needed.  No interrupt is described:
+	 * the vendor registers none, and the driver simply logs "IRQ support
+	 * disabled" while continuing to allow reads and writes.
 	 */
 	gpio0: gpio@20150000 {
 		compatible = "arm,pl061", "arm,primecell";
@@ -246,6 +243,11 @@
 	};
 
 	gpio18: gpio@20270000 {
+		/*
+		 * The SoC implements offsets 0..5.  Upstream PL061 hard-codes eight
+		 * lines and its binding has no width property, so offsets 6 and 7
+		 * remain visible through gpiolib but must not be referenced.
+		 */
 		compatible = "arm,pl061", "arm,primecell";
 		reg = <0x20270000 0x1000>;
 		gpio-controller;
