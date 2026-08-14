@@ -1,0 +1,328 @@
+
+Unknown command 'echo' - try 'help'
+Unknown command 'echo' - try 'help'
+hisilicon #
+hisilicon # echo __DVR_CMD_83779_2__; setenv ipaddr 192.168.7.241
+Unknown command 'echo' - try 'help'
+hisilicon #
+hisilicon # echo __DVR_CMD_83779_3__; setenv netmask 255.255.252.0
+Unknown command 'echo' - try 'help'
+hisilicon #
+hisilicon # echo __DVR_CMD_83779_4__; setenv serverip 192.168.4.34
+Unknown command 'echo' - try 'help'
+hisilicon #
+hisilicon # echo __DVR_CMD_83779_5__; setenv ethaddr 00:18:AE:3C:A2:49
+Unknown command 'echo' - try 'help'
+hisilicon #
+hisilicon # echo __DVR_TFTP_83779_6__; tftp 0x82000000 uImage-hi3531-dhb-ax-ethernet
+Unknown command 'echo' - try 'help'
+No such device: 0:1
+No such device: 0:1
+No such device: 0:1
+No such device: 0:1
+MAC:   00-18-AE-3C-A2-49
+TFTP from server 192.168.4.34; our IP address is 192.168.7.241
+Download Filename 'uImage-hi3531-dhb-ax-ethernet'.
+Download to address: 0x82000000
+Downloading: #################################################
+done
+Bytes transferred = 3189609 (30ab69 hex)
+hisilicon # echo __DVR_BOOTM_83779_7__; bootm 0x82000000
+Unknown command 'echo' - try 'help'
+## Booting kernel from Legacy Image at 82000000 ...
+   Image Name:   Linux-6.18.42 hi3531-dhb-ax-ethe
+   Image Type:   ARM Linux Kernel Image (uncompressed)
+   Data Size:    3189545 Bytes = 3 MiB
+   Load Address: 80008000
+   Entry Point:  80008000
+   Loading Kernel Image ... OK
+OK
+
+Starting kernel ...
+
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 6.18.42 (br@3a369cb44dde) (arm-buildroot-linux-gnueabihf-gcc.br_real (Buildroot 2026.02.3) 14.3.0, GNU ld (GNU Binutils) 2.44) #1 SMP F
+ri Aug 14 13:38:00 UTC 2026
+[    0.000000] CPU: ARMv7 Processor [413fc090] revision 0 (ARMv7), cr=10c5387d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: LTS LTD2704XE-P DVR (TVT DHB_AX V1.2)
+[    0.000000] earlycon: pl11 at MMIO 0x20080000 (options '')
+[    0.000000] printk: legacy bootconsole [pl11] enabled
+[    0.000000] printk: debug: skip boot console de-registration.
+[    0.000000] printk: debug: ignoring loglevel setting.
+[    0.000000] Memory policy: Data cache writealloc
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000080000000-0x00000000dfffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000080000000-0x000000009fffffff]
+[    0.000000]   node   0: [mem 0x00000000c0000000-0x00000000dfffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000080000000-0x00000000dfffffff]
+[    0.000000] OF: reserved mem: Reserved memory: No reserved-memory node in the DT
+[    0.000000] percpu: Embedded 11 pages/cpu s13388 r8192 d23476 u45056
+[    0.000000] pcpu-alloc: s13388 r8192 d23476 u45056 alloc=11*4096
+[    0.000000] pcpu-alloc: [0] 0 [0] 1
+[    0.000000] Kernel command line: console=ttyAMA0,115200 earlycon=pl011,0x20080000 keep_bootcon ignore_loglevel root=/dev/nfs nfsroot=192.168.4.34:/srv/dhb-ax/roo
+tfs,vers=3,tcp,nolock ip=::::dhb-ax:eth0:dhcp rw
+[    0.000000] printk: log buffer data + meta data: 131072 + 409600 = 540672 bytes
+[    0.000000] Dentry cache hash table entries: 131072 (order: 7, 524288 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 262144
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=2, Nodes=1
+[    0.000000] rcu: Hierarchical RCU implementation.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 10 jiffies.
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.000000] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+����o��V������p7�7�+$$$$&)���ʲ�ɥ�ѭ遍��ͽ���m��5�u��������5)ہ������Պʲ�ɥ�ѭ遍��ͽ���m��5�u��������5)�[    0.149947] SCSI subsystem initialized
+[    0.149947] SCSI subsystem initialized
+[    0.157858] usbcore: registered new interface driver usbfs
+[    0.157858] usbcore: registered new interface driver usbfs
+[    0.168973] usbcore: registered new interface driver hub
+[    0.168973] usbcore: registered new interface driver hub
+[    0.179743] usbcore: registered new device driver usb
+[    0.179743] usbcore: registered new device driver usb
+[    0.191145] clocksource: Switched to clocksource arm,sp804
+[    0.191145] clocksource: Switched to clocksource arm,sp804
+[    0.214580] NET: Registered PF_INET protocol family
+[    0.214580] NET: Registered PF_INET protocol family
+[    0.224720] IP idents hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.224720] IP idents hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.241133] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes, linear)
+[    0.241133] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes, linear)
+[    0.257995] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.257995] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.273603] TCP established hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.273603] TCP established hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.289257] TCP bind hash table entries: 8192 (order: 5, 131072 bytes, linear)
+[    0.289257] TCP bind hash table entries: 8192 (order: 5, 131072 bytes, linear)
+[    0.303974] TCP: Hash tables configured (established 8192 bind 8192)
+[    0.303974] TCP: Hash tables configured (established 8192 bind 8192)
+[    0.316896] UDP hash table entries: 512 (order: 3, 28672 bytes, linear)
+[    0.316896] UDP hash table entries: 512 (order: 3, 28672 bytes, linear)
+[    0.330297] UDP-Lite hash table entries: 512 (order: 3, 28672 bytes, linear)
+[    0.330297] UDP-Lite hash table entries: 512 (order: 3, 28672 bytes, linear)
+[    0.344765] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.344765] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.356866] RPC: Registered named UNIX socket transport module.
+[    0.356866] RPC: Registered named UNIX socket transport module.
+[    0.368791] RPC: Registered udp transport module.
+[    0.368791] RPC: Registered udp transport module.
+[    0.378256] RPC: Registered tcp transport module.
+[    0.378256] RPC: Registered tcp transport module.
+[    0.387730] RPC: Registered tcp-with-tls transport module.
+[    0.387730] RPC: Registered tcp-with-tls transport module.
+[    0.398757] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.398757] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.412536] workingset: timestamp_bits=30 max_order=18 bucket_order=0
+[    0.412536] workingset: timestamp_bits=30 max_order=18 bucket_order=0
+[    0.426986] pl061_gpio 20150000.gpio: IRQ support disabled
+[    0.426986] pl061_gpio 20150000.gpio: IRQ support disabled
+[    0.438493] pl061_gpio 20150000.gpio: PL061 GPIO chip registered
+[    0.438493] pl061_gpio 20150000.gpio: PL061 GPIO chip registered
+[    0.450773] pl061_gpio 20160000.gpio: IRQ support disabled
+[    0.450773] pl061_gpio 20160000.gpio: IRQ support disabled
+[    0.462092] pl061_gpio 20160000.gpio: PL061 GPIO chip registered
+[    0.462092] pl061_gpio 20160000.gpio: PL061 GPIO chip registered
+[    0.474421] pl061_gpio 20170000.gpio: IRQ support disabled
+[    0.474421] pl061_gpio 20170000.gpio: IRQ support disabled
+[    0.485783] pl061_gpio 20170000.gpio: PL061 GPIO chip registered
+[    0.485783] pl061_gpio 20170000.gpio: PL061 GPIO chip registered
+[    0.498062] pl061_gpio 20180000.gpio: IRQ support disabled
+[    0.498062] pl061_gpio 20180000.gpio: IRQ support disabled
+[    0.509404] pl061_gpio 20180000.gpio: PL061 GPIO chip registered
+[    0.509404] pl061_gpio 20180000.gpio: PL061 GPIO chip registered
+[    0.521691] pl061_gpio 20190000.gpio: IRQ support disabled
+[    0.521691] pl061_gpio 20190000.gpio: IRQ support disabled
+[    0.533041] pl061_gpio 20190000.gpio: PL061 GPIO chip registered
+[    0.533041] pl061_gpio 20190000.gpio: PL061 GPIO chip registered
+[    0.545337] pl061_gpio 201a0000.gpio: IRQ support disabled
+[    0.545337] pl061_gpio 201a0000.gpio: IRQ support disabled
+[    0.556666] pl061_gpio 201a0000.gpio: PL061 GPIO chip registered
+[    0.556666] pl061_gpio 201a0000.gpio: PL061 GPIO chip registered
+[    0.568958] pl061_gpio 201b0000.gpio: IRQ support disabled
+[    0.568958] pl061_gpio 201b0000.gpio: IRQ support disabled
+[    0.580289] pl061_gpio 201b0000.gpio: PL061 GPIO chip registered
+[    0.580289] pl061_gpio 201b0000.gpio: PL061 GPIO chip registered
+[    0.592559] pl061_gpio 201c0000.gpio: IRQ support disabled
+[    0.592559] pl061_gpio 201c0000.gpio: IRQ support disabled
+[    0.603904] pl061_gpio 201c0000.gpio: PL061 GPIO chip registered
+[    0.603904] pl061_gpio 201c0000.gpio: PL061 GPIO chip registered
+[    0.616199] pl061_gpio 201d0000.gpio: IRQ support disabled
+[    0.616199] pl061_gpio 201d0000.gpio: IRQ support disabled
+[    0.627538] pl061_gpio 201d0000.gpio: PL061 GPIO chip registered
+[    0.627538] pl061_gpio 201d0000.gpio: PL061 GPIO chip registered
+[    0.639824] pl061_gpio 201e0000.gpio: IRQ support disabled
+[    0.639824] pl061_gpio 201e0000.gpio: IRQ support disabled
+[    0.651147] pl061_gpio 201e0000.gpio: PL061 GPIO chip registered
+[    0.651147] pl061_gpio 201e0000.gpio: PL061 GPIO chip registered
+[    0.663423] pl061_gpio 201f0000.gpio: IRQ support disabled
+[    0.663423] pl061_gpio 201f0000.gpio: IRQ support disabled
+[    0.674785] pl061_gpio 201f0000.gpio: PL061 GPIO chip registered
+[    0.674785] pl061_gpio 201f0000.gpio: PL061 GPIO chip registered
+[    0.687068] pl061_gpio 20200000.gpio: IRQ support disabled
+[    0.687068] pl061_gpio 20200000.gpio: IRQ support disabled
+[    0.698388] pl061_gpio 20200000.gpio: PL061 GPIO chip registered
+[    0.698388] pl061_gpio 20200000.gpio: PL061 GPIO chip registered
+[    0.710661] pl061_gpio 20210000.gpio: IRQ support disabled
+[    0.710661] pl061_gpio 20210000.gpio: IRQ support disabled
+[    0.722020] pl061_gpio 20210000.gpio: PL061 GPIO chip registered
+[    0.722020] pl061_gpio 20210000.gpio: PL061 GPIO chip registered
+[    0.734290] pl061_gpio 20220000.gpio: IRQ support disabled
+[    0.734290] pl061_gpio 20220000.gpio: IRQ support disabled
+[    0.745680] pl061_gpio 20220000.gpio: PL061 GPIO chip registered
+[    0.745680] pl061_gpio 20220000.gpio: PL061 GPIO chip registered
+[    0.757956] pl061_gpio 20230000.gpio: IRQ support disabled
+[    0.757956] pl061_gpio 20230000.gpio: IRQ support disabled
+[    0.769289] pl061_gpio 20230000.gpio: PL061 GPIO chip registered
+[    0.769289] pl061_gpio 20230000.gpio: PL061 GPIO chip registered
+[    0.781558] pl061_gpio 20240000.gpio: IRQ support disabled
+[    0.781558] pl061_gpio 20240000.gpio: IRQ support disabled
+[    0.792892] pl061_gpio 20240000.gpio: PL061 GPIO chip registered
+[    0.792892] pl061_gpio 20240000.gpio: PL061 GPIO chip registered
+[    0.805207] pl061_gpio 20250000.gpio: IRQ support disabled
+[    0.805207] pl061_gpio 20250000.gpio: IRQ support disabled
+[    0.816521] pl061_gpio 20250000.gpio: PL061 GPIO chip registered
+[    0.816521] pl061_gpio 20250000.gpio: PL061 GPIO chip registered
+[    0.828790] pl061_gpio 20260000.gpio: IRQ support disabled
+[    0.828790] pl061_gpio 20260000.gpio: IRQ support disabled
+[    0.840124] pl061_gpio 20260000.gpio: PL061 GPIO chip registered
+[    0.840124] pl061_gpio 20260000.gpio: PL061 GPIO chip registered
+[    0.852399] pl061_gpio 20270000.gpio: IRQ support disabled
+[    0.852399] pl061_gpio 20270000.gpio: IRQ support disabled
+[    0.863738] pl061_gpio 20270000.gpio: PL061 GPIO chip registered
+[    0.863738] pl061_gpio 20270000.gpio: PL061 GPIO chip registered
+[    0.876486] cacheinfo: Unable to detect cache hierarchy for CPU 0
+[    0.876486] cacheinfo: Unable to detect cache hierarchy for CPU 0
+[    0.890036] hi3531-dwmac 101c0000.ethernet: IRQ eth_wake_irq not found
+[    0.890036] hi3531-dwmac 101c0000.ethernet: IRQ eth_wake_irq not found
+[    0.903216] hi3531-dwmac 101c0000.ethernet: IRQ sfty not found
+[    0.903216] hi3531-dwmac 101c0000.ethernet: IRQ sfty not found
+[    0.915092] hi3531-dwmac 101c0000.ethernet: PTP uses main clock
+[    0.915092] hi3531-dwmac 101c0000.ethernet: PTP uses main clock
+[    0.927073] hi3531-dwmac 101c0000.ethernet: GMAC0 ver=00001036 GMAC1 ver=00001036 TNK id=000100ff stat=00000000
+[    0.927073] hi3531-dwmac 101c0000.ethernet: GMAC0 ver=00001036 GMAC1 ver=00001036 TNK id=000100ff stat=00000000
+[    0.947391] hi3531-dwmac 101c0000.ethernet: CRG cc=0000000a interface reset=00000000 config=003c003c
+[    0.947391] hi3531-dwmac 101c0000.ethernet: CRG cc=0000000a interface reset=00000000 config=003c003c
+[    0.965762] hi3531-dwmac 101c0000.ethernet: TNK interrupt enable 0000000c -> 00000048
+[    0.965762] hi3531-dwmac 101c0000.ethernet: TNK interrupt enable 0000000c -> 00000048
+[    0.981752] hi3531-dwmac 101c0000.ethernet: User ID: 0x10, Synopsys ID: 0x36
+[    0.981752] hi3531-dwmac 101c0000.ethernet: User ID: 0x10, Synopsys ID: 0x36
+[    0.995978] hi3531-dwmac 101c0000.ethernet: 	DWMAC1000
+[    0.995978] hi3531-dwmac 101c0000.ethernet: 	DWMAC1000
+[    1.006327] hi3531-dwmac 101c0000.ethernet: No HW DMA feature register supported
+[    1.006327] hi3531-dwmac 101c0000.ethernet: No HW DMA feature register supported
+[    1.021194] hi3531-dwmac 101c0000.ethernet: Enhanced/Alternate descriptors
+[    1.021194] hi3531-dwmac 101c0000.ethernet: Enhanced/Alternate descriptors
+[    1.035024] hi3531-dwmac 101c0000.ethernet: Enabled extended descriptors
+[    1.035024] hi3531-dwmac 101c0000.ethernet: Enabled extended descriptors
+[    1.048501] hi3531-dwmac 101c0000.ethernet: Ring mode enabled
+[    1.048501] hi3531-dwmac 101c0000.ethernet: Ring mode enabled
+[    1.060059] hi3531-dwmac 101c0000.ethernet: Enable RX Mitigation via HW Watchdog Timer
+[    1.060059] hi3531-dwmac 101c0000.ethernet: Enable RX Mitigation via HW Watchdog Timer
+[    1.135585] i2c_dev: i2c /dev entries driver
+[    1.135585] i2c_dev: i2c /dev entries driver
+[    1.144688] NET: Registered PF_PACKET protocol family
+[    1.145099] ehci-platform 100b0000.usb: EHCI Host Controller
+[    1.149915] Registering SWP/SWPB emulation handler
+[    1.155482] ehci-platform 100b0000.usb: new USB bus registered, assigned bus number 1
+[    1.144688] NET: Registered PF_PACKET protocol family
+[    1.171602] ohci-platform 100a0000.usb: Generic Platform OHCI controller
+[    1.173373] ehci-platform 100b0000.usb: irq 27, io mem 0x100b0000
+[    1.179939] ohci-platform 100a0000.usb: new USB bus registered, assigned bus number 2
+[    1.145099] ehci-platform 100b0000.usb: EHCI Host Controller
+[    1.149915] Registering SWP/SWPB emulation handler
+[    1.202926] rtc-ds1307 0-0068: registered as rtc0
+[    1.204470] ohci-platform 100a0000.usb: irq 28, io mem 0x100a0000
+[    1.210289] rtc-ds1307 0-0068: setting system clock to 2026-08-14T16:19:07 UTC (1786724347)
+[    1.155482] ehci-platform 100b0000.usb: new USB bus registered, assigned bus number 1
+[    1.171602] ohci-platform 100a0000.usb: Generic Platform OHCI controller
+[    1.173373] ehci-platform 100b0000.usb: irq 27, io mem 0x100b0000
+[    1.179939] ohci-platform 100a0000.usb: new USB bus registered, assigned bus number 2
+[    1.202926] rtc-ds1307 0-0068: registered as rtc0
+[    1.254559] ehci-platform 100b0000.usb: USB 2.0 started, EHCI 1.00
+[    1.257061] i2c-gpio i2c-gpio: using lines 612 (SDA) and 613 (SCL)
+[    1.204470] ohci-platform 100a0000.usb: irq 28, io mem 0x100a0000
+[    1.210289] rtc-ds1307 0-0068: setting system clock to 2026-08-14T16:19:07 UTC (1786724347)
+[    1.279139] hub 1-0:1.0: USB hub found
+[    1.254559] ehci-platform 100b0000.usb: USB 2.0 started, EHCI 1.00
+[    1.257061] i2c-gpio i2c-gpio: using lines 612 (SDA) and 613 (SCL)
+[    1.279139] hub 1-0:1.0: USB hub found
+[    1.304093] hub 1-0:1.0: 2 ports detected
+[    1.304093] hub 1-0:1.0: 2 ports detected
+[    1.313792] hub 2-0:1.0: USB hub found
+[    1.313792] hub 2-0:1.0: USB hub found
+[    1.321456] hub 2-0:1.0: 2 ports detected
+[    1.321456] hub 2-0:1.0: 2 ports detected
+[    1.330770] hi3531-dwmac 101c0000.ethernet eth0: Register MEM_TYPE_PAGE_POOL RxQ-0
+[    1.330770] hi3531-dwmac 101c0000.ethernet eth0: Register MEM_TYPE_PAGE_POOL RxQ-0
+[    1.384562] hi3531-dwmac 101c0000.ethernet eth0: PHY [stmmac-0:01] driver [RTL8211B Gigabit Ethernet] (irq=POLL)
+[    1.384562] hi3531-dwmac 101c0000.ethernet eth0: PHY [stmmac-0:01] driver [RTL8211B Gigabit Ethernet] (irq=POLL)
+[    1.405043] hi3531-dwmac 101c0000.ethernet eth0: No Safety Features support found
+[    1.405043] hi3531-dwmac 101c0000.ethernet eth0: No Safety Features support found
+[    1.420091] hi3531-dwmac 101c0000.ethernet eth0: RX IPC Checksum Offload disabled
+[    1.420091] hi3531-dwmac 101c0000.ethernet eth0: RX IPC Checksum Offload disabled
+[    1.435140] hi3531-dwmac 101c0000.ethernet eth0: No MAC Management Counters available
+[    1.435140] hi3531-dwmac 101c0000.ethernet eth0: No MAC Management Counters available
+[    1.451162] hi3531-dwmac 101c0000.ethernet eth0: PTP not supported by HW
+[    1.451162] hi3531-dwmac 101c0000.ethernet eth0: PTP not supported by HW
+[    1.464672] hi3531-dwmac 101c0000.ethernet eth0: configuring for phy/rgmii link mode
+[    1.464672] hi3531-dwmac 101c0000.ethernet eth0: configuring for phy/rgmii link mode
+[    1.594560] hi3531-dwmac 101c0000.ethernet: GMAC1 RGMII speed 1000, syscfg 003c003c -> 003c003c
+[    1.594560] hi3531-dwmac 101c0000.ethernet: GMAC1 RGMII speed 1000, syscfg 003c003c -> 003c003c
+[    1.612069] hi3531-dwmac 101c0000.ethernet eth0: Link is Up - 1Gbps/Full - flow control rx/tx
+[    1.612069] hi3531-dwmac 101c0000.ethernet eth0: Link is Up - 1Gbps/Full - flow control rx/tx
+[    1.644547] Sending DHCP requests ., OK
+[    1.644547] Sending DHCP requests ., OK
+[    1.692303] IP-Config: Got DHCP answer from 192.168.4.1, my address is 192.168.4.77
+[    1.692303] IP-Config: Got DHCP answer from 192.168.4.1, my address is 192.168.4.77
+[    1.707754] IP-Config: Complete:
+[    1.707754] IP-Config: Complete:
+[    1.714282]      device=eth0, hwaddr=00:18:ae:3c:a2:49, ipaddr=192.168.4.77, mask=255.255.252.0, gw=192.168.4.1
+[    1.714282]      device=eth0, hwaddr=00:18:ae:3c:a2:49, ipaddr=192.168.4.77, mask=255.255.252.0, gw=192.168.4.1
+[    1.734601]      host=dhb-ax, domain=, nis-domain=(none)
+[    1.734601]      host=dhb-ax, domain=, nis-domain=(none)
+[    1.745290]      bootserver=0.0.0.0, rootserver=192.168.4.34, rootpath=
+[    1.745290]      bootserver=0.0.0.0, rootserver=192.168.4.34, rootpath=
+[    1.745309]      nameserver0=1.1.1.2, nameserver1=1.1.1.1
+[    1.745309]      nameserver0=1.1.1.2, nameserver1=1.1.1.1
+[    1.769490]      ntpserver0=192.168.4.1
+[    1.769490]      ntpserver0=192.168.4.1
+[    1.777573] clk: Disabling unused clocks
+[    1.777573] clk: Disabling unused clocks
+[    1.785739] check access for rdinit=/init failed: -2, ignoring
+[    1.785739] check access for rdinit=/init failed: -2, ignoring
+[    1.871701] VFS: Mounted root (nfs filesystem) on device 0:12.
+[    1.871701] VFS: Mounted root (nfs filesystem) on device 0:12.
+[    1.885394] devtmpfs: mounted
+[    1.885394] devtmpfs: mounted
+[    1.891646] Freeing unused kernel image (initmem) memory: 212K
+[    1.891646] Freeing unused kernel image (initmem) memory: 212K
+[    1.903436] Kernel memory protection not selected by kernel config.
+[    1.903436] Kernel memory protection not selected by kernel config.
+[    1.916121] Run /sbin/init as init process
+[    1.916121] Run /sbin/init as init process
+[    1.924340]   with arguments:
+[    1.924340]   with arguments:
+[    1.930322]     /sbin/init
+[    1.930322]     /sbin/init
+[    1.935812]   with environment:
+[    1.935812]   with environment:
+[    1.942112]     HOME=/
+[    1.942112]     HOME=/
+[    1.946896]     TERM=linux
+[    1.946896]     TERM=linux
+Seeding 256 bits [    2.947677] random: crng init done
+and crediting
+[    2.947677] random: crng init done
+Saving 256 bits of creditable seed for next boot
+Starting syslogd: OK
+Starting klogd: OK
+Running sysctl: OK
+Starting network: OK
+Starting crond: OK
+Starting sshd: OK
+
+Welcome to Buildroot
+dhb-ax login:

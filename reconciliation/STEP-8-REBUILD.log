@@ -1,0 +1,2145 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.24kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/debian:12
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/5] FROM docker.io/library/debian:12@sha256:9344f8b8992482f80cba753f323adeaf17690076c095ccff6cc9536be98185dc
+#4 resolve docker.io/library/debian:12@sha256:9344f8b8992482f80cba753f323adeaf17690076c095ccff6cc9536be98185dc done
+#4 DONE 0.0s
+
+#5 [2/5] RUN apt-get update  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       bc       binutils       bison       build-essential       bzip2       ca-certificates       cpio       file       findutils       flex       git       gzip       libncurses-dev       libssl-dev       locales       perl       python3       rsync       sed       tar       unzip       wget       which       xz-utils  && rm -rf /var/lib/apt/lists/*
+#5 CACHED
+
+#6 [4/5] RUN useradd --create-home --uid 1000 --shell /bin/sh br
+#6 CACHED
+
+#7 [3/5] RUN sed -i 's/^# en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen
+#7 CACHED
+
+#8 [5/5] WORKDIR /buildroot
+#8 CACHED
+
+#9 exporting to image
+#9 exporting layers done
+#9 exporting manifest sha256:3a69ef7ac4f43606b14fd4122cb5e39b4eb1ad77452d949d10cdcb2986f218f9 done
+#9 exporting config sha256:de992c5b02dd50c33e93465f332f60b279e4a1005db33ce8552806d1f0499d80 done
+#9 exporting attestation manifest sha256:35d12bde593aca9250da785622666f478793714b65b2bdbaef74a683161636f3 done
+#9 exporting manifest list sha256:3ea3345166e306a18c1362dc23f7f75aeb024917208770819d682360a60cd578 done
+#9 naming to docker.io/library/dhb-ax-buildroot:bookworm done
+#9 unpacking to docker.io/library/dhb-ax-buildroot:bookworm done
+#9 DONE 0.0s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ra9wb2i12enhc863dymj8kgcx
+make: Entering directory '/buildroot'
+  GEN     /output/Makefile
+#
+# configuration written to /output/.config
+#
+make: Leaving directory '/buildroot'
+defconfig verified: every setting present in .config
+make: Entering directory '/buildroot'
+/usr/bin/make -j1  O=/output HOSTCC="/usr/bin/gcc" HOSTCXX="/usr/bin/g++" syncconfig
+make[1]: Entering directory '/buildroot'
+make[1]: warning: -j1 forced in submake: resetting jobserver mode.
+  GEN     /output/Makefile
+make[1]: Leaving directory '/buildroot'
+WARNING: no hash file for linux-6.18.42.tar.xz
+>>> linux custom Extracting
+xzcat /dl/linux/linux-6.18.42.tar.xz | /output/host/bin/tar --strip-components=1 -C /output/build/linux-custom   -xf -
+>>> linux custom Patching
+
+Applying 0001-arm-dts-build-dhb-ax-device-trees.patch using patch: 
+patching file arch/arm/boot/dts/hisilicon/Makefile
+
+Applying 0002-arm-hisi-initialize-hi3531-uart-clock-mux.patch using patch: 
+patching file arch/arm/mach-hisi/hisilicon.c
+
+Applying 0003-net-stmmac-add-hi3531-glue.patch using patch: 
+patching file Documentation/devicetree/bindings/net/hisilicon,hi3531-dwmac.yaml
+patching file Documentation/devicetree/bindings/net/snps,dwmac.yaml
+patching file drivers/net/ethernet/stmicro/stmmac/Kconfig
+patching file drivers/net/ethernet/stmicro/stmmac/Makefile
+patching file drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+
+Applying 0004-net-stmmac-address-the-mac-block-through-pcsr.patch using patch: 
+patching file drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+patching file drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+patching file drivers/net/ethernet/stmicro/stmmac/stmmac_hwtstamp.c
+patching file drivers/net/ethernet/stmicro/stmmac/dwmac1000_core.c
+
+Applying 0005-net-stmmac-add-a-per-instance-dma-register-base.patch using patch: 
+patching file drivers/net/ethernet/stmicro/stmmac/stmmac.h
+patching file drivers/net/ethernet/stmicro/stmmac/stmmac_tc.c
+patching file drivers/net/ethernet/stmicro/stmmac/stmmac_selftests.c
+patching file drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+patching file drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+
+Applying 0006-net-stmmac-derive-ptp-and-mmc-bases-from-the-mac-block.patch using patch: 
+patching file drivers/net/ethernet/stmicro/stmmac/hwif.c
+
+Applying 0007-ata-add-hi3531-ahci-glue.patch using patch: 
+patching file drivers/ata/Kconfig
+patching file drivers/ata/Makefile
+patching file drivers/ata/ahci_hi3531.c
+
+Applying 0008-gpio-pl061-skip-irqchip-without-parent-irq.patch using patch: 
+patching file drivers/gpio/gpio-pl061.c
+
+Applying 0009-phy-hisilicon-add-hi3531-usb-phy.patch using patch: 
+patching file drivers/phy/hisilicon/Kconfig
+patching file drivers/phy/hisilicon/Makefile
+patching file drivers/phy/hisilicon/phy-hi3531-usb.c
+
+Applying 0010-arm-hisi-add-hi3531-smp-operations.patch using patch: 
+patching file arch/arm/mach-hisi/platsmp.c
+for p in  ; do if test -d $p ; then TAR="/output/host/bin/tar" PATH=/output/host/bin:$PATH support/scripts/apply-patches.sh  /output/build/linux-custom $p \*.patch || exit 1 ; else TAR="/output/host/bin/tar" PATH=/output/host/bin:$PATH support/scripts/apply-patches.sh  /output/build/linux-custom `dirname $p` `basename $p` || exit 1; fi done
+Using /output/build/linux-custom/.config as base
+#
+# merged configuration written to /output/build/linux-custom/.config (needs make)
+#
+make[1]: Entering directory '/buildroot'
+make[1]: warning: jobserver unavailable: using -j1.  Add '+' to parent make rule.
+  HOSTCC  scripts/basic/fixdep
+  HOSTCC  scripts/kconfig/conf.o
+  HOSTCC  scripts/kconfig/confdata.o
+  HOSTCC  scripts/kconfig/expr.o
+  LEX     scripts/kconfig/lexer.lex.c
+  YACC    scripts/kconfig/parser.tab.[ch]
+  HOSTCC  scripts/kconfig/lexer.lex.o
+  HOSTCC  scripts/kconfig/menu.o
+  HOSTCC  scripts/kconfig/parser.tab.o
+  HOSTCC  scripts/kconfig/preprocess.o
+  HOSTCC  scripts/kconfig/symbol.o
+  HOSTCC  scripts/kconfig/util.o
+  HOSTLD  scripts/kconfig/conf
+#
+# No change to .config
+#
+make[1]: Leaving directory '/output/build/linux-custom'
+>>> linux custom Updating kernel config with fixups
+make[1]: Entering directory '/buildroot'
+make[1]: warning: jobserver unavailable: using -j1.  Add '+' to parent make rule.
+#
+# configuration written to .config
+#
+make[1]: Leaving directory '/output/build/linux-custom'
+>>> linux custom Configuring
+>>> linux custom Building
+>>> linux custom Copying devicetree overlay /work/br2-external/board/dhb_ax/dts
+GIT_DIR=. PATH="/output/host/bin:/output/host/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" PKG_CONFIG="/output/host/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG_LIBDIR="/output/host/lib/pkgconfig:/output/host/share/pkgconfig" BR_BINARIES_DIR=/output/images /usr/bin/make  HOSTCC="/usr/bin/gcc -O2 -isystem /output/host/include -L/output/host/lib -Wl,-rpath,/output/host/lib" ARCH=arm KCFLAGS="-Wno-attribute-alias" INSTALL_MOD_PATH=/output/target CROSS_COMPILE="/output/host/bin/arm-buildroot-linux-gnueabihf-" WERROR=0 REGENERATE_PARSERS=1 DEPMOD=/output/host/sbin/depmod INSTALL_MOD_STRIP=1 -C /output/build/linux-custom all
+make[1]: Entering directory '/output/build/linux-custom'
+  SYNC    include/config/auto.conf.cmd
+  HOSTCC  scripts/basic/fixdep
+  HOSTCC  scripts/kconfig/conf.o
+  HOSTCC  scripts/kconfig/confdata.o
+  HOSTCC  scripts/kconfig/expr.o
+  HOSTCC  scripts/kconfig/lexer.lex.o
+  HOSTCC  scripts/kconfig/menu.o
+  HOSTCC  scripts/kconfig/parser.tab.o
+  HOSTCC  scripts/kconfig/preprocess.o
+  HOSTCC  scripts/kconfig/symbol.o
+  HOSTCC  scripts/kconfig/util.o
+  HOSTLD  scripts/kconfig/conf
+  WRAP    arch/arm/include/generated/uapi/asm/kvm_para.h
+  WRAP    arch/arm/include/generated/uapi/asm/bitsperlong.h
+  WRAP    arch/arm/include/generated/uapi/asm/errno.h
+  WRAP    arch/arm/include/generated/uapi/asm/bpf_perf_event.h
+  WRAP    arch/arm/include/generated/uapi/asm/ioctl.h
+  WRAP    arch/arm/include/generated/uapi/asm/ipcbuf.h
+  WRAP    arch/arm/include/generated/uapi/asm/msgbuf.h
+  UPD     include/generated/uapi/linux/version.h
+  SYSHDR  arch/arm/include/generated/uapi/asm/unistd-eabi.h
+  SYSHDR  arch/arm/include/generated/uapi/asm/unistd-oabi.h
+  WRAP    arch/arm/include/generated/uapi/asm/param.h
+  WRAP    arch/arm/include/generated/uapi/asm/poll.h
+  WRAP    arch/arm/include/generated/uapi/asm/resource.h
+  WRAP    arch/arm/include/generated/uapi/asm/sembuf.h
+  UPD     include/config/kernel.release
+  WRAP    arch/arm/include/generated/uapi/asm/shmbuf.h
+  HOSTCC  scripts/dtc/dtc.o
+  WRAP    arch/arm/include/generated/uapi/asm/siginfo.h
+  WRAP    arch/arm/include/generated/uapi/asm/socket.h
+  HOSTCC  scripts/dtc/flattree.o
+  HOSTCC  scripts/dtc/fstree.o
+  WRAP    arch/arm/include/generated/uapi/asm/sockios.h
+  HOSTCC  scripts/dtc/data.o
+  WRAP    arch/arm/include/generated/uapi/asm/termbits.h
+  WRAP    arch/arm/include/generated/uapi/asm/termios.h
+  HOSTCC  scripts/dtc/livetree.o
+  UPD     include/generated/compile.h
+  UPD     include/generated/utsrelease.h
+  WRAP    arch/arm/include/generated/asm/early_ioremap.h
+  HOSTCC  scripts/dtc/treesource.o
+  WRAP    arch/arm/include/generated/asm/extable.h
+  HOSTCC  scripts/dtc/srcpos.o
+  HOSTCC  scripts/dtc/checks.o
+  WRAP    arch/arm/include/generated/asm/flat.h
+  WRAP    arch/arm/include/generated/asm/parport.h
+  HOSTCC  scripts/dtc/util.o
+  WRAP    arch/arm/include/generated/asm/ring_buffer.h
+  WRAP    arch/arm/include/generated/asm/cfi.h
+  WRAP    arch/arm/include/generated/asm/compat.h
+  WRAP    arch/arm/include/generated/asm/dma-mapping.h
+  WRAP    arch/arm/include/generated/asm/emergency-restart.h
+  WRAP    arch/arm/include/generated/asm/exec.h
+  WRAP    arch/arm/include/generated/asm/irq_regs.h
+  WRAP    arch/arm/include/generated/asm/kdebug.h
+  WRAP    arch/arm/include/generated/asm/kmap_size.h
+  WRAP    arch/arm/include/generated/asm/local.h
+  WRAP    arch/arm/include/generated/asm/local64.h
+  WRAP    arch/arm/include/generated/asm/mmiowb.h
+  WRAP    arch/arm/include/generated/asm/msi.h
+  WRAP    arch/arm/include/generated/asm/preempt.h
+  WRAP    arch/arm/include/generated/asm/rqspinlock.h
+  WRAP    arch/arm/include/generated/asm/runtime-const.h
+  WRAP    arch/arm/include/generated/asm/rwonce.h
+  WRAP    arch/arm/include/generated/asm/serial.h
+  WRAP    arch/arm/include/generated/asm/softirq_stack.h
+  WRAP    arch/arm/include/generated/asm/trace_clock.h
+  WRAP    arch/arm/include/generated/asm/unwind_user.h
+  WRAP    arch/arm/include/generated/asm/video.h
+  LEX     scripts/dtc/dtc-lexer.lex.c
+  YACC    scripts/dtc/dtc-parser.tab.[ch]
+  HOSTCC  scripts/dtc/libfdt/fdt.o
+  HOSTCC  scripts/dtc/libfdt/fdt_ro.o
+  HOSTCC  scripts/dtc/libfdt/fdt_wip.o
+  HOSTCC  scripts/dtc/libfdt/fdt_sw.o
+  HOSTCC  scripts/dtc/libfdt/fdt_rw.o
+  HOSTCC  scripts/dtc/libfdt/fdt_strerror.o
+  HOSTCC  scripts/dtc/libfdt/fdt_empty_tree.o
+  HOSTCC  scripts/dtc/libfdt/fdt_addresses.o
+  HOSTCC  scripts/dtc/libfdt/fdt_overlay.o
+  HOSTCC  scripts/dtc/fdtoverlay.o
+  HOSTCC  scripts/dtc/dtc-lexer.lex.o
+  HOSTCC  scripts/dtc/dtc-parser.tab.o
+  HOSTLD  scripts/dtc/fdtoverlay
+  HOSTLD  scripts/dtc/dtc
+  HOSTCC  scripts/kallsyms
+  HOSTCC  scripts/sorttable
+  DTC     arch/arm/boot/dts/hisilicon/hi3620-hi4511.dtb
+  DTC     arch/arm/boot/dts/hisilicon/hi3519-demb.dtb
+  DTC     arch/arm/boot/dts/hisilicon/hi3531-dhb-ax.dtb
+  DTC     arch/arm/boot/dts/hisilicon/hi3531-dhb-ax-ethernet.dtb
+  SYSNR   arch/arm/include/generated/asm/unistd-nr.h
+  GEN     arch/arm/include/generated/asm/mach-types.h
+  SYSTBL  arch/arm/include/generated/calls-oabi.S
+  SYSTBL  arch/arm/include/generated/calls-eabi.S
+  CC      scripts/mod/empty.o
+  HOSTCC  scripts/mod/mk_elfconfig
+  CC      scripts/mod/devicetable-offsets.s
+  UPD     scripts/mod/devicetable-offsets.h
+  MKELF   scripts/mod/elfconfig.h
+  HOSTCC  scripts/mod/modpost.o
+  HOSTCC  scripts/mod/file2alias.o
+  HOSTCC  scripts/mod/sumversion.o
+  HOSTCC  scripts/mod/symsearch.o
+  HOSTLD  scripts/mod/modpost
+  CC      kernel/bounds.s
+  CHKSHA1 include/linux/atomic/atomic-arch-fallback.h
+  CHKSHA1 include/linux/atomic/atomic-instrumented.h
+  CHKSHA1 include/linux/atomic/atomic-long.h
+  UPD     include/generated/timeconst.h
+  UPD     include/generated/bounds.h
+  CC      arch/arm/kernel/asm-offsets.s
+  UPD     include/generated/asm-offsets.h
+  CC      kernel/sched/rq-offsets.s
+  UPD     include/generated/rq-offsets.h
+  CALL    scripts/checksyscalls.sh
+  LDS     scripts/module.lds
+  HOSTCC  usr/gen_init_cpio
+  CC      init/main.o
+  CC      arch/arm/mach-hisi/hisilicon.o
+  AR      certs/built-in.a
+  CC      mm/filemap.o
+  AR      ipc/built-in.a
+  CC      arch/arm/vfp/vfpmodule.o
+  CC      mm/mempool.o
+  CC      arch/arm/mm/extable.o
+  AR      fs/notify/dnotify/built-in.a
+  CC      arch/arm/kernel/elf.o
+  AR      fs/notify/inotify/built-in.a
+  CC      kernel/sched/core.o
+  AR      fs/notify/fanotify/built-in.a
+  AR      fs/notify/built-in.a
+  CC      fs/nfs_common/grace.o
+  CC      arch/arm/mm/fault.o
+  AS      arch/arm/kernel/entry-common.o
+  GEN     usr/initramfs_data.cpio
+  CC      arch/arm/kernel/irq.o
+  COPY    usr/initramfs_inc_data
+  AS      usr/initramfs_data.o
+  AR      usr/built-in.a
+  CC      kernel/locking/mutex.o
+  CC      arch/arm/mach-hisi/platsmp.o
+  CC      kernel/locking/semaphore.o
+  CC      fs/nfs_common/common.o
+  AS      arch/arm/vfp/vfphw.o
+  CC      arch/arm/kernel/opcodes.o
+  CC      arch/arm/vfp/vfpsingle.o
+  CC      arch/arm/mach-hisi/hotplug.o
+  CC      arch/arm/mm/init.o
+  CC      arch/arm/kernel/process.o
+  UPD     init/utsversion-tmp.h
+  CC      init/do_mounts.o
+  CC      fs/iomap/trace.o
+  AR      fs/nfs_common/built-in.a
+  CC      arch/arm/common/firmware.o
+  CC      kernel/locking/rwsem.o
+  CC      arch/arm/mm/iomap.o
+  AR      arch/arm/mach-hisi/built-in.a
+  AS      arch/arm/common/secure_cntvoff.o
+  CC      kernel/locking/percpu-rwsem.o
+  CC      arch/arm/vfp/vfpdouble.o
+  CC      fs/iomap/iter.o
+  AR      arch/arm/common/built-in.a
+  CC      kernel/locking/spinlock.o
+  CC      arch/arm/kernel/ptrace.o
+  CC      mm/oom_kill.o
+  CC      arch/arm/mm/dma-mapping.o
+  CC      init/do_mounts_initrd.o
+  CC      arch/arm/kernel/reboot.o
+  AR      arch/arm/vfp/built-in.a
+  AR      fs/quota/built-in.a
+  CC      kernel/locking/osq_lock.o
+  CC      kernel/locking/rtmutex_api.o
+  CC      fs/iomap/buffered-io.o
+  CC      fs/iomap/direct-io.o
+  CC      kernel/power/qos.o
+  CC      kernel/sched/fair.o
+  CC      arch/arm/kernel/io.o
+  CC      init/initramfs.o
+  CC      arch/arm/kernel/setup.o
+  CC      arch/arm/mm/fault-armv.o
+  CC      mm/fadvise.o
+  AR      arch/arm/probes/built-in.a
+  CC      fs/iomap/ioend.o
+  AR      kernel/locking/built-in.a
+  CC      init/calibrate.o
+  CC      kernel/power/poweroff.o
+  CC      arch/arm/mm/flush.o
+  CC      kernel/sched/build_policy.o
+  CC      fs/proc/task_mmu.o
+  AR      kernel/power/built-in.a
+  CC      arch/arm/mm/idmap.o
+  CC      arch/arm/kernel/signal.o
+  CC      mm/maccess.o
+  CC      security/commoncap.o
+  CC      init/init_task.o
+  AR      arch/arm/net/built-in.a
+  CC      fs/kernfs/mount.o
+  CC      arch/arm/mm/ioremap.o
+  CC      fs/iomap/fiemap.o
+  AS      arch/arm/kernel/sigreturn_codes.o
+  CC      mm/page-writeback.o
+  CC      arch/arm/kernel/stacktrace.o
+  CC      init/version.o
+  CC      arch/arm/kernel/sys_arm.o
+  CC      fs/iomap/seek.o
+  CC      security/min_addr.o
+  CC      fs/kernfs/inode.o
+  CC      arch/arm/mm/mmap.o
+  AR      init/built-in.a
+  CC      kernel/sched/build_utility.o
+  CC      fs/proc/inode.o
+  AR      security/built-in.a
+  CC      mm/folio-compat.o
+  AR      fs/iomap/built-in.a
+  CC      kernel/printk/printk.o
+  CC      arch/arm/kernel/time.o
+  CC      arch/arm/mm/pgd.o
+  CC      fs/kernfs/dir.o
+  CC      fs/proc/root.o
+  CC      arch/arm/kernel/traps.o
+  CC      mm/readahead.o
+  CC      arch/arm/mm/mmu.o
+  AR      arch/arm/crypto/built-in.a
+  AR      crypto/built-in.a
+  CC      block/partitions/core.o
+  CC      fs/proc/base.o
+  CC      kernel/irq/irqdesc.o
+  AS      arch/arm/kernel/entry-armv.o
+  CC      arch/arm/kernel/bugs.o
+  CC      fs/kernfs/file.o
+  CC      mm/swap.o
+  CC      arch/arm/mm/pageattr.o
+  CC      block/partitions/msdos.o
+  CC      arch/arm/kernel/cacheinfo.o
+  CC      kernel/irq/handle.o
+  CC      arch/arm/mm/proc-syms.o
+  CC      arch/arm/kernel/armksyms.o
+  CC      fs/kernfs/symlink.o
+  CC      kernel/irq/manage.o
+  CC      block/partitions/efi.o
+  CC      kernel/printk/printk_safe.o
+  CC      fs/sysfs/file.o
+  CC      fs/proc/generic.o
+  CC      arch/arm/mm/alignment.o
+  CC      mm/truncate.o
+  AR      kernel/sched/built-in.a
+  CC      fs/devpts/inode.o
+  CC      arch/arm/kernel/module.o
+  AR      fs/kernfs/built-in.a
+  CC      mm/vmscan.o
+  CC      kernel/printk/nbcon.o
+  AR      block/partitions/built-in.a
+  CC      block/bdev.o
+  CC      fs/sysfs/dir.o
+  CC      fs/proc/array.o
+  AS      arch/arm/mm/abort-ev7.o
+  AS      arch/arm/mm/pabort-v7.o
+  CC      arch/arm/kernel/smp.o
+  AS      arch/arm/mm/cache-v7.o
+  CC      arch/arm/mm/cache.o
+  AR      fs/devpts/built-in.a
+  CC      mm/shrinker.o
+  CC      fs/sysfs/symlink.o
+  CC      kernel/rcu/update.o
+  CC      kernel/irq/spurious.o
+  CC      kernel/printk/printk_ringbuffer.o
+  CC      arch/arm/mm/copypage-v6.o
+  CC      arch/arm/kernel/smp_tlb.o
+  CC      block/fops.o
+  CC      fs/sysfs/mount.o
+  CC      kernel/irq/resend.o
+  CC      fs/proc/fd.o
+  CC      io_uring/io_uring.o
+  CC      kernel/rcu/sync.o
+  CC      arch/arm/mm/context.o
+  CC      kernel/rcu/srcutree.o
+  CC      kernel/irq/chip.o
+  CC      arch/arm/kernel/smp_scu.o
+  CC      kernel/printk/sysctl.o
+  CC      mm/shmem.o
+  CC      fs/sysfs/group.o
+  AS      arch/arm/mm/tlb-v7.o
+  CC      arch/arm/mm/tlb.o
+  AR      kernel/printk/built-in.a
+  CC      arch/arm/kernel/smp_twd.o
+  CC      fs/ramfs/inode.o
+  CC      fs/proc/proc_tty.o
+  AS      arch/arm/mm/proc-v7.o
+  CC      arch/arm/mm/proc-v7-bugs.o
+  CC      block/bio.o
+  CC      kernel/irq/dummychip.o
+  CC      arch/arm/kernel/unwind.o
+  CC      arch/arm/mm/l2c-common.o
+  AR      fs/sysfs/built-in.a
+  CC      fs/nfs/client.o
+  CC      kernel/rcu/tree.o
+  CC      arch/arm/mm/cache-l2x0.o
+  CC      fs/proc/cmdline.o
+  CC      fs/ramfs/file-mmu.o
+  CC      kernel/irq/devres.o
+  CC      arch/arm/kernel/devtree.o
+  CC      fs/proc/consoles.o
+  CC      kernel/irq/kexec.o
+  AR      fs/ramfs/built-in.a
+  CC      block/elevator.o
+  CC      arch/arm/kernel/swp_emulate.o
+  CC      kernel/irq/autoprobe.o
+  AS      arch/arm/mm/l2c-l2x0-resume.o
+  AR      arch/arm/mm/built-in.a
+  CC      block/blk-core.o
+  CC      kernel/rcu/rcu_segcblist.o
+  CC      fs/proc/cpuinfo.o
+  CC      kernel/irq/irqdomain.o
+  CC      mm/util.o
+  CC      fs/nfs/dir.o
+  AS      arch/arm/kernel/head.o
+  CC      io_uring/opdef.o
+  AS      arch/arm/kernel/phys2virt.o
+  CC      fs/proc/devices.o
+  AS      arch/arm/kernel/hyp-stub.o
+  AS      arch/arm/kernel/smccc-call.o
+  CC      arch/arm/kernel/spectre.o
+  AS      arch/arm/lib/ashldi3.o
+  AS      arch/arm/lib/ashrdi3.o
+  AR      kernel/livepatch/built-in.a
+  AS      arch/arm/lib/backtrace.o
+  CC      fs/exportfs/expfs.o
+  AS      arch/arm/lib/bswapsdi2.o
+  AS      arch/arm/lib/call_with_stack.o
+  AS      arch/arm/lib/changebit.o
+  AS      arch/arm/lib/clear_user.o
+  AS      arch/arm/lib/clearbit.o
+  AS      arch/arm/lib/copy_from_user.o
+  AS      arch/arm/lib/copy_page.o
+  CC      fs/proc/interrupts.o
+  AS      arch/arm/lib/copy_to_user.o
+  AS      arch/arm/lib/csumipv6.o
+  AS      arch/arm/lib/csumpartial.o
+  CC      block/blk-sysfs.o
+  AS      arch/arm/lib/csumpartialcopy.o
+  AS      arch/arm/lib/csumpartialcopyuser.o
+  LDS     arch/arm/kernel/vmlinux.lds
+  AR      arch/arm/kernel/built-in.a
+  AS      arch/arm/lib/delay-loop.o
+  AR      arch/arm/built-in.a
+  CC      io_uring/kbuf.o
+  CC      arch/arm/lib/delay.o
+  CC      kernel/irq/proc.o
+  CC      mm/mmzone.o
+  CC      fs/proc/loadavg.o
+  AR      fs/exportfs/built-in.a
+  CC      fs/lockd/clntlock.o
+  AS      arch/arm/lib/div64.o
+  AS      arch/arm/lib/findbit.o
+  CC      fs/nfs/file.o
+  AS      arch/arm/lib/getuser.o
+  AS      arch/arm/lib/io-readsb.o
+  AS      arch/arm/lib/io-readsl.o
+  AS      arch/arm/lib/io-readsw-armv4.o
+  AS      arch/arm/lib/io-writesb.o
+  AS      arch/arm/lib/io-writesl.o
+  AR      kernel/rcu/built-in.a
+  CC      block/blk-flush.o
+  AS      arch/arm/lib/io-writesw-armv4.o
+  CC      kernel/irq/cpuhotplug.o
+  AS      arch/arm/lib/lib1funcs.o
+  AS      arch/arm/lib/lshrdi3.o
+  CC      mm/vmstat.o
+  AS      arch/arm/lib/memchr.o
+  CC      fs/proc/meminfo.o
+  AS      arch/arm/lib/memcpy.o
+  CC      io_uring/rsrc.o
+  AS      arch/arm/lib/memmove.o
+  AS      arch/arm/lib/memset.o
+  AS      arch/arm/lib/muldi3.o
+  CC      kernel/irq/ipi.o
+  AS      arch/arm/lib/putuser.o
+  AS      arch/arm/lib/setbit.o
+  AS      arch/arm/lib/strchr.o
+  AS      arch/arm/lib/strrchr.o
+  AS      arch/arm/lib/testchangebit.o
+  AS      arch/arm/lib/testclearbit.o
+  AS      arch/arm/lib/testsetbit.o
+  AS      arch/arm/lib/ucmpdi2.o
+  AR      arch/arm/lib/built-in.a
+  AR      arch/arm/lib/lib.a
+  CC      fs/nls/nls_base.o
+  CC      kernel/dma/mapping.o
+  CC      block/blk-settings.o
+  CC      kernel/irq/affinity.o
+  CC      fs/proc/stat.o
+  AR      fs/unicode/built-in.a
+  CC      mm/backing-dev.o
+  CC      fs/lockd/clntproc.o
+  CC [M]  fs/nls/nls_cp437.o
+  AR      kernel/irq/built-in.a
+  CC      io_uring/notif.o
+  AR      lib/kunit/built-in.a
+  AR      lib/math/tests/built-in.a
+  CC      lib/math/div64.o
+  CC [M]  fs/nls/nls_iso8859-1.o
+  CC      fs/proc/uptime.o
+  CC      lib/math/gcd.o
+  CC      kernel/dma/direct.o
+  CC      fs/nfs/getroot.o
+  CC      lib/math/lcm.o
+  CC      block/blk-ioc.o
+  AR      fs/hostfs/built-in.a
+  AR      drivers/cache/built-in.a
+  CC      mm/mm_init.o
+  CC      drivers/irqchip/irqchip.o
+  CC      lib/math/int_log.o
+  AR      fs/nls/built-in.a
+  CC      mm/percpu.o
+  CC      lib/math/int_pow.o
+  CC      lib/math/int_sqrt.o
+  CC      fs/proc/util.o
+  CC      lib/math/reciprocal_div.o
+  CC      io_uring/tctx.o
+  CC      drivers/irqchip/irq-gic.o
+  CC      lib/math/rational.o
+  CC      fs/lockd/clntxdr.o
+  CC      block/blk-map.o
+  CC      fs/proc/version.o
+  CC      kernel/dma/ops_helpers.o
+  CC      fs/nfs/inode.o
+  AR      lib/math/built-in.a
+  AR      lib/crc/tests/built-in.a
+  HOSTCC  lib/crc/gen_crc32table
+  CC [M]  lib/crc/crc16.o
+  CC      io_uring/filetable.o
+  CC      lib/crypto/blake2s.o
+  CC      fs/proc/softirqs.o
+  CC      kernel/dma/dummy.o
+  CC      drivers/irqchip/irq-gic-common.o
+  GEN     lib/crc/crc32table.h
+  CC      lib/crc/crc32-main.o
+  AS      lib/crypto/arm/blake2s-core.o
+  CC      fs/lockd/host.o
+  CC      block/blk-merge.o
+  CC      lib/crypto/chacha-block-generic.o
+  AR      lib/crc/built-in.a
+  AR      lib/tests/built-in.a
+  AR      kernel/entry/built-in.a
+  CC      lib/crypto/sha256.o
+  CC      block/blk-timeout.o
+  CC      mm/slab_common.o
+  AR      drivers/irqchip/built-in.a
+  AR      drivers/bus/mhi/built-in.a
+  CC      drivers/bus/simple-pm-bus.o
+  CC      fs/proc/namespaces.o
+  CC      io_uring/rw.o
+  CC      kernel/dma/coherent.o
+  AS      lib/crypto/arm/sha256-ce.o
+  AR      drivers/bus/built-in.a
+  PERLASM lib/crypto/arm/sha256-core.S
+  AR      drivers/phy/allwinner/built-in.a
+  AR      drivers/phy/amlogic/built-in.a
+  AR      drivers/phy/broadcom/built-in.a
+  AR      drivers/phy/cadence/built-in.a
+  AR      drivers/phy/freescale/built-in.a
+  AS      lib/crypto/arm/sha256-core.o
+  CC      drivers/phy/hisilicon/phy-hi3531-usb.o
+  AR      drivers/pinctrl/actions/built-in.a
+  AR      lib/crypto/built-in.a
+  AR      lib/vdso/built-in.a
+  AR      drivers/pinctrl/bcm/built-in.a
+  CC      lib/zlib_inflate/inffast.o
+  AR      drivers/pinctrl/cirrus/built-in.a
+  AR      drivers/pinctrl/freescale/built-in.a
+  AR      drivers/pinctrl/mediatek/built-in.a
+  AR      drivers/pinctrl/mvebu/built-in.a
+  AR      drivers/pinctrl/nomadik/built-in.a
+  AR      drivers/pinctrl/nuvoton/built-in.a
+  AR      drivers/pinctrl/nxp/built-in.a
+  AR      drivers/pinctrl/qcom/built-in.a
+  AR      drivers/pinctrl/sophgo/built-in.a
+  AR      drivers/pinctrl/spacemit/built-in.a
+  AR      drivers/pinctrl/sprd/built-in.a
+  AR      drivers/pinctrl/starfive/built-in.a
+  AR      drivers/pinctrl/sunplus/built-in.a
+  AR      drivers/pinctrl/ti/built-in.a
+  CC      drivers/pinctrl/core.o
+  CC      lib/zlib_inflate/inflate.o
+  CC      kernel/dma/remap.o
+  CC      fs/proc/self.o
+  CC      fs/lockd/svc.o
+  CC      block/blk-lib.o
+  AR      drivers/phy/hisilicon/built-in.a
+  AR      drivers/phy/ingenic/built-in.a
+  AR      drivers/phy/intel/built-in.a
+  AR      drivers/phy/lantiq/built-in.a
+  AR      drivers/phy/marvell/built-in.a
+  AR      drivers/phy/mediatek/built-in.a
+  AR      drivers/phy/microchip/built-in.a
+  AR      drivers/phy/motorola/built-in.a
+  AR      drivers/phy/mscc/built-in.a
+  AR      drivers/phy/nuvoton/built-in.a
+  AR      drivers/phy/qualcomm/built-in.a
+  AR      drivers/phy/ralink/built-in.a
+  AR      drivers/phy/realtek/built-in.a
+  AR      drivers/phy/renesas/built-in.a
+  CC      fs/nfs/super.o
+  CC      mm/compaction.o
+  AR      drivers/phy/rockchip/built-in.a
+  CC      fs/proc/thread_self.o
+  AR      drivers/phy/samsung/built-in.a
+  AR      drivers/phy/socionext/built-in.a
+  AR      drivers/phy/sophgo/built-in.a
+  AR      drivers/phy/st/built-in.a
+  AR      drivers/phy/starfive/built-in.a
+  AR      drivers/phy/sunplus/built-in.a
+  AR      drivers/phy/tegra/built-in.a
+  AR      drivers/phy/ti/built-in.a
+  AR      drivers/phy/xilinx/built-in.a
+  CC      drivers/phy/phy-core.o
+  AR      kernel/dma/built-in.a
+  AR      kernel/unwind/built-in.a
+  CC      kernel/module/main.o
+  CC      lib/zlib_inflate/infutil.o
+  CC      io_uring/poll.o
+  CC      fs/proc/proc_sysctl.o
+  CC      lib/zlib_inflate/inftrees.o
+  CC      drivers/pinctrl/pinctrl-utils.o
+  CC      block/blk-mq.o
+  CC      lib/zlib_inflate/inflate_syms.o
+  CC      mm/show_mem.o
+  CC      drivers/pinctrl/pinmux.o
+  AR      lib/zlib_inflate/built-in.a
+  CC      lib/dim/dim.o
+  CC      fs/lockd/svclock.o
+  AR      drivers/phy/built-in.a
+  CC      drivers/gpio/gpiolib.o
+  CC      lib/dim/net_dim.o
+  CC      fs/nfs/io.o
+  CC      mm/interval_tree.o
+  CC      drivers/pinctrl/pinconf.o
+  CC      io_uring/eventfd.o
+  CC      lib/dim/rdma_dim.o
+  CC      fs/proc/proc_net.o
+  CC      drivers/pinctrl/pinconf-generic.o
+  CC      fs/lockd/svcshare.o
+  CC      mm/list_lru.o
+  CC      kernel/module/strict_rwx.o
+  AR      lib/dim/built-in.a
+  CC      io_uring/uring_cmd.o
+  CC      lib/argv_split.o
+  CC      fs/nfs/direct.o
+  CC      lib/bug.o
+  CC      fs/proc/kmsg.o
+  CC      kernel/module/kmod.o
+  CC      drivers/pinctrl/devicetree.o
+  CC      mm/workingset.o
+  CC      fs/proc/page.o
+  CC      io_uring/openclose.o
+  CC      fs/lockd/svcproc.o
+  CC      drivers/pinctrl/pinctrl-single.o
+  CC      lib/buildid.o
+  CC      kernel/module/kallsyms.o
+  CC      drivers/gpio/gpiolib-devres.o
+  CC      mm/debug.o
+  AR      fs/proc/built-in.a
+  CC      io_uring/sqpoll.o
+  CC      lib/cmdline.o
+  CC      block/blk-mq-tag.o
+  CC      drivers/gpio/gpiolib-legacy.o
+  CC      kernel/module/procfs.o
+  CC      lib/cpumask.o
+  CC      kernel/time/time.o
+  CC      fs/nfs/pagelist.o
+  CC      mm/gup.o
+  CC      drivers/gpio/gpiolib-of.o
+  AR      drivers/pinctrl/built-in.a
+  CC      fs/lockd/svcsubs.o
+  AR      sound/built-in.a
+  CC      block/blk-mq-dma.o
+  CC      kernel/module/sysfs.o
+  CC      lib/ctype.o
+  CC      lib/dec_and_lock.o
+  CC      lib/decompress.o
+  CC      drivers/gpio/gpiolib-cdev.o
+  CC      kernel/futex/core.o
+  CC      lib/decompress_inflate.o
+  CC      kernel/time/timer.o
+  CC      block/blk-stat.o
+  CC      io_uring/xattr.o
+  CC      fs/lockd/mon.o
+  AR      kernel/module/built-in.a
+  CC      kernel/bpf/core.o
+  CC      lib/dump_stack.o
+  CC      block/blk-mq-sysfs.o
+  CC      mm/mmap_lock.o
+  CC      lib/earlycpio.o
+  CC      io_uring/nop.o
+  CC      kernel/time/hrtimer.o
+  CC      fs/nfs/read.o
+  CC      kernel/futex/syscalls.o
+  CC      lib/extable.o
+  CC      drivers/gpio/gpiolib-swnode.o
+  CC      fs/lockd/trace.o
+  CC      block/blk-mq-cpumap.o
+  CC      lib/fdt.o
+  CC      mm/vma_init.o
+  CC      io_uring/fs.o
+  CC      drivers/gpio/gpio-pl061.o
+  CC      lib/fdt_addresses.o
+  CC      lib/fdt_empty_tree.o
+  CC      lib/fdt_ro.o
+  CC      kernel/futex/pi.o
+  CC      block/blk-mq-sched.o
+  CC      kernel/time/sleep_timeout.o
+  CC      fs/lockd/xdr.o
+  CC      lib/fdt_rw.o
+  CC      fs/nfs/symlink.o
+  CC      mm/highmem.o
+  CC      io_uring/splice.o
+  AR      drivers/gpio/built-in.a
+  AR      drivers/pwm/built-in.a
+  AR      drivers/leds/blink/built-in.a
+  AR      drivers/leds/simatic/built-in.a
+  AR      drivers/leds/built-in.a
+  AR      drivers/pci/controller/dwc/built-in.a
+  AR      drivers/pci/controller/mobiveil/built-in.a
+  AR      drivers/pci/controller/plda/built-in.a
+  AR      drivers/pci/controller/built-in.a
+  AR      drivers/pci/switch/built-in.a
+  CC      drivers/pci/of.o
+  CC      lib/fdt_strerror.o
+  CC      kernel/time/timekeeping.o
+  CC      lib/fdt_sw.o
+  AR      kernel/bpf/built-in.a
+  CC      kernel/time/ntp.o
+  CC      kernel/futex/requeue.o
+  CC      lib/fdt_wip.o
+  CC      lib/flex_proportions.o
+  CC      mm/memory.o
+  CC      io_uring/sync.o
+  CC      block/ioctl.o
+  AR      drivers/pci/built-in.a
+  CC      drivers/video/console/dummycon.o
+  CC      lib/idr.o
+  CC      fs/nfs/unlink.o
+  AR      drivers/video/backlight/built-in.a
+  CC      fs/lockd/netlink.o
+  AR      drivers/video/fbdev/core/built-in.a
+  AR      drivers/video/fbdev/omap/built-in.a
+  AR      drivers/video/fbdev/omap2/omapfb/dss/built-in.a
+  AR      drivers/video/fbdev/omap2/omapfb/displays/built-in.a
+  AR      drivers/video/fbdev/omap2/omapfb/built-in.a
+  CC      kernel/futex/waitwake.o
+  AR      drivers/video/fbdev/omap2/built-in.a
+  AR      drivers/video/fbdev/built-in.a
+  CC      net/core/sock.o
+  CC      io_uring/msg_ring.o
+  AR      drivers/video/console/built-in.a
+  AR      drivers/video/built-in.a
+  AR      drivers/idle/built-in.a
+  AR      drivers/char/ipmi/built-in.a
+  CC      drivers/amba/bus.o
+  CC      lib/iomem_copy.o
+  CC      lib/irq_regs.o
+  CC      lib/is_single_threaded.o
+  CC      block/genhd.o
+  CC      fs/lockd/clnt4xdr.o
+  AR      kernel/futex/built-in.a
+  AR      drivers/clk/actions/built-in.a
+  AR      drivers/clk/analogbits/built-in.a
+  AR      drivers/clk/bcm/built-in.a
+  CC      drivers/clk/hisilicon/clk.o
+  CC      kernel/time/clocksource.o
+  CC      fs/nfs/write.o
+  CC      lib/klist.o
+  AR      drivers/amba/built-in.a
+  CC      mm/mincore.o
+  CC      io_uring/advise.o
+  CC      lib/kobject.o
+  CC      drivers/clk/hisilicon/clkgate-separated.o
+  CC      kernel/time/jiffies.o
+  CC      fs/lockd/xdr4.o
+  CC      drivers/clk/hisilicon/clkdivider-hi6220.o
+  CC      block/ioprio.o
+  CC      lib/kobject_uevent.o
+  CC      io_uring/statx.o
+  CC      kernel/time/timer_list.o
+  CC      drivers/clk/hisilicon/clk-hisi-phase.o
+  CC [M]  fs/ext4/balloc.o
+  CC      drivers/clk/hisilicon/clk-hi3620.o
+  CC      kernel/time/timeconv.o
+  CC      block/badblocks.o
+  CC      io_uring/timeout.o
+  CC      fs/lockd/svc4proc.o
+  CC      mm/mlock.o
+  AR      drivers/clk/hisilicon/built-in.a
+  CC      kernel/time/timecounter.o
+  AR      drivers/clk/imgtec/built-in.a
+  AR      drivers/clk/imx/built-in.a
+  AR      drivers/clk/ingenic/built-in.a
+  AR      drivers/clk/keystone/built-in.a
+  AR      drivers/clk/mediatek/built-in.a
+  CC      fs/nfs/namespace.o
+  AR      drivers/clk/microchip/built-in.a
+  AR      drivers/clk/mstar/built-in.a
+  AR      drivers/clk/mvebu/built-in.a
+  AR      drivers/clk/ralink/built-in.a
+  CC      kernel/time/alarmtimer.o
+  AR      drivers/clk/renesas/built-in.a
+  AR      drivers/clk/socfpga/built-in.a
+  AR      drivers/clk/sophgo/built-in.a
+  AR      drivers/clk/spacemit/built-in.a
+  AR      drivers/clk/sprd/built-in.a
+  AR      drivers/clk/starfive/built-in.a
+  AR      drivers/clk/sunxi-ng/built-in.a
+  AR      drivers/clk/ti/built-in.a
+  AR      drivers/clk/versatile/built-in.a
+  AR      drivers/clk/xilinx/built-in.a
+  CC      drivers/clk/clk-devres.o
+  CC      lib/logic_pio.o
+  CC [M]  fs/ext4/bitmap.o
+  CC      net/core/request_sock.o
+  CC      block/blk-rq-qos.o
+  CC      drivers/clk/clk-bulk.o
+  CC      io_uring/cancel.o
+  CC      lib/maple_tree.o
+  CC      mm/mmap.o
+  CC      kernel/time/posix-timers.o
+  CC      fs/lockd/procfs.o
+  CC [M]  fs/ext4/block_validity.o
+  CC      drivers/clk/clkdev.o
+  CC      fs/nfs/mount_clnt.o
+  CC      net/core/skbuff.o
+  CC      block/disk-events.o
+  CC      drivers/clk/clk.o
+  CC      io_uring/waitid.o
+  AR      fs/lockd/built-in.a
+  CC [M]  fs/jbd2/transaction.o
+  CC [M]  fs/ext4/dir.o
+  CC      block/blk-ia-ranges.o
+  CC      fs/nfs/nfstrace.o
+  CC      kernel/time/posix-cpu-timers.o
+  CC      mm/mmu_gather.o
+  CC      io_uring/register.o
+  CC [M]  fs/ext4/ext4_jbd2.o
+  CC      block/early-lookup.o
+  CC [M]  fs/jbd2/commit.o
+  CC      mm/mprotect.o
+  CC      fs/nfs/export.o
+  CC      kernel/time/posix-clock.o
+  AR      block/built-in.a
+  CC      drivers/clk/clk-divider.o
+  CC [M]  fs/ext4/extents.o
+  CC      kernel/fork.o
+  CC      io_uring/truncate.o
+  CC      kernel/time/itimer.o
+  CC [M]  fs/jbd2/recovery.o
+  CC      fs/nfs/sysfs.o
+  CC      drivers/clk/clk-fixed-factor.o
+  CC      mm/mremap.o
+  CC      io_uring/memmap.o
+  CC      drivers/clk/clk-fixed-rate.o
+  CC      kernel/time/clockevents.o
+  CC [M]  fs/jbd2/checkpoint.o
+  CC      fs/nfs/fs_context.o
+  CC      drivers/clk/clk-gate.o
+  CC      io_uring/alloc_cache.o
+  CC      kernel/time/tick-common.o
+  CC      mm/msync.o
+  CC      lib/memcat_p.o
+  CC      drivers/clk/clk-multiplier.o
+  CC [M]  fs/jbd2/revoke.o
+  CC      io_uring/query.o
+  AR      drivers/soc/apple/built-in.a
+  AR      drivers/soc/aspeed/built-in.a
+  AR      drivers/soc/bcm/built-in.a
+  AR      drivers/soc/fsl/built-in.a
+  AR      drivers/soc/fujitsu/built-in.a
+  AR      drivers/soc/hisilicon/built-in.a
+  AR      drivers/soc/imx/built-in.a
+  AR      drivers/soc/ixp4xx/built-in.a
+  AR      drivers/soc/loongson/built-in.a
+  CC      drivers/clk/clk-mux.o
+  AR      drivers/soc/mediatek/built-in.a
+  AR      drivers/soc/microchip/built-in.a
+  AR      drivers/soc/nuvoton/built-in.a
+  AR      drivers/soc/pxa/built-in.a
+  AR      drivers/soc/amlogic/built-in.a
+  AR      drivers/soc/qcom/built-in.a
+  AR      drivers/soc/renesas/built-in.a
+  AR      drivers/soc/rockchip/built-in.a
+  AR      drivers/soc/sophgo/built-in.a
+  AR      drivers/soc/sunxi/built-in.a
+  AR      drivers/soc/ti/built-in.a
+  AR      drivers/soc/versatile/built-in.a
+  AR      drivers/soc/vt8500/built-in.a
+  AR      drivers/soc/xilinx/built-in.a
+  AR      drivers/soc/built-in.a
+  AR      virt/lib/built-in.a
+  AR      virt/built-in.a
+  CC      kernel/time/tick-broadcast.o
+  CC      net/core/datagram.o
+  CC      mm/page_vma_mapped.o
+  CC      lib/nmi_backtrace.o
+  CC      drivers/clk/clk-composite.o
+  CC [M]  fs/jbd2/journal.o
+  CC      io_uring/zcrx.o
+  CC      fs/nfs/nfsroot.o
+  CC      net/ethernet/eth.o
+  CC      kernel/time/sched_clock.o
+  CC      lib/objpool.o
+  CC [M]  fs/ext4/extents_status.o
+  CC      mm/pagewalk.o
+  CC      drivers/clk/clk-fractional-divider.o
+  AR      kernel/time/built-in.a
+  CC      kernel/exec_domain.o
+  CC      lib/plist.o
+  CC      lib/radix-tree.o
+  CC      fs/nfs/sysctl.o
+  CC      drivers/clk/clk-gpio.o
+  CC      kernel/panic.o
+  CC      net/core/stream.o
+  CC      mm/pgtable-generic.o
+  AR      net/ethernet/built-in.a
+  CC [M]  fs/fat/cache.o
+  CC      drivers/clk/clk-conf.o
+  CC      fs/nfs/nfs3super.o
+  CC [M]  fs/ext4/file.o
+  LD [M]  fs/jbd2/jbd2.o
+  CC      lib/ratelimit.o
+  CC      io_uring/io-wq.o
+  CC      net/core/scm.o
+  CC      lib/rbtree.o
+  CC      mm/rmap.o
+  CC      kernel/cpu.o
+  AR      drivers/clk/built-in.a
+  AR      drivers/virtio/built-in.a
+  AR      drivers/reset/amlogic/built-in.a
+  AR      drivers/reset/hisilicon/built-in.a
+  AR      drivers/reset/starfive/built-in.a
+  AR      drivers/reset/sti/built-in.a
+  AR      drivers/reset/tegra/built-in.a
+  CC      drivers/reset/core.o
+  CC [M]  fs/fat/dir.o
+  CC      fs/nfs/nfs3client.o
+  CC      lib/seq_buf.o
+  AR      net/802/built-in.a
+  CC [M]  fs/ext4/fsmap.o
+  CC      fs/open.o
+  CC      lib/siphash.o
+  CC      net/core/gen_stats.o
+  CC      io_uring/futex.o
+  AR      drivers/reset/built-in.a
+  CC      drivers/tty/vt/vt_ioctl.o
+  CC      fs/nfs/nfs3proc.o
+  CC      lib/string.o
+  CC      kernel/exit.o
+  CC      mm/vmalloc.o
+  CC [M]  fs/ext4/fsync.o
+  CC      lib/sys_info.o
+  CC [M]  fs/fat/fatent.o
+  CC      io_uring/epoll.o
+  CC      net/core/gen_estimator.o
+  CC      drivers/tty/vt/vc_screen.o
+  CC      lib/timerqueue.o
+  CC      net/sched/sch_generic.o
+  CC [M]  fs/ext4/hash.o
+  CC      lib/vsprintf.o
+  CC      io_uring/napi.o
+  CC      fs/nfs/nfs3xdr.o
+  CC      net/core/net_namespace.o
+  CC [M]  fs/fat/file.o
+  CC      kernel/softirq.o
+  CC      drivers/tty/vt/selection.o
+  CC [M]  fs/ext4/ialloc.o
+  CC      io_uring/net.o
+  CC [M]  fs/fat/inode.o
+  CC      kernel/resource.o
+  CC      drivers/tty/vt/keyboard.o
+  AR      fs/nfs/built-in.a
+  CC      net/netlink/af_netlink.o
+  CC      net/core/secure_seq.o
+  CC      net/sched/sch_mq.o
+  CC      mm/vma.o
+  CC [M]  fs/ext4/indirect.o
+  CC      kernel/sysctl.o
+  CC      net/core/flow_dissector.o
+  CC [M]  fs/fat/misc.o
+  CC      lib/win_minmax.o
+  CC      drivers/tty/vt/vt.o
+  CC      net/sched/sch_frag.o
+  CC      io_uring/cmd_net.o
+  CC      lib/xarray.o
+  CC [M]  fs/fat/nfs.o
+  CC [M]  fs/ext4/inline.o
+  CC      kernel/capability.o
+  CC      mm/vma_exec.o
+  AR      net/sched/built-in.a
+  CC      fs/read_write.o
+  CC      io_uring/fdinfo.o
+  CC      lib/lockref.o
+  CC [M]  fs/fat/namei_vfat.o
+  CC      net/netlink/genetlink.o
+  CC      lib/bcd.o
+  CC      lib/sort.o
+  CC      mm/page_alloc.o
+  CC      kernel/ptrace.o
+  CC      net/core/sysctl_net_core.o
+  AR      io_uring/built-in.a
+  AR      drivers/char/agp/built-in.a
+  CC      drivers/char/mem.o
+  CC      lib/parser.o
+  CC      lib/debug_locks.o
+  CC [M]  fs/ext4/inode.o
+  CC      lib/random32.o
+  CC      drivers/char/random.o
+  LD [M]  fs/fat/fat.o
+  LD [M]  fs/fat/vfat.o
+  AR      drivers/tty/serial/8250/built-in.a
+  CC      drivers/tty/serial/serial_core.o
+  COPY    drivers/tty/vt/defkeymap.c
+  CC      drivers/tty/vt/consolemap.o
+  CC      lib/bust_spinlocks.o
+  CC      net/core/dev.o
+  CC      lib/kasprintf.o
+  CC      kernel/user.o
+  CC [M]  fs/ext4/ioctl.o
+  CC      net/netlink/policy.o
+  CC      lib/bitmap.o
+  CC      kernel/signal.o
+  HOSTCC  drivers/tty/vt/conmakehash
+  CC      drivers/char/misc.o
+  COPY    drivers/tty/vt/ucs_width_table.h
+  COPY    drivers/tty/vt/ucs_recompose_table.h
+  COPY    drivers/tty/vt/ucs_fallback_table.h
+  CC      drivers/tty/vt/defkeymap.o
+  CC      lib/scatterlist.o
+  AR      net/netlink/built-in.a
+  AR      drivers/iommu/arm/arm-smmu/built-in.a
+  CONMK   drivers/tty/vt/consolemap_deftbl.c
+  CC      drivers/tty/vt/ucs.o
+  AR      drivers/iommu/arm/arm-smmu-v3/built-in.a
+  AR      drivers/iommu/arm/built-in.a
+  AR      drivers/iommu/iommufd/built-in.a
+  AR      drivers/iommu/built-in.a
+  CC      drivers/tty/serial/serial_base_bus.o
+  CC      drivers/tty/vt/consolemap_deftbl.o
+  AR      drivers/tty/vt/built-in.a
+  CC      lib/list_sort.o
+  CC      fs/file_table.o
+  AR      drivers/char/built-in.a
+  CC      mm/page_frag_cache.o
+  CC      mm/init-mm.o
+  CC      net/core/dev_api.o
+  AR      net/bpf/built-in.a
+  CC      lib/uuid.o
+  CC      fs/super.o
+  CC      kernel/sys.o
+  CC      lib/iov_iter.o
+  CC      mm/memblock.o
+  CC      drivers/tty/serial/serial_ctrl.o
+  AR      drivers/tty/ipwireless/built-in.a
+  CC [M]  fs/ext4/mballoc.o
+  CC      drivers/tty/serial/serial_port.o
+  CC      net/ethtool/ioctl.o
+  AR      drivers/gpu/host1x/built-in.a
+  CC      drivers/tty/serial/earlycon.o
+  AR      drivers/gpu/drm/tests/built-in.a
+  AR      drivers/gpu/drm/arm/built-in.a
+  AR      drivers/gpu/drm/clients/built-in.a
+  AR      drivers/gpu/drm/display/built-in.a
+  AR      drivers/gpu/drm/renesas/rcar-du/built-in.a
+  AR      drivers/gpu/drm/renesas/rz-du/built-in.a
+  AR      drivers/gpu/drm/renesas/built-in.a
+  AR      drivers/gpu/drm/omapdrm/built-in.a
+  AR      drivers/gpu/drm/tilcdc/built-in.a
+  AR      drivers/gpu/drm/imx/built-in.a
+  AR      drivers/gpu/drm/panel/built-in.a
+  AR      drivers/gpu/drm/bridge/analogix/built-in.a
+  AR      drivers/gpu/drm/bridge/cadence/built-in.a
+  AR      drivers/gpu/drm/bridge/imx/built-in.a
+  AR      drivers/gpu/drm/bridge/synopsys/built-in.a
+  AR      drivers/gpu/drm/bridge/built-in.a
+  AR      drivers/gpu/drm/hisilicon/built-in.a
+  AR      drivers/gpu/drm/mxsfb/built-in.a
+  AR      drivers/gpu/drm/sysfb/built-in.a
+  AR      drivers/gpu/drm/tiny/built-in.a
+  AR      drivers/gpu/drm/xlnx/built-in.a
+  AR      drivers/gpu/drm/gud/built-in.a
+  CC      lib/clz_ctz.o
+  AR      drivers/gpu/drm/sitronix/built-in.a
+  AR      drivers/gpu/drm/solomon/built-in.a
+  AR      drivers/gpu/drm/built-in.a
+  CC      mm/slub.o
+  CC      drivers/tty/tty_io.o
+  AR      drivers/gpu/vga/built-in.a
+  AR      drivers/gpu/tests/built-in.a
+  AR      drivers/gpu/built-in.a
+  CC      kernel/umh.o
+  CC      net/ethtool/common.o
+  CC      net/core/dev_addr_lists.o
+  CC      drivers/tty/serial/amba-pl011.o
+  CC      lib/bsearch.o
+  CC      kernel/workqueue.o
+  CC      lib/find_bit.o
+  CC      net/ipv4/route.o
+  CC [M]  fs/ext4/migrate.o
+  CC      lib/llist.o
+  CC      lib/lwq.o
+  AR      drivers/tty/serial/built-in.a
+  CC      mm/madvise.o
+  CC      drivers/tty/n_tty.o
+  CC      lib/memweight.o
+  CC      lib/kfifo.o
+  CC      net/ethtool/netlink.o
+  CC      fs/char_dev.o
+  CC [M]  fs/ext4/mmp.o
+  CC      lib/percpu-refcount.o
+  CC      drivers/base/power/clock_ops.o
+  CC [M]  fs/ext4/move_extent.o
+  CC      net/core/dst.o
+  CC      drivers/tty/tty_ioctl.o
+  CC      net/unix/af_unix.o
+  AR      drivers/base/power/built-in.a
+  CC      net/ethtool/bitset.o
+  CC      lib/rhashtable.o
+  CC      drivers/base/firmware_loader/builtin/main.o
+  CC      net/ipv4/inetpeer.o
+  AR      drivers/base/firmware_loader/builtin/built-in.a
+  CC      drivers/base/firmware_loader/main.o
+  CC      mm/dmapool.o
+  CC      kernel/pid.o
+  CC      drivers/tty/tty_ldisc.o
+  CC [M]  fs/ext4/namei.o
+  CC      net/core/netevent.o
+  CC      mm/early_ioremap.o
+  CC      lib/base64.o
+  AR      drivers/base/firmware_loader/built-in.a
+  CC      drivers/base/regmap/regmap.o
+  CC      lib/once.o
+  CC      net/ipv4/protocol.o
+  CC      net/ethtool/strset.o
+  CC      drivers/tty/tty_buffer.o
+  CC      lib/refcount.o
+  CC      net/core/neighbour.o
+  CC      mm/memfd.o
+  CC      kernel/task_work.o
+  CC      lib/rcuref.o
+  CC      lib/usercopy.o
+  CC      drivers/tty/tty_port.o
+  CC      net/ipv4/ip_input.o
+  CC      lib/errseq.o
+  CC      net/ethtool/linkinfo.o
+  CC      net/unix/garbage.o
+  CC      lib/bucket_locks.o
+  CC      kernel/extable.o
+  CC      mm/execmem.o
+  CC      drivers/tty/tty_mutex.o
+  CC      lib/generic-radix-tree.o
+  CC      drivers/base/regmap/regcache.o
+  CC      net/ethtool/linkmodes.o
+  CC      drivers/tty/tty_ldsem.o
+  CC      lib/bitmap-str.o
+  CC      net/ipv4/ip_fragment.o
+  AR      mm/built-in.a
+  CC      net/ethtool/rss.o
+  CC      net/unix/sysctl_net_unix.o
+  CC      kernel/params.o
+  CC [M]  fs/ext4/page-io.o
+  CC      drivers/base/regmap/regcache-rbtree.o
+  CC      drivers/tty/tty_baudrate.o
+  CC      lib/string_helpers.o
+  CC [M]  fs/ext4/readpage.o
+  AR      net/unix/built-in.a
+  CC      drivers/tty/tty_jobctrl.o
+  AR      drivers/base/test/built-in.a
+  CC      fs/stat.o
+  CC      drivers/base/regmap/regcache-flat.o
+  CC      kernel/kthread.o
+  CC      net/ipv4/ip_forward.o
+  CC      net/core/rtnetlink.o
+  CC      net/ethtool/linkstate.o
+  AR      drivers/block/built-in.a
+  CC      lib/hexdump.o
+  CC      drivers/base/regmap/regcache-maple.o
+  CC [M]  fs/ext4/resize.o
+  CC      drivers/tty/n_null.o
+  CC      lib/kstrtox.o
+  CC      kernel/sys_ni.o
+  CC      drivers/tty/pty.o
+  CC      net/ipv6/addrconf_core.o
+  CC      drivers/base/regmap/regmap-i2c.o
+  CC      lib/iomap_copy.o
+  CC      net/ipv6/exthdrs_core.o
+  CC      kernel/nsproxy.o
+  CC      lib/devres.o
+  CC      net/ipv4/ip_options.o
+  CC      net/ethtool/debug.o
+  CC      lib/hweight.o
+  CC      drivers/base/regmap/regmap-mmio.o
+  CC      drivers/tty/sysrq.o
+  CC      lib/bitrev.o
+  CC      lib/genalloc.o
+  CC      drivers/base/component.o
+  CC      kernel/nstree.o
+  CC      net/ipv4/ip_output.o
+  CC      net/ethtool/wol.o
+  AR      drivers/base/regmap/built-in.a
+  CC      drivers/base/core.o
+  CC      lib/percpu_counter.o
+  CC [M]  fs/ext4/super.o
+  CC      net/ipv6/ip6_checksum.o
+  CC      kernel/nscommon.o
+  CC [M]  fs/ext4/symlink.o
+  AR      drivers/tty/built-in.a
+  CC      net/core/utils.o
+  CC      lib/syscall.o
+  CC      kernel/notifier.o
+  CC      net/ethtool/features.o
+  CC      lib/nlattr.o
+  CC      net/ipv6/ip6_icmp.o
+  CC      net/packet/af_packet.o
+  CC      kernel/ksysfs.o
+  CC      fs/exec.o
+  CC      net/ethtool/privflags.o
+  CC      net/ipv6/output_core.o
+  CC      kernel/cred.o
+  CC      net/ipv4/ip_sockglue.o
+  CC      lib/glob.o
+  CC      net/core/link_watch.o
+  CC      lib/strncpy_from_user.o
+  CC      drivers/base/bus.o
+  CC      kernel/reboot.o
+  CC      net/ipv6/protocol.o
+  CC      net/ethtool/rings.o
+  CC      lib/strnlen_user.o
+  AR      drivers/misc/eeprom/built-in.a
+  AR      drivers/misc/cb710/built-in.a
+  AR      drivers/misc/lis3lv02d/built-in.a
+  AR      drivers/misc/cardreader/built-in.a
+  AR      drivers/misc/keba/built-in.a
+  AR      drivers/misc/amd-sbi/built-in.a
+  AR      drivers/misc/built-in.a
+  AR      net/dsa/built-in.a
+  CC [M]  fs/ext4/sysfs.o
+  CC      net/core/filter.o
+  CC      drivers/base/dd.o
+  CC      lib/net_utils.o
+  CC      net/ipv4/inet_hashtables.o
+  CC      kernel/async.o
+  CC      net/sunrpc/clnt.o
+  CC      net/ipv6/ip6_offload.o
+  CC [M]  fs/ext4/xattr.o
+  CC      net/ethtool/channels.o
+  CC      lib/sg_pool.o
+  CC      kernel/range.o
+  CC      drivers/base/syscore.o
+  AR      net/packet/built-in.a
+  CC      net/handshake/alert.o
+  CC      kernel/smpboot.o
+  CC      lib/stackdepot.o
+  CC      kernel/ucount.o
+  CC      drivers/base/driver.o
+  CC      net/ethtool/coalesce.o
+  CC      kernel/regset.o
+  CC      net/ipv6/tcpv6_offload.o
+  CC      drivers/base/class.o
+  CC      lib/sbitmap.o
+  CC      net/handshake/genl.o
+  CC      net/ipv4/inet_timewait_sock.o
+  CC      kernel/ksyms_common.o
+  CC      net/sunrpc/xprt.o
+  CC      drivers/base/platform.o
+  CC [M]  fs/ext4/xattr_hurd.o
+  CC      net/ethtool/pause.o
+  CC      net/handshake/netlink.o
+  CC      kernel/groups.o
+  CC      lib/group_cpus.o
+  CC      net/ipv6/exthdrs_offload.o
+  CC [M]  fs/ext4/xattr_trusted.o
+  CC      lib/devmem_is_allowed.o
+  CC      net/ipv4/inet_connection_sock.o
+  CC      kernel/stacktrace.o
+  CC      net/ethtool/eee.o
+  CC      drivers/base/cpu.o
+  CC      net/handshake/request.o
+  AR      lib/lib.a
+  AR      lib/built-in.a
+  CC      drivers/base/firmware.o
+  AR      net/ipv6/built-in.a
+  CC      drivers/base/init.o
+  CC [M]  fs/ext4/xattr_user.o
+  CC      kernel/smp.o
+  CC      fs/pipe.o
+  CC      drivers/mfd/syscon.o
+  CC      net/sunrpc/socklib.o
+  CC      net/ethtool/tsinfo.o
+  CC      drivers/base/map.o
+  AR      drivers/mfd/built-in.a
+  CC      net/core/sock_diag.o
+  CC [M]  fs/ext4/fast_commit.o
+  CC      net/handshake/tlshd.o
+  CC      kernel/uid16.o
+  CC      drivers/base/devres.o
+  CC      net/sunrpc/xprtsock.o
+  CC      net/ipv4/tcp.o
+  CC      net/devres.o
+  CC      net/ethtool/cabletest.o
+  CC      kernel/kallsyms.o
+  CC      drivers/base/attribute_container.o
+  CC      net/socket.o
+  CC      net/handshake/trace.o
+  AR      drivers/nfc/built-in.a
+  CC [M]  fs/ext4/orphan.o
+  CC      drivers/base/transport_class.o
+  CC      net/sunrpc/sched.o
+  CC      net/ethtool/tunnels.o
+  CC      drivers/base/topology.o
+  CC      kernel/stop_machine.o
+  CC      net/core/dev_ioctl.o
+  AR      net/handshake/built-in.a
+  AR      drivers/dax/hmem/built-in.a
+  AR      drivers/dax/built-in.a
+  CC      net/sunrpc/auth.o
+  LD [M]  fs/ext4/ext4.o
+  CC      fs/namei.o
+  CC      drivers/base/container.o
+  CC      net/ipv4/tcp_input.o
+  CC      kernel/seccomp.o
+  CC      drivers/base/property.o
+  CC      net/ethtool/fec.o
+  CC      fs/fcntl.o
+  CC      net/core/tso.o
+  CC      net/sunrpc/auth_null.o
+  CC      net/ipv4/tcp_output.o
+  CC      drivers/base/cacheinfo.o
+  CC      net/sunrpc/auth_tls.o
+  CC      net/ethtool/eeprom.o
+  CC      kernel/utsname_sysctl.o
+  CC      kernel/irq_work.o
+  AR      drivers/cxl/core/built-in.a
+  AR      drivers/cxl/built-in.a
+  CC      net/core/sock_reuseport.o
+  CC      net/sysctl_net.o
+  CC      drivers/base/swnode.o
+  CC      kernel/context_tracking.o
+  CC      net/ethtool/stats.o
+  CC      net/sunrpc/auth_unix.o
+  CC      fs/ioctl.o
+  AR      drivers/macintosh/built-in.a
+  CC      net/ipv4/tcp_timer.o
+  CC      kernel/iomem.o
+  CC      drivers/base/faux.o
+  CC      net/sunrpc/svc.o
+  CC      kernel/rseq.o
+  CC      net/core/fib_notifier.o
+  CC      drivers/base/devtmpfs.o
+  CC      net/ethtool/phc_vclocks.o
+  CC      net/ipv4/tcp_ipv4.o
+  CC      fs/readdir.o
+  AR      kernel/built-in.a
+  AR      drivers/scsi/arm/built-in.a
+  CC      drivers/scsi/scsi.o
+  CC      drivers/base/module.o
+  CC      net/core/xdp.o
+  CC      net/sunrpc/svcsock.o
+  CC      net/ethtool/mm.o
+  CC      fs/select.o
+  CC      drivers/base/pinctrl.o
+  CC      fs/dcache.o
+  AR      drivers/nvme/common/built-in.a
+  AR      drivers/nvme/host/built-in.a
+  AR      drivers/nvme/target/built-in.a
+  AR      drivers/nvme/built-in.a
+  CC      net/core/flow_offload.o
+  AR      drivers/base/built-in.a
+  CC      net/ethtool/module.o
+  CC      drivers/scsi/hosts.o
+  CC      fs/inode.o
+  CC      net/ethtool/cmis_fw_update.o
+  CC      net/sunrpc/svcauth.o
+  CC      net/core/gro.o
+  CC      drivers/scsi/scsi_ioctl.o
+  AR      drivers/net/phy/mediatek/built-in.a
+  AR      drivers/net/phy/qcom/built-in.a
+  CC      drivers/net/phy/realtek/realtek_main.o
+  CC      fs/attr.o
+  CC      net/ipv4/tcp_minisocks.o
+  AR      drivers/net/pse-pd/built-in.a
+  CC      net/core/netdev-genl.o
+  CC      net/ethtool/cmis_cdb.o
+  CC      drivers/scsi/scsicam.o
+  CC      net/ethtool/pse-pd.o
+  CC      net/sunrpc/svcauth_unix.o
+  AR      drivers/firewire/built-in.a
+  CC      drivers/net/phy/stubs.o
+  CC      fs/bad_inode.o
+  AR      drivers/net/phy/realtek/built-in.a
+  CC      net/ipv4/tcp_cong.o
+  CC      drivers/scsi/scsi_error.o
+  CC      net/ethtool/plca.o
+  CC      fs/file.o
+  CC      drivers/net/mdio/fwnode_mdio.o
+  CC      net/sunrpc/addr.o
+  CC      drivers/net/phy/mdio_bus.o
+  CC      net/core/netdev-genl-gen.o
+  AR      drivers/cdrom/built-in.a
+  CC      drivers/net/mdio/of_mdio.o
+  CC      net/ethtool/phy.o
+  CC      drivers/scsi/scsi_lib.o
+  CC      net/sunrpc/rpcb_clnt.o
+  CC      net/ipv4/tcp_metrics.o
+  CC      net/sunrpc/timer.o
+  CC      drivers/net/phy/mdio_device.o
+  CC      net/core/gso.o
+  AR      drivers/net/mdio/built-in.a
+  CC      fs/filesystems.o
+  AR      drivers/auxdisplay/built-in.a
+  CC      net/ipv4/tcp_fastopen.o
+  CC      net/ethtool/tsconfig.o
+  CC      drivers/usb/common/common.o
+  CC      drivers/net/phy/phylink.o
+  CC      net/core/net-sysfs.o
+  CC      fs/namespace.o
+  CC      net/sunrpc/xdr.o
+  AR      drivers/usb/common/built-in.a
+  CC      drivers/usb/core/usb.o
+  CC      drivers/net/pcs/pcs-xpcs.o
+  AR      net/ethtool/built-in.a
+  CC      drivers/scsi/scsi_lib_dma.o
+  CC      net/sunrpc/sunrpc_syms.o
+  CC      drivers/usb/core/hub.o
+  CC      net/ipv4/tcp_rate.o
+  CC      drivers/scsi/scsi_scan.o
+  CC      drivers/input/input.o
+  CC      drivers/net/pcs/pcs-xpcs-plat.o
+  CC      drivers/net/phy/phy.o
+  CC      net/core/hotdata.o
+  CC      net/ipv4/tcp_recovery.o
+  CC      net/sunrpc/cache.o
+  CC      drivers/input/input-compat.o
+  GEN     drivers/scsi/scsi_devinfo_tbl.c
+  CC      drivers/scsi/scsi_devinfo.o
+  CC      drivers/net/pcs/pcs-xpcs-nxp.o
+  CC      drivers/usb/phy/of.o
+  CC      net/core/netdev_rx_queue.o
+  CC      drivers/input/input-mt.o
+  CC      net/ipv4/tcp_ulp.o
+  CC      drivers/net/phy/phy-c45.o
+  CC      drivers/usb/core/hcd.o
+  CC      drivers/scsi/scsi_sysctl.o
+  AR      drivers/usb/phy/built-in.a
+  CC      drivers/net/pcs/pcs-xpcs-wx.o
+  CC      drivers/usb/core/urb.o
+  CC      drivers/input/input-poller.o
+  CC      net/core/netdev_queues.o
+  CC      drivers/scsi/scsi_trace.o
+  CC      fs/seq_file.o
+  CC      net/sunrpc/rpc_pipe.o
+  CC      drivers/input/ff-core.o
+  AR      drivers/net/pcs/built-in.a
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_main.o
+  CC      drivers/rtc/lib.o
+  CC      net/ipv4/tcp_offload.o
+  CC      drivers/net/phy/phy-core.o
+  CC      drivers/scsi/scsi_logging.o
+  CC      net/core/page_pool.o
+  CC      drivers/input/touchscreen.o
+  CC      drivers/rtc/class.o
+  CC      drivers/usb/core/message.o
+  CC      fs/xattr.o
+  CC      drivers/input/touch-overlay.o
+  CC      drivers/scsi/scsi_common.o
+  CC      drivers/rtc/interface.o
+  CC      drivers/net/phy/phy_device.o
+  CC      net/sunrpc/sysfs.o
+  CC      drivers/scsi/sd.o
+  AR      drivers/input/built-in.a
+  CC      net/ipv4/tcp_plb.o
+  CC      drivers/i2c/algos/i2c-algo-bit.o
+  CC      fs/libfs.o
+  CC      net/core/page_pool_user.o
+  CC      drivers/rtc/dev.o
+  CC      drivers/usb/core/driver.o
+  AR      drivers/i2c/algos/built-in.a
+  CC      drivers/i2c/busses/i2c-gpio.o
+  CC      net/sunrpc/svc_xprt.o
+  CC      drivers/rtc/proc.o
+  CC      net/ipv4/datagram.o
+  CC      drivers/usb/core/config.o
+  CC      drivers/rtc/sysfs.o
+  CC      drivers/net/phy/linkmode.o
+  CC      net/core/net-procfs.o
+  AR      drivers/i2c/busses/built-in.a
+  AR      drivers/i2c/muxes/built-in.a
+  CC      drivers/i2c/i2c-boardinfo.o
+  CC      fs/fs-writeback.o
+  CC      drivers/rtc/rtc-ds1307.o
+  CC      drivers/i2c/i2c-core-base.o
+  CC      drivers/net/phy/phy_link_topology.o
+  CC      drivers/usb/core/file.o
+  CC      net/ipv4/raw.o
+  CC      drivers/scsi/scsi_sysfs.o
+  CC      net/core/selftests.o
+  CC      net/sunrpc/xprtmultipath.o
+  CC      drivers/usb/core/buffer.o
+  CC      drivers/net/phy/phy_caps.o
+  CC      fs/pnode.o
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.o
+  AR      drivers/rtc/built-in.a
+  CC      drivers/usb/host/ehci-hcd.o
+  CC      drivers/usb/core/sysfs.o
+  CC      net/sunrpc/stats.o
+  CC      drivers/i2c/i2c-core-smbus.o
+  AR      drivers/scsi/built-in.a
+  AR      drivers/usb/storage/built-in.a
+  CC [M]  drivers/usb/storage/scsiglue.o
+  CC      fs/splice.o
+  CC      drivers/net/phy/mdio_bus_provider.o
+  CC      net/core/of_net.o
+  CC      net/ipv4/udp.o
+  CC      drivers/usb/core/endpoint.o
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_mdio.o
+  CC      net/sunrpc/sysctl.o
+  CC      drivers/i2c/i2c-core-of.o
+  AR      net/core/built-in.a
+  CC      net/ipv4/udplite.o
+  CC [M]  drivers/usb/storage/protocol.o
+  CC      drivers/usb/core/devio.o
+  CC      drivers/net/phy/swphy.o
+  CC [M]  drivers/usb/storage/transport.o
+  CC      drivers/i2c/i2c-dev.o
+  CC      fs/sync.o
+  AR      net/sunrpc/built-in.a
+  CC      drivers/net/ethernet/stmicro/stmmac/ring_mode.o
+  CC      drivers/net/phy/mdio_devres.o
+  AR      drivers/usb/misc/built-in.a
+  CC      drivers/usb/host/ehci-platform.o
+  AR      drivers/i3c/built-in.a
+  CC      drivers/usb/core/notify.o
+  CC      fs/utimes.o
+  CC      drivers/net/phy/fixed_phy.o
+  CC      drivers/net/mii.o
+  AR      drivers/i2c/built-in.a
+  CC [M]  drivers/usb/storage/usb.o
+  CC      drivers/net/ethernet/stmicro/stmmac/chain_mode.o
+  CC      net/ipv4/udp_offload.o
+  CC [M]  drivers/usb/serial/usb-serial.o
+  CC      drivers/usb/host/ohci-hcd.o
+  CC      drivers/usb/core/generic.o
+  CC      fs/d_path.o
+  AR      drivers/net/phy/built-in.a
+  CC      drivers/net/loopback.o
+  CC [M]  drivers/usb/storage/initializers.o
+  AR      drivers/media/i2c/built-in.a
+  AR      drivers/media/tuners/built-in.a
+  AR      drivers/media/rc/keymaps/built-in.a
+  AR      drivers/media/rc/built-in.a
+  AR      drivers/media/common/b2c2/built-in.a
+  AR      drivers/media/common/saa7146/built-in.a
+  AR      drivers/media/common/siano/built-in.a
+  AR      drivers/media/platform/allegro-dvt/built-in.a
+  AR      drivers/media/common/v4l2-tpg/built-in.a
+  AR      drivers/media/common/videobuf2/built-in.a
+  AR      drivers/media/common/built-in.a
+  AR      drivers/media/platform/amlogic/c3/isp/built-in.a
+  AR      drivers/media/platform/amlogic/c3/mipi-adapter/built-in.a
+  CC      drivers/usb/core/quirks.o
+  AR      drivers/media/pci/ttpci/built-in.a
+  AR      drivers/media/platform/amlogic/c3/mipi-csi2/built-in.a
+  AR      drivers/media/platform/amlogic/c3/built-in.a
+  AR      drivers/media/pci/b2c2/built-in.a
+  AR      drivers/media/pci/pluto2/built-in.a
+  AR      drivers/media/platform/amlogic/meson-ge2d/built-in.a
+  CC [M]  drivers/usb/serial/generic.o
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac_lib.o
+  AR      drivers/media/pci/dm1105/built-in.a
+  AR      drivers/media/platform/amlogic/built-in.a
+  AR      drivers/media/platform/amphion/built-in.a
+  AR      drivers/media/pci/pt1/built-in.a
+  AR      drivers/media/platform/aspeed/built-in.a
+  AR      drivers/media/platform/atmel/built-in.a
+  AR      drivers/media/pci/pt3/built-in.a
+  AR      drivers/media/pci/mantis/built-in.a
+  AR      drivers/media/platform/broadcom/built-in.a
+  AR      drivers/media/pci/ngene/built-in.a
+  AR      drivers/media/platform/cadence/built-in.a
+  AR      drivers/media/platform/chips-media/coda/built-in.a
+  AR      drivers/media/pci/ddbridge/built-in.a
+  AR      drivers/media/platform/chips-media/wave5/built-in.a
+  AR      drivers/media/pci/saa7146/built-in.a
+  AR      drivers/media/platform/chips-media/built-in.a
+  AR      drivers/media/pci/smipcie/built-in.a
+  AR      drivers/media/platform/imagination/built-in.a
+  AR      drivers/media/platform/intel/built-in.a
+  AR      drivers/media/pci/netup_unidvb/built-in.a
+  AR      drivers/media/platform/marvell/built-in.a
+  AR      drivers/media/pci/intel/ipu3/built-in.a
+  AR      drivers/media/pci/intel/ivsc/built-in.a
+  AR      drivers/media/pci/intel/built-in.a
+  AR      drivers/media/platform/mediatek/jpeg/built-in.a
+  AR      drivers/media/platform/mediatek/mdp/built-in.a
+  AR      drivers/media/pci/built-in.a
+  AR      drivers/media/platform/mediatek/vcodec/common/built-in.a
+  CC      fs/stack.o
+  AR      drivers/media/platform/mediatek/vcodec/encoder/built-in.a
+  CC      net/ipv4/arp.o
+  AR      drivers/media/platform/mediatek/vcodec/decoder/built-in.a
+  AR      drivers/media/platform/mediatek/vcodec/built-in.a
+  AR      drivers/media/platform/mediatek/vpu/built-in.a
+  AR      drivers/media/platform/mediatek/mdp3/built-in.a
+  AR      drivers/media/platform/mediatek/built-in.a
+  AR      drivers/media/platform/microchip/built-in.a
+  AR      drivers/media/platform/nuvoton/built-in.a
+  AR      drivers/media/platform/nvidia/tegra-vde/built-in.a
+  AR      drivers/media/platform/nvidia/built-in.a
+  AR      drivers/media/platform/nxp/dw100/built-in.a
+  AR      drivers/media/platform/nxp/imx-jpeg/built-in.a
+  AR      drivers/media/platform/nxp/imx8-isi/built-in.a
+  AR      drivers/media/platform/nxp/built-in.a
+  AR      drivers/media/platform/qcom/camss/built-in.a
+  AR      drivers/media/platform/qcom/iris/built-in.a
+  AR      drivers/media/platform/qcom/venus/built-in.a
+  AR      drivers/media/platform/qcom/built-in.a
+  AR      drivers/media/platform/raspberrypi/pisp_be/built-in.a
+  CC [M]  drivers/usb/storage/sierra_ms.o
+  AR      drivers/media/platform/raspberrypi/rp1-cfe/built-in.a
+  AR      drivers/ptp/built-in.a
+  CC      drivers/usb/host/ohci-platform.o
+  AR      drivers/media/platform/raspberrypi/built-in.a
+  AR      drivers/media/platform/renesas/rcar-isp/built-in.a
+  AR      drivers/media/platform/renesas/rcar-vin/built-in.a
+  AR      drivers/media/platform/renesas/rzg2l-cru/built-in.a
+  AR      drivers/media/platform/renesas/vsp1/built-in.a
+  AR      drivers/media/platform/renesas/built-in.a
+  AR      drivers/media/platform/rockchip/rga/built-in.a
+  AR      drivers/media/platform/rockchip/rkisp1/built-in.a
+  CC [M]  drivers/usb/storage/option_ms.o
+  AR      drivers/media/platform/rockchip/rkvdec/built-in.a
+  AR      drivers/media/platform/rockchip/built-in.a
+  AR      drivers/media/platform/samsung/exynos-gsc/built-in.a
+  AR      drivers/media/platform/samsung/exynos4-is/built-in.a
+  AR      drivers/media/platform/samsung/s3c-camif/built-in.a
+  AR      drivers/media/platform/samsung/s5p-g2d/built-in.a
+  CC      drivers/usb/core/devices.o
+  CC      fs/fs_struct.o
+  AR      drivers/media/platform/samsung/s5p-jpeg/built-in.a
+  AR      drivers/media/platform/samsung/s5p-mfc/built-in.a
+  AR      drivers/media/platform/samsung/built-in.a
+  AR      drivers/media/platform/st/sti/bdisp/built-in.a
+  AR      drivers/media/platform/st/sti/c8sectpfe/built-in.a
+  AR      drivers/media/platform/st/sti/delta/built-in.a
+  AR      drivers/media/platform/st/sti/hva/built-in.a
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac1000_core.o
+  AR      drivers/media/platform/st/stm32/built-in.a
+  AR      drivers/media/platform/st/built-in.a
+  AR      drivers/media/platform/sunxi/sun4i-csi/built-in.a
+  CC [M]  drivers/usb/serial/bus.o
+  AR      drivers/media/platform/sunxi/sun6i-csi/built-in.a
+  AR      drivers/media/platform/sunxi/sun6i-mipi-csi2/built-in.a
+  AR      drivers/media/platform/sunxi/sun8i-a83t-mipi-csi2/built-in.a
+  AR      drivers/media/platform/sunxi/sun8i-di/built-in.a
+  AR      drivers/media/platform/sunxi/sun8i-rotate/built-in.a
+  AR      drivers/media/platform/sunxi/built-in.a
+  AR      drivers/media/platform/synopsys/hdmirx/built-in.a
+  AR      drivers/media/platform/synopsys/built-in.a
+  AR      drivers/media/platform/ti/am437x/built-in.a
+  AR      drivers/media/platform/ti/cal/built-in.a
+  CC [M]  drivers/usb/storage/usual-tables.o
+  AR      drivers/media/platform/ti/vpe/built-in.a
+  AR      drivers/media/platform/ti/davinci/built-in.a
+  AR      drivers/media/platform/ti/j721e-csi2rx/built-in.a
+  AR      drivers/media/platform/ti/omap/built-in.a
+  AR      drivers/media/platform/ti/omap3isp/built-in.a
+  AR      drivers/media/platform/ti/built-in.a
+  CC [M]  drivers/usb/serial/ftdi_sio.o
+  AR      drivers/media/platform/verisilicon/built-in.a
+  AR      drivers/media/platform/via/built-in.a
+  AR      drivers/usb/host/built-in.a
+  AR      drivers/media/platform/xilinx/built-in.a
+  AR      drivers/media/platform/built-in.a
+  AR      drivers/media/usb/b2c2/built-in.a
+  AR      drivers/media/usb/dvb-usb/built-in.a
+  AR      drivers/media/usb/dvb-usb-v2/built-in.a
+  AR      drivers/media/usb/s2255/built-in.a
+  AR      drivers/media/usb/siano/built-in.a
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac1000_dma.o
+  AR      drivers/media/usb/ttusb-budget/built-in.a
+  AR      drivers/media/usb/ttusb-dec/built-in.a
+  AR      drivers/media/usb/built-in.a
+  AR      drivers/media/mmc/siano/built-in.a
+  AR      drivers/media/mmc/built-in.a
+  AR      drivers/media/firewire/built-in.a
+  AR      drivers/media/spi/built-in.a
+  AR      drivers/media/test-drivers/built-in.a
+  AR      drivers/media/built-in.a
+  CC      drivers/usb/core/phy.o
+  CC      net/ipv4/icmp.o
+  CC      fs/statfs.o
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac100_core.o
+  CC      drivers/usb/core/port.o
+  LD [M]  drivers/usb/storage/usb-storage.o
+  CC      drivers/power/reset/hisi-reboot.o
+  CC      fs/fs_pin.o
+  LD [M]  drivers/usb/serial/usbserial.o
+  AR      drivers/power/reset/built-in.a
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac100_dma.o
+  CC      drivers/power/supply/power_supply_core.o
+  CC      drivers/watchdog/watchdog_core.o
+  CC      drivers/power/supply/power_supply_sysfs.o
+  CC      net/ipv4/devinet.o
+  CC      drivers/usb/core/of.o
+  CC      net/ipv4/af_inet.o
+  CC      fs/nsfs.o
+  AR      drivers/mmc/built-in.a
+  CC      drivers/watchdog/watchdog_dev.o
+  CC      net/ipv4/igmp.o
+  CC      fs/fs_types.o
+  CC      drivers/net/ethernet/stmicro/stmmac/enh_desc.o
+  AR      drivers/usb/core/built-in.a
+  AR      drivers/usb/built-in.a
+  CC      net/ipv4/fib_frontend.o
+  CC      fs/fs_context.o
+  AR      drivers/power/supply/built-in.a
+  AR      drivers/power/built-in.a
+  CC      drivers/net/ethernet/stmicro/stmmac/norm_desc.o
+  CC [M]  drivers/watchdog/sp805_wdt.o
+  CC      drivers/net/ethernet/stmicro/stmmac/mmc_core.o
+  CC      net/ipv4/fib_semantics.o
+  AR      drivers/ufs/built-in.a
+  AR      drivers/watchdog/built-in.a
+  CC      net/ipv4/fib_trie.o
+  CC      fs/fs_parser.o
+  AR      drivers/firmware/arm_ffa/built-in.a
+  CC      fs/fsopen.o
+  CC      drivers/clocksource/timer-of.o
+  AR      drivers/firmware/arm_scmi/built-in.a
+  AR      drivers/firmware/broadcom/built-in.a
+  AR      drivers/firmware/cirrus/test/built-in.a
+  AR      drivers/firmware/cirrus/built-in.a
+  AR      drivers/firmware/meson/built-in.a
+  AR      drivers/firmware/microchip/built-in.a
+  AR      drivers/firmware/efi/built-in.a
+  AR      drivers/firmware/imx/built-in.a
+  AR      drivers/firmware/psci/built-in.a
+  AR      drivers/firmware/qcom/built-in.a
+  AR      drivers/firmware/samsung/built-in.a
+  AR      drivers/firmware/smccc/built-in.a
+  AR      drivers/firmware/tegra/built-in.a
+  AR      drivers/firmware/xilinx/built-in.a
+  AR      drivers/firmware/built-in.a
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_hwtstamp.o
+  CC      net/ipv4/fib_notifier.o
+  CC      drivers/clocksource/timer-probe.o
+  CC      fs/init.o
+  CC      fs/kernel_read_file.o
+  CC      drivers/of/base.o
+  CC      drivers/clocksource/mmio.o
+  CC      drivers/of/cpu.o
+  CC      fs/mnt_idmapping.o
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_ptp.o
+  CC      drivers/clocksource/timer-sp804.o
+  CC      drivers/clocksource/dummy_timer.o
+  AR      drivers/platform/built-in.a
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac4_descs.o
+  CC      net/ipv4/inet_fragment.o
+  CC      net/ipv4/ping.o
+  AR      drivers/hwtracing/intel_th/built-in.a
+  CC      fs/remap_range.o
+  CC      drivers/of/device.o
+  CC      net/ipv4/ip_tunnel_core.o
+  AR      drivers/clocksource/built-in.a
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac4_dma.o
+  CC      fs/pidfs.o
+  CC      drivers/of/module.o
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac4_lib.o
+  AR      drivers/android/built-in.a
+  CC      drivers/of/platform.o
+  CC      fs/file_attr.o
+  CC      drivers/of/property.o
+  CC      net/ipv4/gre_offload.o
+  CC      fs/buffer.o
+  CC [M]  drivers/ata/libata-core.o
+  CC      fs/mpage.o
+  CC      drivers/of/kobj.o
+  CC      drivers/of/fdt.o
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac4_core.o
+  DTC     drivers/of/empty_root.dtb
+  CC [M]  drivers/ata/libata-scsi.o
+  CC      net/ipv4/metrics.o
+  CC      net/ipv4/netlink.o
+  CC      fs/proc_namespace.o
+  CC [M]  drivers/ata/libata-eh.o
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac5.o
+  CC      drivers/of/fdt_address.o
+  CC [M]  drivers/ata/libata-transport.o
+  CC      drivers/of/address.o
+  CC      net/ipv4/nexthop.o
+  CC [M]  drivers/ata/libata-trace.o
+  CC      fs/direct-io.o
+  CC      drivers/net/ethernet/stmicro/stmmac/hwif.o
+  CC      net/ipv4/udp_tunnel_stub.o
+  CC      fs/eventpoll.o
+  CC      drivers/of/irq.o
+  CC      net/ipv4/sysctl_net_ipv4.o
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_tc.o
+  CC      net/ipv4/proc.o
+  CC      drivers/of/of_reserved_mem.o
+  CC [M]  drivers/ata/libata-sata.o
+  CC      fs/anon_inodes.o
+  CC [M]  drivers/ata/libata-pmp.o
+  CC      drivers/net/ethernet/stmicro/stmmac/dwxgmac2_core.o
+  WRAP    drivers/of/empty_root.dtb.S
+  AS      drivers/of/empty_root.dtb.o
+  AR      drivers/of/built-in.a
+  CC      net/ipv4/ipconfig.o
+  CC      drivers/net/ethernet/stmicro/stmmac/dwxgmac2_dma.o
+  CC [M]  drivers/ata/ahci_platform.o
+  CC      net/ipv4/tcp_cubic.o
+  CC      fs/signalfd.o
+  CC      fs/timerfd.o
+  CC [M]  drivers/ata/libahci.o
+  CC      drivers/net/ethernet/stmicro/stmmac/dwxgmac2_descs.o
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_xdp.o
+  CC      fs/eventfd.o
+  CC      fs/aio.o
+  CC [M]  drivers/ata/libahci_platform.o
+  CC [M]  drivers/ata/ahci_hi3531.o
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_est.o
+  CC      fs/locks.o
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_fpe.o
+  AR      net/ipv4/built-in.a
+  AR      net/built-in.a
+  CC      fs/binfmt_script.o
+  CC      fs/binfmt_elf.o
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_vlan.o
+  CC      fs/coredump.o
+  CC      drivers/net/ethernet/stmicro/stmmac/stmmac_platform.o
+  CC      fs/drop_caches.o
+  LD [M]  drivers/ata/libata.o
+  CC      drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.o
+  CC      fs/sysctls.o
+  CC      fs/fhandle.o
+  CC [M]  fs/mbcache.o
+  AR      drivers/net/ethernet/stmicro/stmmac/built-in.a
+  AR      drivers/net/ethernet/stmicro/built-in.a
+  AR      drivers/net/ethernet/built-in.a
+  AR      drivers/net/built-in.a
+  AR      drivers/built-in.a
+  AR      fs/built-in.a
+  AR      built-in.a
+  AR      vmlinux.a
+  LD      vmlinux.o
+  MODPOST Module.symvers
+  CC      .vmlinux.export.o
+  CC [M]  fs/nls/nls_cp437.mod.o
+  CC [M]  .module-common.o
+  CC [M]  fs/nls/nls_iso8859-1.mod.o
+  CC [M]  fs/mbcache.mod.o
+  CC [M]  fs/ext4/ext4.mod.o
+  CC [M]  fs/jbd2/jbd2.mod.o
+  CC [M]  fs/fat/fat.mod.o
+  CC [M]  fs/fat/vfat.mod.o
+  CC [M]  lib/crc/crc16.mod.o
+  CC [M]  drivers/usb/storage/usb-storage.mod.o
+  CC [M]  drivers/usb/serial/usbserial.mod.o
+  CC [M]  drivers/usb/serial/ftdi_sio.mod.o
+  CC [M]  drivers/watchdog/sp805_wdt.mod.o
+  CC [M]  drivers/ata/libata.mod.o
+  CC [M]  drivers/ata/ahci_platform.mod.o
+  CC [M]  drivers/ata/libahci.mod.o
+  CC [M]  drivers/ata/libahci_platform.mod.o
+  CC [M]  drivers/ata/ahci_hi3531.mod.o
+  LD [M]  fs/nls/nls_cp437.ko
+  LD [M]  fs/nls/nls_iso8859-1.ko
+  LD [M]  fs/mbcache.ko
+  LD [M]  fs/ext4/ext4.ko
+  LD [M]  fs/jbd2/jbd2.ko
+  LD [M]  fs/fat/fat.ko
+  LD [M]  fs/fat/vfat.ko
+  LD [M]  lib/crc/crc16.ko
+  LD [M]  drivers/usb/serial/usbserial.ko
+  LD [M]  drivers/ata/libahci_platform.ko
+  LD [M]  drivers/usb/storage/usb-storage.ko
+  LD [M]  drivers/usb/serial/ftdi_sio.ko
+  LD [M]  drivers/ata/ahci_platform.ko
+  LD [M]  drivers/ata/libata.ko
+  LD [M]  drivers/ata/libahci.ko
+  LD [M]  drivers/watchdog/sp805_wdt.ko
+  LD [M]  drivers/ata/ahci_hi3531.ko
+  UPD     include/generated/utsversion.h
+  CC      init/version-timestamp.o
+  KSYMS   .tmp_vmlinux0.kallsyms.S
+  AS      .tmp_vmlinux0.kallsyms.o
+  LD      .tmp_vmlinux1
+  NM      .tmp_vmlinux1.syms
+  KSYMS   .tmp_vmlinux1.kallsyms.S
+  AS      .tmp_vmlinux1.kallsyms.o
+  LD      .tmp_vmlinux2
+  NM      .tmp_vmlinux2.syms
+  KSYMS   .tmp_vmlinux2.kallsyms.S
+  AS      .tmp_vmlinux2.kallsyms.o
+  LD      vmlinux.unstripped
+  NM      System.map
+  SORTTAB vmlinux.unstripped
+  OBJCOPY vmlinux
+  GEN     modules.builtin.modinfo
+  GEN     modules.builtin
+  OBJCOPY arch/arm/boot/Image
+  Kernel: arch/arm/boot/Image is ready
+  LDS     arch/arm/boot/compressed/vmlinux.lds
+  AS      arch/arm/boot/compressed/head.o
+  GZIP    arch/arm/boot/compressed/piggy_data
+  CC      arch/arm/boot/compressed/misc.o
+  CC      arch/arm/boot/compressed/decompress.o
+  CC      arch/arm/boot/compressed/string.o
+  AS      arch/arm/boot/compressed/hyp-stub.o
+  CC      arch/arm/boot/compressed/fdt_rw.o
+  CC      arch/arm/boot/compressed/fdt_ro.o
+  CC      arch/arm/boot/compressed/fdt_wip.o
+  CC      arch/arm/boot/compressed/fdt.o
+  CC      arch/arm/boot/compressed/fdt_check_mem_start.o
+  AS      arch/arm/boot/compressed/lib1funcs.o
+  AS      arch/arm/boot/compressed/ashldi3.o
+  AS      arch/arm/boot/compressed/bswapsdi2.o
+  AS      arch/arm/boot/compressed/piggy.o
+  LD      arch/arm/boot/compressed/vmlinux
+  OBJCOPY arch/arm/boot/zImage
+  Kernel: arch/arm/boot/zImage is ready
+make[1]: Leaving directory '/output/build/linux-custom'
+GIT_DIR=. PATH="/output/host/bin:/output/host/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" PKG_CONFIG="/output/host/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG_LIBDIR="/output/host/lib/pkgconfig:/output/host/share/pkgconfig" BR_BINARIES_DIR=/output/images /usr/bin/make  HOSTCC="/usr/bin/gcc -O2 -isystem /output/host/include -L/output/host/lib -Wl,-rpath,/output/host/lib" ARCH=arm KCFLAGS="-Wno-attribute-alias" INSTALL_MOD_PATH=/output/target CROSS_COMPILE="/output/host/bin/arm-buildroot-linux-gnueabihf-" WERROR=0 REGENERATE_PARSERS=1 DEPMOD=/output/host/sbin/depmod INSTALL_MOD_STRIP=1 -C /output/build/linux-custom zImage
+make[1]: Entering directory '/output/build/linux-custom'
+  CALL    scripts/checksyscalls.sh
+  MODPOST vmlinux.symvers
+  Kernel: arch/arm/boot/Image is ready
+  Kernel: arch/arm/boot/zImage is ready
+make[1]: Leaving directory '/output/build/linux-custom'
+GIT_DIR=. PATH="/output/host/bin:/output/host/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" PKG_CONFIG="/output/host/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG_LIBDIR="/output/host/lib/pkgconfig:/output/host/share/pkgconfig" BR_BINARIES_DIR=/output/images /usr/bin/make  HOSTCC="/usr/bin/gcc -O2 -isystem /output/host/include -L/output/host/lib -Wl,-rpath,/output/host/lib" ARCH=arm KCFLAGS="-Wno-attribute-alias" INSTALL_MOD_PATH=/output/target CROSS_COMPILE="/output/host/bin/arm-buildroot-linux-gnueabihf-" WERROR=0 REGENERATE_PARSERS=1 DEPMOD=/output/host/sbin/depmod INSTALL_MOD_STRIP=1 -C /output/build/linux-custom hisilicon/hi3531-dhb-ax.dtb hisilicon/hi3531-dhb-ax-ethernet.dtb 
+make[1]: Entering directory '/output/build/linux-custom'
+make[1]: Leaving directory '/output/build/linux-custom'
+>>> linux custom Installing to target
+# Install modules and remove symbolic links pointing to build
+# directories, not relevant on the target
+make[1]: Entering directory '/buildroot'
+make[1]: warning: -j1 forced in submake: resetting jobserver mode.
+  INSTALL /output/target/lib/modules/6.18.42/modules.order
+  INSTALL /output/target/lib/modules/6.18.42/modules.builtin
+  INSTALL /output/target/lib/modules/6.18.42/modules.builtin.modinfo
+  SYMLINK /output/target/lib/modules/6.18.42/build
+  INSTALL /output/target/lib/modules/6.18.42/kernel/fs/nls/nls_cp437.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/fs/nls/nls_cp437.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/fs/nls/nls_iso8859-1.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/fs/nls/nls_iso8859-1.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/fs/mbcache.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/fs/mbcache.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/fs/ext4/ext4.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/fs/ext4/ext4.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/fs/jbd2/jbd2.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/fs/jbd2/jbd2.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/fs/fat/fat.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/fs/fat/fat.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/fs/fat/vfat.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/fs/fat/vfat.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/lib/crc/crc16.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/lib/crc/crc16.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/drivers/usb/storage/usb-storage.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/drivers/usb/storage/usb-storage.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/drivers/usb/serial/usbserial.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/drivers/usb/serial/usbserial.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/drivers/usb/serial/ftdi_sio.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/drivers/usb/serial/ftdi_sio.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/drivers/watchdog/sp805_wdt.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/drivers/watchdog/sp805_wdt.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/drivers/ata/libata.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/drivers/ata/libata.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/drivers/ata/ahci_platform.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/drivers/ata/ahci_platform.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/drivers/ata/libahci.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/drivers/ata/libahci.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/drivers/ata/libahci_platform.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/drivers/ata/libahci_platform.ko
+  INSTALL /output/target/lib/modules/6.18.42/kernel/drivers/ata/ahci_hi3531.ko
+  STRIP   /output/target/lib/modules/6.18.42/kernel/drivers/ata/ahci_hi3531.ko
+  DEPMOD  /output/target/lib/modules/6.18.42
+make[1]: Leaving directory '/output/build/linux-custom'
+# Installing dtc (device tree compiler) as host tool, if selected
+if grep -q "CONFIG_DTC=y" /output/build/linux-custom/.config; then /usr/bin/install -D -m 0755 /output/build/linux-custom/scripts/dtc/dtc /output/host/bin/linux-dtc ; ln -sf linux-dtc /output/host/bin/dtc; fi
+>>> linux custom Installing to images directory
+/usr/bin/install -m 0644 -D /output/build/linux-custom/arch/arm/boot/zImage /output/images/zImage
+# dtbs moved from arch/<ARCH>/boot to arch/<ARCH>/boot/dts since 3.8-rc1
+install -D /output/build/linux-custom/arch/arm/boot/dts/hisilicon/hi3531-dhb-ax.dtb /output/images/hi3531-dhb-ax.dtb
+install -D /output/build/linux-custom/arch/arm/boot/dts/hisilicon/hi3531-dhb-ax-ethernet.dtb /output/images/hi3531-dhb-ax-ethernet.dtb
+>>>   Finalizing host directory
+>>>   Finalizing target directory
+mkdir -p /output/host/etc/meson
+sed -e "s%@TARGET_CFLAGS@%'-D_LARGEFILE_SOURCE', '-D_LARGEFILE64_SOURCE', '-D_FILE_OFFSET_BITS=64', '-D_TIME_BITS=64', '-O2', '-g0', '-D_FORTIFY_SOURCE=1'@PKG_TARGET_CFLAGS@%g" -e "s%@TARGET_LDFLAGS@%@PKG_TARGET_LDFLAGS@%g" -e "s%@TARGET_CXXFLAGS@%'-D_LARGEFILE_SOURCE', '-D_LARGEFILE64_SOURCE', '-D_FILE_OFFSET_BITS=64', '-D_TIME_BITS=64', '-O2', '-g0', '-D_FORTIFY_SOURCE=1'@PKG_TARGET_CXXFLAGS@%g" -e "s%@TARGET_FCFLAGS@%'-O2', '-g0'@PKG_TARGET_FCFLAGS@%g"         -e "s%@TARGET_CC@%/output/host/bin/arm-buildroot-linux-gnueabihf-gcc%g" -e "s%@TARGET_CXX@%/bin/false%g" -e "s%@TARGET_AR@%/output/host/bin/arm-buildroot-linux-gnueabihf-gcc-ar%g" -e "s%@TARGET_FC@%/bin/false%g" -e "s%@TARGET_STRIP@%/output/host/bin/arm-buildroot-linux-gnueabihf-strip%g" -e "s%@TARGET_ARCH@%arm%g" -e "s%@TARGET_CPU@%cortex-a9%g" -e "s%@TARGET_ENDIAN@%little%g" -e "s%@TARGET_FCFLAGS@%%g" -e "s%@TARGET_CFLAGS@%%g" -e "s%@TARGET_LDFLAGS@%%g" -e "s%@TARGET_CXXFLAGS@%%g" -e "s%@BR2_CMAKE@%/output/host/bin/cmake%g" -e "s%@PKGCONF_HOST_BINARY@%/output/host/bin/pkgconf%g" -e "s%@HOST_DIR@%/output/host%g" -e "s%@STAGING_DIR@%/output/host/arm-buildroot-linux-gnueabihf/sysroot%g" -e "s%@STATIC@%false%g" /buildroot/support/misc/cross-compilation.conf.in > /output/host/etc/meson/cross-compilation.conf.in
+sed         -e "s%@TARGET_CC@%/output/host/bin/arm-buildroot-linux-gnueabihf-gcc%g" -e "s%@TARGET_CXX@%/bin/false%g" -e "s%@TARGET_AR@%/output/host/bin/arm-buildroot-linux-gnueabihf-gcc-ar%g" -e "s%@TARGET_FC@%/bin/false%g" -e "s%@TARGET_STRIP@%/output/host/bin/arm-buildroot-linux-gnueabihf-strip%g" -e "s%@TARGET_ARCH@%arm%g" -e "s%@TARGET_CPU@%cortex-a9%g" -e "s%@TARGET_ENDIAN@%little%g" -e "s%@TARGET_FCFLAGS@%'-O2', '-g0'%g" -e "s%@TARGET_CFLAGS@%'-D_LARGEFILE_SOURCE', '-D_LARGEFILE64_SOURCE', '-D_FILE_OFFSET_BITS=64', '-D_TIME_BITS=64', '-O2', '-g0', '-D_FORTIFY_SOURCE=1'%g" -e "s%@TARGET_LDFLAGS@%%g" -e "s%@TARGET_CXXFLAGS@%'-D_LARGEFILE_SOURCE', '-D_LARGEFILE64_SOURCE', '-D_FILE_OFFSET_BITS=64', '-D_TIME_BITS=64', '-O2', '-g0', '-D_FORTIFY_SOURCE=1'%g" -e "s%@BR2_CMAKE@%/output/host/bin/cmake%g" -e "s%@PKGCONF_HOST_BINARY@%/output/host/bin/pkgconf%g" -e "s%@HOST_DIR@%/output/host%g" -e "s%@STAGING_DIR@%/output/host/arm-buildroot-linux-gnueabihf/sysroot%g" -e "s%@STATIC@%false%g" /buildroot/support/misc/cross-compilation.conf.in > /output/host/etc/meson/cross-compilation.conf
+/usr/bin/sed -i -e '/# GENERIC_SERIAL$/s~^.*#~console::respawn:/sbin/getty -L  console 0 vt100 #~' /output/target/etc/inittab
+/usr/bin/sed -i -e '/^#.*-o remount,rw \/$/s~^#\+~~' /output/target/etc/inittab
+if grep -q CONFIG_ASH=y /output/build/busybox-1.37.0/.config; then grep -qsE '^/bin/ash$' /output/target/etc/shells || echo "/bin/ash" >> /output/target/etc/shells; fi
+if grep -q CONFIG_HUSH=y /output/build/busybox-1.37.0/.config; then grep -qsE '^/bin/hush$' /output/target/etc/shells || echo "/bin/hush" >> /output/target/etc/shells; fi
+mkdir -p /output/target/etc
+echo "dhb-ax" > /output/target/etc/hostname
+/usr/bin/sed -i -e '$a \127.0.1.1\tdhb-ax' -e '/^127.0.1.1/d' /output/target/etc/hosts
+mkdir -p /output/target/etc
+echo "Welcome to Buildroot" > /output/target/etc/issue
+/usr/bin/sed -i -e s,^root:[^:]*:,root::, /output/target/etc/shadow
+grep -qsE '^/bin/sh$' /output/target/etc/shells || echo "/bin/sh" >> /output/target/etc/shells
+if [ -x /output/target/sbin/swapon -a -x /output/target/sbin/swapoff ]; then /usr/bin/sed -i -e '/^#.*\/sbin\/swap/s/^#\+[[:blank:]]*//' /output/target/etc/inittab; else /usr/bin/sed -i -e '/^[^#].*\/sbin\/swap/s/^/#/' /output/target/etc/inittab; fi
+if test -d /output/target/lib/modules/`MAKEFLAGS='-j10 --jobserver-auth=3,4' /usr/bin/make  HOSTCC="/usr/bin/gcc -O2 -isystem /output/host/include -L/output/host/lib -Wl,-rpath,/output/host/lib" ARCH=arm KCFLAGS="-Wno-attribute-alias" INSTALL_MOD_PATH=/output/target CROSS_COMPILE="/output/host/bin/arm-buildroot-linux-gnueabihf-" WERROR=0 REGENERATE_PARSERS=1 DEPMOD=/output/host/sbin/depmod INSTALL_MOD_STRIP=1 -C /output/build/linux-custom --no-print-directory -s kernelrelease 2>/dev/null` && grep -q "CONFIG_MODULES=y" /output/build/linux-custom/.config; then /output/host/sbin/depmod -a -b /output/target `MAKEFLAGS='-j10 --jobserver-auth=3,4' /usr/bin/make  HOSTCC="/usr/bin/gcc -O2 -isystem /output/host/include -L/output/host/lib -Wl,-rpath,/output/host/lib" ARCH=arm KCFLAGS="-Wno-attribute-alias" INSTALL_MOD_PATH=/output/target CROSS_COMPILE="/output/host/bin/arm-buildroot-linux-gnueabihf-" WERROR=0 REGENERATE_PARSERS=1 DEPMOD=/output/host/sbin/depmod INSTALL_MOD_STRIP=1 -C /output/build/linux-custom --no-print-directory -s kernelrelease 2>/dev/null`; fi
+printf '%s\n' C en_US locale-archive > /output/build/locales.nopurge
+for dir in /output/target/usr/share/locale /output/target/usr/share/X11/locale /output/target/usr/lib/locale; do if [ ! -d $dir ]; then continue; fi; for langdir in $dir/*; do if [ -e "${langdir}" ]; then grep -qx "${langdir##*/}" /output/build/locales.nopurge || rm -rf $langdir; fi done; done
+if [ -d /output/target/usr/share/X11/locale ]; then for lang in C en_US; do if [ -f /output/target/usr/share/X11/locale/$lang/XLC_LOCALE ]; then echo "$lang/XLC_LOCALE: $lang"; fi done > /output/target/usr/share/X11/locale/locale.dir; fi
+rm -rf /output/target/usr/include /output/target/usr/share/aclocal \
+	/output/target/usr/lib/pkgconfig /output/target/usr/share/pkgconfig \
+	/output/target/usr/lib/cmake /output/target/usr/share/cmake \
+	/output/target/usr/lib/rpm /output/target/usr/doc
+find /output/target/usr/{lib,share}/ -name '*.cmake' -print0 | xargs -0 rm -f
+find /output/target/lib/ /output/target/usr/lib/ /output/target/usr/libexec/ \
+	\( -name '*.a' -o -name '*.la' -o -name '*.prl' \) -print0 | xargs -0 rm -f
+rm -rf /output/target/usr/share/gdb
+rm -rf /output/target/usr/share/bash-completion
+rm -rf /output/target/etc/bash_completion.d
+rm -rf /output/target/usr/share/zsh
+rm -rf /output/target/usr/man /output/target/usr/share/man
+rm -rf /output/target/usr/info /output/target/usr/share/info
+rm -rf /output/target/usr/doc /output/target/usr/share/doc
+rm -rf /output/target/usr/share/gtk-doc
+rmdir /output/target/usr/share 2>/dev/null || true
+rm -rf /output/target/lib/debug /output/target/usr/lib/debug
+find /output/target   -type f \( -perm /111 -o -name '*.so*' \) -not \( -name 'libpthread*.so*' -o -name 'ld-*.so*' -o -name '*.ko' \) -print0 | xargs -0 /output/host/bin/arm-buildroot-linux-gnueabihf-strip --remove-section=.comment --remove-section=.note 2>/dev/null || true
+find /output/target   \( -name 'ld-*.so*' -o -name 'libpthread*.so*' \) -print0 | xargs -0 -r /output/host/bin/arm-buildroot-linux-gnueabihf-strip --remove-section=.comment --remove-section=.note --strip-debug 2>/dev/null || true
+test -f /output/target/etc/ld.so.conf && \
+	{ echo "ERROR: we shouldn't have a /etc/ld.so.conf file"; exit 1; } || true
+test -d /output/target/etc/ld.so.conf.d && \
+	{ echo "ERROR: we shouldn't have a /etc/ld.so.conf.d directory"; exit 1; } || true
+mkdir -p /output/target/etc
+( \
+	echo "NAME=Buildroot"; \
+	echo "VERSION=2026.02.3"; \
+	echo "ID=buildroot"; \
+	echo "VERSION_ID=2026.02.3"; \
+	echo "PRETTY_NAME=\"Buildroot 2026.02.3\"" \
+) >  /output/target/usr/lib/os-release
+ln -sf ../usr/lib/os-release /output/target/etc
+>>>   Sanitizing RPATH in target tree
+PARALLEL_JOBS=11 \
+	PER_PACKAGE_DIR=/output/per-package \
+	/buildroot/support/scripts/fix-rpath target
+>>>   Sanity check in overlays /work/br2-external/board/dhb_ax/rootfs-overlay
+support/scripts/check-merged \
+	-t overlay \
+	 \
+	 \
+	/work/br2-external/board/dhb_ax/rootfs-overlay
+>>>   Copying overlay /work/br2-external/board/dhb_ax/rootfs-overlay
+>>>   Executing post-build script /work/br2-external/board/dhb_ax/post-build.sh
+post-build: writers absent, read-only tools present
+post-build: installed durable OpenSSH host and root authorized keys
+touch /output/target/usr
+>>>   Generating root filesystems common tables
+rm -rf /output/build/buildroot-fs
+mkdir -p /output/build/buildroot-fs
+printf '   	sshd -1 sshd -1 * /var/empty - - SSH drop priv user\n\n' >> /output/build/buildroot-fs/full_users_table.txt
+printf '   	/bin/busybox                     f 4755 0  0 - - - - -\n 	/var/empty d 755 root root - - - - -\n\n' > /output/build/buildroot-fs/full_devices_table.txt
+cat system/device_table.txt >> /output/build/buildroot-fs/full_devices_table.txt
+>>>   Generating filesystem image rootfs.tar
+mkdir -p /output/images
+rm -rf /output/build/buildroot-fs/tar
+mkdir -p /output/build/buildroot-fs/tar
+rsync -auH --exclude=/THIS_IS_NOT_YOUR_ROOT_FILESYSTEM /output/target/ /output/build/buildroot-fs/tar/target
+echo '#!/bin/sh' > /output/build/buildroot-fs/tar/fakeroot
+echo "set -e" >> /output/build/buildroot-fs/tar/fakeroot
+echo "chown -h -R 0:0 /output/build/buildroot-fs/tar/target" >> /output/build/buildroot-fs/tar/fakeroot
+PATH="/output/host/bin:/output/host/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" /buildroot/support/scripts/mkusers /output/build/buildroot-fs/full_users_table.txt /output/build/buildroot-fs/tar/target >> /output/build/buildroot-fs/tar/fakeroot
+echo "/output/host/bin/makedevs -d /output/build/buildroot-fs/full_devices_table.txt /output/build/buildroot-fs/tar/target" >> /output/build/buildroot-fs/tar/fakeroot
+printf '   	rm -rf /output/build/buildroot-fs/tar/target/usr/lib/udev/hwdb.d/ /output/build/buildroot-fs/tar/target/etc/udev/hwdb.d/\n' >> /output/build/buildroot-fs/tar/fakeroot
+echo "find /output/build/buildroot-fs/tar/target/run/ -mindepth 1 -prune -print0 | xargs -0r rm -rf --" >> /output/build/buildroot-fs/tar/fakeroot
+echo "find /output/build/buildroot-fs/tar/target/tmp/ -mindepth 1 -prune -print0 | xargs -0r rm -rf --" >> /output/build/buildroot-fs/tar/fakeroot
+printf '   \n' >> /output/build/buildroot-fs/tar/fakeroot
+printf '   \n' >> /output/build/buildroot-fs/tar/fakeroot
+printf '   	(cd /output/build/buildroot-fs/tar/target; find -print0 | LC_ALL=C sort -z | /output/host/bin/tar  --pax-option=exthdr.name=%%d/PaxHeaders/%%f,atime:=0,ctime:=0 -cf /output/images/rootfs.tar --null --xattrs-include='\''*'\'' --no-recursion -T - --numeric-owner)\n' >> /output/build/buildroot-fs/tar/fakeroot
+chmod a+x /output/build/buildroot-fs/tar/fakeroot
+PATH="/output/host/bin:/output/host/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" FAKEROOTDONTTRYCHOWN=1 /output/host/bin/fakeroot -- /output/build/buildroot-fs/tar/fakeroot
+rootdir=/output/build/buildroot-fs/tar/target
+table='/output/build/buildroot-fs/full_devices_table.txt'
+>>>   Executing post-image script /work/br2-external/board/dhb_ax/post-image.sh
+post-image: uImage-hi3531-dhb-ax-ethernet
+post-image: uImage-hi3531-dhb-ax
+make: Leaving directory '/buildroot'
+
+artifacts -> artifacts/buildroot/
+  hi3531-dhb-ax-ethernet.dtb
+  hi3531-dhb-ax.dtb
+  rootfs.tar
+  uImage-hi3531-dhb-ax
+  uImage-hi3531-dhb-ax-ethernet
+  zImage
+  zImage-hi3531-dhb-ax-appended-dtb
+  zImage-hi3531-dhb-ax-ethernet-appended-dtb
+c7b7e080ee5542e3f2c8c902d4cf25854f8c6c61ce3f94be7599dd23f0b1586d  /output/images/hi3531-dhb-ax-ethernet.dtb
+e9d11dec700d3e50576d7401f0b8629feddeab2c0c53d10dada54693e1c92295  /output/images/hi3531-dhb-ax.dtb
+dc9ecf40f963cb69f62e49d1d8bf451cbd272b120e0597e0daa6fd1977297f86  /output/images/rootfs.tar
+1aa9c5c9a516458a77d7aaab697d9b6410dfdee4d31a50b456eda86fd1bb66c5  /output/images/uImage-hi3531-dhb-ax
+56ff2bd1895adb61354faae5fcb0271582d7f48aca0343ecc0c536941e87c23b  /output/images/uImage-hi3531-dhb-ax-ethernet
+4bb5b5bbc87af030d20d91620be65d1e2acfc63844037b45834a947ef2baeb3c  /output/images/zImage
+07b306fe18974da133817e3e0723ba309249aaabd3f4b8d4d6a36925e81c342c  /output/images/zImage-hi3531-dhb-ax-appended-dtb
+1f299045a8843d5e6102e29e6b01264f2f91752d757623126c44319b5abed2a0  /output/images/zImage-hi3531-dhb-ax-ethernet-appended-dtb
