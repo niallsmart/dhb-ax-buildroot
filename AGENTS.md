@@ -81,62 +81,28 @@ Facts that affect low-level work:
 
 ## Talking to the DVR
 
-The UART is a single-reader resource. Repository tools serialize direct access
-with `flock -n /tmp/dvr-uart.lock` on the Pi; use the same lock for any manual
-reader. Never open a second picocom, screen or other reader while the `dvr`
-console or a boot script owns the UART.
+The `dvr` tmux session owns the UART through one long-lived SSH and picocom
+connection. Start or attach to it with `just dvr`. Leave it running.
 
-Choose the tool according to the operation:
-
-- For ordinary commands at an existing Linux shell, use
-  `tools/dvr-console.sh`. It drives the persistent picocom session under the
-  local `dvr` tmux session.
-- For rebooting, interrupting autoboot and TFTP-booting a kernel, use
-  `tools/dvr-boot.exp`. Expect owns the state transitions and prompt matching;
-  fixed sleeps and tmux scrollback are not reliable enough for this sequence.
-- For interactive investigation, attach to the `dvr` tmux session. Direct SSH
-  plus picocom is a manual fallback only: first release the tmux console and
-  acquire the UART lock.
-
-Start the persistent console with `just dvr`, then run ordinary commands with:
+- Use `tools/dvr-exec.sh` for one command at a Linux shell.
+- Use `tools/dvr-boot.exp` to reboot, stop U-Boot and TFTP-boot a kernel.
+- Use `just dvr` for interactive work.
 
 ```sh
-tools/dvr-console.sh 'cat /proc/mtd'
+tools/dvr-exec.sh 'cat /proc/mtd'
 ```
 
-For ordinary Linux commands, prefer `tools/dvr-console.sh`: it brackets the
-command in start/end markers and prints only the text between the last pair, so
-the result cannot be confused with stale scrollback. It polls for completion
-rather than sleeping a fixed interval, so slow commands are not truncated.
-
-For interactive serial work, access the `dvr` tmux session directly. It is
-acceptable to use `tmux capture-pane`; limit the requested history (for
-example with `-S -80`) and account for stale output when interpreting it. Do
-not automate reboot or boot-prompt detection by scraping this pane.
-
-Alternatively, SSH to the Raspberry Pi and access `/dev/serial0` directly,
-bypassing tmux. First gracefully quit the existing picocom with its `Ctrl-A`,
-`Ctrl-Q` sequence, verify the device is unused, retain the `/proc/consoles`
-check below, and take `/tmp/dvr-uart.lock`. Do not kill or restart the shared
-tmux server.
-
-For `dvr-console.sh`, `SESSION` and `TIMEOUT` are environment overrides; the
-defaults are `dvr` and 20 seconds.
+Both helpers use the existing session and share a local lock. `dvr-exec.sh`
+requires a Linux shell; it marks each command and returns only that command's
+output. Its `SESSION` and `TIMEOUT` defaults are `dvr` and 20 seconds.
 
 The console might be at U-Boot (`hisilicon #`), the mainline shell (`/ #`), or
 the vendor login prompt (vendor root password: `1001chin`). Confirm which
-before sending a command. Reach the Pi non-interactively with SSH rather than
-typing shell commands into an arbitrary tmux pane. In particular,
-`raspberrypi:0.0` may be an unrelated interactive TUI, not a shell. Do not
-restart or kill the shared tmux server.
+before sending anything.
 
-The DVR UART is `/dev/serial0` (normally `/dev/ttyAMA0`) at 115200 8N1 on the
-Pi. Before reopening it after a Pi reboot, make sure Linux has not claimed it
-as a console:
-
-```sh
-grep -q '^ttyAMA0' /proc/consoles && echo "UART IS A CONSOLE - abort"
-```
+tmux scrollback is the console history; use `tmux capture-pane` for forensics.
+There is no Pi logfile. Pass `--transcript PATH` to `dvr-boot.exp` when a local
+boot transcript is useful.
 
 ## Booting a kernel over TFTP (the Raspberry Pi)
 
@@ -158,13 +124,10 @@ tools/dvr-boot.exp --check uImage-hi3531-dhb-ax-ethernet
 tools/dvr-boot.exp uImage-hi3531-dhb-ax-ethernet
 ```
 
-The Expect tool verifies the staged image and TFTP service, gracefully
-releases the `dvr` tmux console, opens the UART directly through SSH, handles
-login/reboot/U-Boot/TFTP/Linux prompt transitions, and restores the persistent
-tmux console afterward. It does not stage the image, call `saveenv`, or write
-board storage. Use `--transcript PATH` when a durable boot log is needed.
+The tool uses the persistent `dvr` session, leaves it running, and boots the
+staged image from RAM.
 
-For manual recovery, the equivalent commands at the DVR's U-Boot prompt are:
+For a manual boot, the equivalent U-Boot commands are:
 
 ```text
 setenv ipaddr 192.168.7.241
@@ -179,7 +142,7 @@ bootm 0x82000000
 because its custom PID 1 does not handle BusyBox's normal reboot signal; the
 Expect tool selects that path automatically. It sends a key every 0.25 seconds
 through reset and stops only after matching a new `hisilicon #` prompt. For
-manual recovery, do the same; reacting to "Hit any key to stop autoboot" is too
+manual boot, do the same; reacting to "Hit any key to stop autoboot" is too
 slow.
 
 ### The TFTP gotcha: ensure tftpd-hpa is running
@@ -216,12 +179,6 @@ mount -t nfs -o soft,timeo=100,retrans=3,nolock,vers=3 \
 Do not use the default hard mount: if the link drops, it can block the shell
 uninterruptibly and force a reset.
 
-The Pi has very little free space. A full SD card makes picocom terminate with
-`FATAL: write to logfile failed: No space left on device`, which also removes
-the serial console. If the console disappears unexpectedly, check `df -h /` on
-the Pi first. Old images under `/srv/tftp` are regenerable, but inspect them
-before reclaiming space; do not delete files as part of diagnosis alone.
-
 ## Nothing writes to the board
 
 The factory firmware still boots and the flash images in `backups/` are the only
@@ -231,7 +188,7 @@ copies of it. Kernels are loaded into DRAM over TFTP and run from there.
   `flashcp`, `flash_eraseall`, `nandwrite`, or similar commands.
 - Never write to the attached SATA disk, mount it read-write, or run `fsck` on
   it.
-- `tools/dvr-console.sh` does not enforce any of this. It sends whatever it is
+- `tools/dvr-exec.sh` does not enforce any of this. It sends whatever it is
   given, so check a command before sending it.
 
 Safe operations include U-Boot `printenv`, `nand info`, `nand bad`, `nand

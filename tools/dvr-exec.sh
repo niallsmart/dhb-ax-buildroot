@@ -1,15 +1,13 @@
 #!/bin/sh
 # Run a command on the DVR's serial console and print only that command's output.
 #
-#   tools/dvr-console.sh 'uname -a'
-#   tools/dvr-console.sh 'cat /proc/mtd'
-#   SESSION=dvr2 TIMEOUT=30 tools/dvr-console.sh 'dmesg | tail -40'
+#   tools/dvr-exec.sh 'uname -a'
+#   tools/dvr-exec.sh 'cat /proc/mtd'
+#   SESSION=dvr2 TIMEOUT=30 tools/dvr-exec.sh 'dmesg | tail -40'
 #
-# The console is a picocom session running under tmux (see the `dvr` target in
-# the Justfile). Reading it with a bare `tmux capture-pane` returns the whole
-# scrollback, so every read drags in stale output from earlier commands. This
-# wraps the command in start/end markers and prints only what falls between
-# them, so the output is exactly one command's worth.
+# The console is a durable picocom session running under tmux (see `just dvr`).
+# Full scrollback is useful for forensics; this helper instead wraps one command
+# in unique markers and returns only that command's output.
 #
 # This sends whatever you give it. The project's rule that nothing writes to
 # the DVR's flash or disk is not enforced here — it is on the caller.
@@ -24,10 +22,24 @@ if [ $# -eq 0 ]; then
 fi
 cmd=$*
 
+case $SESSION in
+	*[!A-Za-z0-9_.-]*)
+		echo "error: unsafe tmux session name: $SESSION" >&2
+		exit 1
+		;;
+esac
+
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then
 	echo "error: no tmux session '$SESSION'; start it with: just dvr" >&2
 	exit 1
 fi
+
+lock=/tmp/dvr-tmux-$SESSION.lock
+if ! mkdir "$lock" 2>/dev/null; then
+	echo "error: another DVR console tool holds $lock" >&2
+	exit 1
+fi
+trap 'rmdir "$lock" 2>/dev/null || true' EXIT HUP INT TERM
 
 # Markers carry a per-run nonce, which is what makes reading the pane safe:
 # every previous run's markers are still sitting in the scrollback, so fixed

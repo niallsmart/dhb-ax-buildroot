@@ -13,7 +13,7 @@ proc usage {{status 0}} {
 Options:
   --check                 Run preflight checks only; do not access the UART
   --host HOST             Pi SSH host (default: raspberrypi)
-  --session NAME          tmux console to release/restore (default: dvr)
+  --session NAME          persistent tmux console to use (default: dvr)
   --transcript PATH       Append serial output to PATH
   --load-address ADDRESS  U-Boot load address (default: 0x82000000)
   --ipaddr ADDRESS        DVR address used by U-Boot (default: 192.168.7.241)
@@ -23,8 +23,8 @@ Options:
   --boot-timeout SECONDS  Linux prompt timeout (default: 120)
   --help                  Show this help
 
-The named tmux session is gracefully released before direct UART access and
-restored afterward. If it does not exist, the UART must already be unused.}
+The named tmux session remains the sole owner of the UART. This tool attaches
+as another tmux client for the duration of the boot, then detaches.}
     exit $status
 }
 
@@ -142,111 +142,87 @@ if {![ssh_command $host $image_check]} {
     exit 3
 }
 
-set had_session [expr {![catch {exec tmux has-session -t $session}]}]
-if {$had_session} {
-    set pane_command [string trim [exec tmux display-message -p -t $session {#{pane_current_command}}]]
-    if {$pane_command ne "ssh"} {
-        puts stderr "error: tmux session '$session' runs '$pane_command', not the expected SSH console"
-        exit 3
-    }
+if {[catch {exec tmux has-session -t $session}]} {
+    puts stderr "error: no tmux session '$session'; start it with: just dvr"
+    exit 3
+}
+set pane_state [string trim [exec tmux display-message -p -t $session {#{pane_current_command} #{pane_dead}}]]
+if {$pane_state ne "ssh 0"} {
+    puts stderr "error: tmux session '$session' is not a live SSH console ($pane_state)"
+    exit 3
 }
 
 if {$check_only} {
-    if {$had_session} {
-        puts "Preflight passed; tmux session '$session' will be released and restored during a boot."
-    } elseif {![ssh_command $host {test -z "$(fuser /dev/serial0 2>/dev/null)"}]} {
-        puts stderr "error: /dev/serial0 is already in use and no managed tmux session was found"
-        exit 3
-    } else {
-        puts "Preflight passed; /dev/serial0 is free."
-    }
+    puts "Preflight passed; boot automation will use the persistent tmux console '$session'."
     exit 0
 }
 
-set serial_active 0
-set serial_spawn_id ""
-set restore_session $had_session
+set tool_lock "/tmp/dvr-tmux-$session.lock"
+if {[catch {exec mkdir $tool_lock}]} {
+    puts stderr "error: another DVR console tool holds $tool_lock"
+    exit 4
+}
+set lock_held 1
+set console_active 0
+set console_spawn_id ""
 
-proc restore_console {} {
-    global serial_active serial_spawn_id restore_session session host
+proc detach_console {} {
+    global console_active console_spawn_id lock_held tool_lock
 
-    if {$serial_active} {
-        catch {send -i $serial_spawn_id -- "\001\021"}
+    if {$console_active} {
+        # Detach this tmux client with the default C-b d binding. The session,
+        # picocom process and scrollback remain alive.
+        catch {send -i $console_spawn_id -- "\002d"}
         set old_timeout $::timeout
         set ::timeout 3
-        catch {expect -i $serial_spawn_id eof}
+        catch {expect -i $console_spawn_id eof}
         set ::timeout $old_timeout
-        # Closing and reaping the SSH pty is harmless after EOF and guarantees
-        # the remote flock has been released before restoring picocom.
-        catch {close -i $serial_spawn_id}
-        catch {wait -i $serial_spawn_id}
-        set serial_active 0
+        catch {close -i $console_spawn_id}
+        catch {wait -i $console_spawn_id}
+        set console_active 0
     }
 
-    if {$restore_session && [catch {exec tmux has-session -t $session}]} {
-        after 250
-        set command "ssh -tt $host 'flock -n /tmp/dvr-uart.lock picocom -b 115200 --omap crcrlf --logfile dvr.log /dev/serial0'"
-        if {[catch {exec tmux new-session -d -s $session $command} output]} {
-            puts stderr "warning: could not restore tmux session '$session': $output"
-        } else {
-            puts "Restored tmux console '$session'."
-        }
+    if {$lock_held} {
+        catch {file delete -force $tool_lock}
+        set lock_held 0
     }
 }
 
 proc abort_boot {message code} {
     puts stderr "error: $message"
-    restore_console
+    detach_console
     exit $code
 }
 
 trap {abort_boot "interrupted" 130} {SIGINT SIGTERM SIGHUP}
 
-if {$had_session} {
-    puts "Releasing tmux console '$session'..."
-    if {[catch {exec tmux send-keys -t $session C-a C-q} output]} {
-        abort_boot "could not ask picocom to quit: $output" 4
-    }
-    set released 0
-    for {set i 0} {$i < 50} {incr i} {
-        if {[catch {exec tmux has-session -t $session}]} {
-            set released 1
-            break
-        }
-        after 100
-    }
-    if {!$released} {
-        abort_boot "tmux console '$session' did not release the UART" 4
-    }
-}
-
-if {![ssh_command $host {test -z "$(fuser /dev/serial0 2>/dev/null)"}]} {
-    abort_boot "/dev/serial0 is still in use" 4
-}
-
 if {$transcript ne ""} { log_file -a $transcript }
 log_user 1
 set timeout 5
 
-puts "Opening the DVR UART directly through $host..."
-spawn ssh -tt $host "flock -n /tmp/dvr-uart.lock picocom -q -b 115200 --omap crcrlf /dev/serial0"
-set serial_spawn_id $spawn_id
-set serial_active 1
+puts "Attaching to persistent tmux console '$session'..."
+set env(TERM) xterm-256color
+if {[catch {spawn tmux attach-session -t $session} output]} {
+    abort_boot "could not attach to tmux console: $output" 4
+}
+set console_spawn_id $spawn_id
+set console_active 1
 
 # Synchronize with U-Boot, a Linux shell, or a login prompt. The factory and
 # mainline systems use different prompts, so handle both without assuming
-# which kernel is currently running.
+# which kernel is currently running. Do not anchor prompts at end-of-line:
+# tmux's client stream writes terminal control sequences after visible text.
 send -- "\r"
 set shell_ready 0
 set uboot_ready 0
 for {set i 0} {$i < 12 && !$shell_ready && !$uboot_ready} {incr i} {
     expect {
-        -re {hisilicon # *$} { set uboot_ready 1 }
-        -re {(~|/) # *$} { set shell_ready 1 }
-        -re {[^ \r\n]+ login: *$} { send -- "root\r" }
-        -re {Password: *$} { send -- "1001chin\r" }
+        -re {hisilicon # *} { set uboot_ready 1 }
+        -re {(~|/) # *} { set shell_ready 1 }
+        -re {[^ \r\n]+ login: *} { send -- "root\r" }
+        -re {Password: *} { send -- "1001chin\r" }
         timeout { send -- "\r" }
-        eof { abort_boot "serial connection closed while synchronizing" 5 }
+        eof { abort_boot "tmux console closed while synchronizing" 5 }
     }
 }
 if {!$shell_ready && !$uboot_ready} {
@@ -266,8 +242,8 @@ if {!$uboot_ready} {
         send -- " "
         after 250
         expect {
-            -re {hisilicon # *$} { set uboot_ready 1 }
-            eof { abort_boot "serial connection closed during reboot" 6 }
+            -re {hisilicon # *} { set uboot_ready 1 }
+            eof { abort_boot "tmux console closed during reboot" 6 }
             timeout {}
         }
     }
@@ -283,8 +259,8 @@ proc uboot_command {command} {
     set old_timeout $timeout
     set timeout 10
     expect {
-        -re {hisilicon # *$} {}
-        eof { abort_boot "serial connection closed after: $command" 7 }
+        -re {hisilicon # *} {}
+        eof { abort_boot "tmux console closed after: $command" 7 }
         timeout { abort_boot "U-Boot command timed out: $command" 7 }
     }
     set timeout $old_timeout
@@ -304,12 +280,12 @@ expect {
     -re {(TFTP error|Retry count exceeded|Access violation|File not found)} {
         abort_boot "TFTP reported a transfer failure" 8
     }
-    eof { abort_boot "serial connection closed during TFTP" 8 }
+    eof { abort_boot "tmux console closed during TFTP" 8 }
     timeout { abort_boot "TFTP did not complete within 120 seconds" 8 }
 }
 expect {
-    -re {hisilicon # *$} {}
-    eof { abort_boot "serial connection closed after TFTP" 8 }
+    -re {hisilicon # *} {}
+    eof { abort_boot "tmux console closed after TFTP" 8 }
     timeout { abort_boot "U-Boot prompt did not return after TFTP" 8 }
 }
 
@@ -317,12 +293,13 @@ puts "Booting from RAM..."
 send -- "bootm $load_address\r"
 set timeout $boot_timeout
 expect {
-    -re {(~|/) # *$} {}
+    -re {(~|/) # *} {}
+    -re {[^ \r\n]+ login: *} {}
     -re {Kernel panic - not syncing} { abort_boot "kernel panic" 9 }
-    eof { abort_boot "serial connection closed during kernel boot" 9 }
-    timeout { abort_boot "Linux shell did not appear within $boot_timeout seconds" 9 }
+    eof { abort_boot "tmux console closed during kernel boot" 9 }
+    timeout { abort_boot "Linux login or shell prompt did not appear within $boot_timeout seconds" 9 }
 }
 
-puts "Linux shell reached successfully."
-restore_console
+puts "Linux login or shell prompt reached successfully."
+detach_console
 exit 0
