@@ -47,6 +47,14 @@ scripts/buildroot.sh
 The output image is
 `artifacts/buildroot/uImage-hi3531-dhb-ax-ethernet`.
 
+## Commit messages
+
+Use a short, imperative subject, such as `buildroot: verify the kernel archive`
+or `tools: reuse the persistent DVR console`. Add a component prefix when it
+makes the subject clearer, but do not force one. Keep each commit to one logical
+change, and add a body only when the reason or supporting evidence is not
+obvious. Do not add a `Signed-off-by` line unless it is required.
+
 ## Reasoning from hardware evidence
 
 No public documentation for this SoC is available. Cross-check conclusions
