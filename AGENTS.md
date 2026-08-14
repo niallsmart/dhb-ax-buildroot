@@ -162,13 +162,33 @@ A quick way to tell the server apart from the board: `tftp 192.168.4.34` from
 your own machine and `get` the image. If that times out too, it is the Pi, not
 the DVR.
 
-## Iterating with the NFS share
+## Publishing and iterating with the NFS root
 
-The Pi exports `/srv/dhb-ax` read-write to the mainline system at
-`192.168.7.240`. This is the fast path for driver work: copy modules or bulk
-output through the share rather than rebooting or scraping serial output.
+The Pi exports `/srv/dhb-ax` read-write to the mainline system. The DVR has a
+DHCP reservation at `192.168.4.77`; `192.168.7.240` is its legacy static
+address. The normal Buildroot system mounts
+`192.168.4.34:/srv/dhb-ax/rootfs` as its root filesystem. Its kernel and
+appended DTB still load into RAM over TFTP, so neither board flash nor SATA is
+involved.
 
-Mount it from the DVR with a soft NFSv3 mount:
+Build and publish a complete root filesystem with:
+
+```sh
+scripts/buildroot.sh
+scripts/publish-nfs-root.sh
+```
+
+The publisher uses `rsync` for the tar archive, extracts it with numeric owners
+in a staging directory on the Pi, validates critical files and promotes it by
+rename. It refuses a full publication while the DVR has an active NFS session:
+boot the retained rescue uImage first. It keeps the previous tree at
+`/srv/dhb-ax/.rootfs.previous` for rollback. The Pi has little free space, so
+remove that copy only after the new root has booted successfully and no client
+can still be using it.
+
+For ordinary driver work, copy modules or bulk output through the share rather
+than republishing the root, rebooting, or scraping serial output. From the
+rescue image, mount it with:
 
 ```sh
 mkdir -p /mnt
@@ -176,8 +196,10 @@ mount -t nfs -o soft,timeo=100,retrans=3,nolock,vers=3 \
       192.168.4.34:/srv/dhb-ax /mnt
 ```
 
-Do not use the default hard mount: if the link drops, it can block the shell
-uninterruptibly and force a reset.
+Do not use the default hard mount for this optional `/mnt` mount: if the link
+drops, it can block the rescue shell uninterruptibly and force a reset. The
+actual NFS root intentionally uses a hard TCP mount; silently returning I/O
+errors from the root filesystem would be worse.
 
 ## Nothing writes to the board
 
