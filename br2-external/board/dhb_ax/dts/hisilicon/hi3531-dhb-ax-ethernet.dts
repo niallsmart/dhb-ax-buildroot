@@ -29,6 +29,40 @@
 	aliases {
 		ethernet0 = &gmac1;
 	};
+
+	/*
+	 * Bit-banged I2C, matching how the vendor reaches the DS1307.  Their
+	 * gpioi2c module drives PL061 data bits 4 and 5 (offsets 0x40 and
+	 * 0x80 in the address-masked data window) and sets both as outputs.
+	 * Bank 12 is the only one of the nineteen whose direction register
+	 * reads 0x30, and both pins sit high at rest, which is what an idle
+	 * bus with pull-ups looks like.
+	 *
+	 * open-drain is required: I2C devices pull the line low and rely on
+	 * the pull-up to return it high, so the controller must never drive
+	 * high actively.  This registerless controller is a root child rather
+	 * than a child of the simple-bus SoC node.
+	 */
+	i2c-gpio {
+		compatible = "i2c-gpio";
+		sda-gpios = <&gpio12 4 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+		scl-gpios = <&gpio12 5 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+		i2c-gpio,delay-us = <5>;   /* ~100 kHz */
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/*
+		 * Battery-backed DS1307-compatible clock.  The vendor module's
+		 * default mode uses the DS1307 register map at 7-bit address 0x68;
+		 * its separate PCF8563 mode uses 0x51.  Mainline rtc-ds1307 reads
+		 * this device successfully and supplies rtc0/hctosys.  The exact
+		 * package manufacturer remains unidentified.
+		 */
+		rtc@68 {
+			compatible = "dallas,ds1307";
+			reg = <0x68>;
+		};
+	};
 };
 
 &soc {
@@ -38,7 +72,7 @@
 	 * SATA glue also use, and 0x20050000 the system controller behind
 	 * reboot and SMP.
 	 */
-	usbphy: usb-phy@200300b8 {
+	usbphy: usb-phy@20030000 {
 		compatible = "hisilicon,hi3531-usb-phy";
 		reg = <0x20030000 0x00000100>,
 		      <0x20050000 0x00000100>;
@@ -254,39 +288,6 @@
 		#gpio-cells = <2>;
 		clocks = <&peripheral_clk>;
 		clock-names = "apb_pclk";
-	};
-
-	/*
-	 * Bit-banged I2C, matching how the vendor reaches the DS1307.  Their
-	 * gpioi2c module drives PL061 data bits 4 and 5 (offsets 0x40 and
-	 * 0x80 in the address-masked data window) and sets both as outputs.
-	 * Bank 12 is the only one of the nineteen whose direction register
-	 * reads 0x30, and both pins sit high at rest, which is what an idle
-	 * bus with pull-ups looks like.
-	 *
-	 * open-drain is required: I2C devices pull the line low and rely on
-	 * the pull-up to return it high, so the controller must never drive
-	 * high actively.
-	 */
-	i2c-gpio {
-		compatible = "i2c-gpio";
-		sda-gpios = <&gpio12 4 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-		scl-gpios = <&gpio12 5 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-		i2c-gpio,delay-us = <5>;   /* ~100 kHz */
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		/*
-		 * Battery-backed DS1307-compatible clock.  The vendor module's
-		 * default mode uses the DS1307 register map at 7-bit address 0x68;
-		 * its separate PCF8563 mode uses 0x51.  Mainline rtc-ds1307 reads
-		 * this device successfully and supplies rtc0/hctosys.  The exact
-		 * package manufacturer remains unidentified.
-		 */
-		rtc@68 {
-			compatible = "dallas,ds1307";
-			reg = <0x68>;
-		};
 	};
 
 	/*
