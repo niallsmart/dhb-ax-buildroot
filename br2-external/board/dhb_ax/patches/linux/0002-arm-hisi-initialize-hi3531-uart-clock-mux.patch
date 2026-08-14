@@ -4,11 +4,6 @@ Subject: [LOCAL ONLY] ARM: hisi: initialize the Hi3531 UART clock mux
 U-Boot leaves the UART on its 3 MHz source.  Clear CRG bit 13 during OF
 clock initialization so the full console runs at the rate the device tree
 describes.
-
-Regenerated 2026-08-04 against pristine 6.18.42.  The previous revision
-carried one space too many on a context line and a hunk header one line
-early; GNU patch's default fuzz of 2 hid both.  Buildroot applies patches
-with -F0, which does not.
 ---
 --- a/arch/arm/mach-hisi/hisilicon.c
 +++ b/arch/arm/mach-hisi/hisilicon.c

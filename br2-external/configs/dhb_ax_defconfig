@@ -46,7 +46,7 @@ BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
 BR2_KERNEL_HEADERS_AS_KERNEL=y
 BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_6_18=y
 
-# The patch queue.  Buildroot looks for <dir>/<package>/*.patch, so the nine
+# The patch queue.  Buildroot looks for <dir>/<package>/*.patch, so the eleven
 # kernel patches live in board/dhb_ax/patches/linux/.  They are applied to a
 # freshly extracted tree every time, which is what removes the need for the
 # reverse-apply idempotency check the old build carries.
@@ -155,8 +155,8 @@ BR2_PACKAGE_MTD_MTD_DEBUG=y
 # BR2_PACKAGE_MTD_UBINIZE is not set
 # BR2_PACKAGE_MTD_UBIHEALTHD is not set
 
-# Open questions that need these: TX checksum offload and PHY master/slave
-# state (ethtool), the bit-banged bus and the DS1307 (i2c-tools).
+# Runtime validation uses ethtool for link and MAC capability inspection, and
+# i2c-tools for the bit-banged bus and DS1307-compatible RTC.
 #
 # i2c-tools is hidden unless BUSYBOX_SHOW_OTHERS is set -- Buildroot conceals
 # packages that overlap a BusyBox applet.  Without it the selection below is

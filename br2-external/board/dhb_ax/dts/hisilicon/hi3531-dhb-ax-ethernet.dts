@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Minimal bring-up plus GMAC1 Ethernet and a watchdog restart
- * method.  Everything else stays disabled.
+ * Validated general-purpose bring-up for memory, SMP, GPIO, RTC, USB, SATA,
+ * GMAC1 Ethernet and the watchdog.
  */
 /dts-v1/;
 
@@ -320,11 +320,10 @@
 	 * mach-godnet/include/mach/platform.h; the controller is AHCI with
 	 * two ports at the usual 0x100 + n * 0x80 stride.
 	 *
-	 * The interrupt is inferred, not read from a header: the vendor
-	 * kernel reports "irq 68" for ata1/ata2 and its GODNET_IRQ_START is
-	 * 32, giving SPI 36.  The same arithmetic gives the GMAC's SPI 87,
-	 * which is confirmed working, but nothing here has been validated on
-	 * hardware yet.
+	 * The interrupt was derived from the vendor kernel's IRQ 68 and its
+	 * GODNET_IRQ_START of 32, giving SPI 36.  The mainline driver has since
+	 * enumerated the AHCI 1.2 controller, its five-port JMicron multiplier
+	 * and the attached disk, and completed read I/O through this path.
 	 *
 	 * The second reg window is the shared peripheral CRG; the glue driver
 	 * needs it for the SATA clock and reset bits at 0xb4.  ports-implemented
