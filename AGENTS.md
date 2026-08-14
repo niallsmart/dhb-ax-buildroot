@@ -89,6 +89,39 @@ Facts that affect low-level work:
 
 ## Talking to the DVR
 
+### Serial console
+
+Use the UART for U-Boot, boot logs, recovery, or when Linux networking or sshd
+is unavailable.
+
+The `dvr` tmux session owns the UART through one long-lived SSH and picocom
+connection. Start or attach to it with `just dvr`. Leave it running.
+
+- Use `just dvr` for an interactive console.
+- Use `tools/dvr-exec.sh` to run one command at a Linux shell.
+- Use `tools/dvr-boot.exp` to RAM-boot a staged kernel.
+
+```sh
+tools/dvr-exec.sh 'cat /proc/mtd'
+```
+
+tmux scrollback is the console history; use `tmux capture-pane` for forensics.
+
+### Vendor Linux
+
+When the vendor Linux 3.0.8 system is running, Telnet access is allowed and is
+usually more convenient than the serial shell:
+
+```sh
+telnet 192.168.4.77
+```
+
+Log in as `root` with password `1001chin`. The DHCP reservation is
+`192.168.4.77`; the legacy static address is `192.168.7.240`. Telnet is
+unencrypted, so use it only on the local trusted network.
+
+### Buildroot Linux
+
 When the normal Buildroot system is running, use OpenSSH directly. The DVR has
 a DHCP reservation at `192.168.4.77`, and root login is public-key only:
 
@@ -102,128 +135,41 @@ is faster and more flexible than sending shell commands through the UART. The
 authorized key comes from the ignored local build input at
 `artifacts/local/ssh/authorized_keys`.
 
-Use the UART for U-Boot, boot logs, recovery, or when Linux networking or sshd
-is unavailable. The rescue and vendor systems may not provide SSH.
-
-The `dvr` tmux session owns the UART through one long-lived SSH and picocom
-connection. Start or attach to it with `just dvr`. Leave it running.
-
-- Use `tools/dvr-exec.sh` for one command at a Linux shell.
-- Use `tools/dvr-boot.exp` to reboot, stop U-Boot and TFTP-boot a kernel.
-- Use `just dvr` for an interactive serial console.
-
-```sh
-tools/dvr-exec.sh 'cat /proc/mtd'
-```
-
-Both helpers use the existing session and share a local lock. `dvr-exec.sh`
-requires a Linux shell; it marks each command and returns only that command's
-output. Its `SESSION` and `TIMEOUT` defaults are `dvr` and 20 seconds.
-
-The console might be at U-Boot (`hisilicon #`), the mainline shell (`/ #`), or
-the vendor login prompt (vendor root password: `1001chin`). Confirm which
-before sending anything.
-
-tmux scrollback is the console history; use `tmux capture-pane` for forensics.
-There is no Pi logfile. Pass `--transcript PATH` to `dvr-boot.exp` when a local
-boot transcript is useful.
-
 ## Booting a kernel over TFTP (the Raspberry Pi)
 
-Kernels are RAM-booted from a Raspberry Pi that acts as the TFTP server and hosts
-the serial console. Reach it over SSH as `raspberrypi` (192.168.4.34 — this is
-U-Boot's `serverip`). Its TFTP root is `/srv/tftp`, owned by root, so staging an
-image needs `sudo`:
+The Raspberry Pi at `raspberrypi` hosts the TFTP server and serial connection.
+Stage and boot a local image with:
 
 ```sh
-scp artifacts/buildroot/uImage-hi3531-dhb-ax-ethernet \
-    raspberrypi:/tmp/img
-ssh raspberrypi 'sudo install -m0644 /tmp/img /srv/tftp/uImage-hi3531-dhb-ax-ethernet'
+tools/dvr-boot.exp --stage \
+    artifacts/buildroot/uImage-hi3531-dhb-ax-ethernet
 ```
 
-Then, at the DVR's U-Boot prompt (`hisilicon #`), over the serial console:
+Use `--check --stage` to compare the local and staged images without changing
+anything or accessing the UART. An already-staged image can still be booted by
+name:
 
 ```sh
-tools/dvr-boot.exp --check uImage-hi3531-dhb-ax-ethernet
 tools/dvr-boot.exp uImage-hi3531-dhb-ax-ethernet
 ```
 
-The tool uses the persistent `dvr` session, leaves it running, and boots the
-staged image from RAM.
-
-For a manual boot, the equivalent U-Boot commands are:
-
-```text
-setenv ipaddr 192.168.7.241
-setenv netmask 255.255.252.0
-setenv serverip 192.168.4.34
-setenv ethaddr 00:18:AE:3C:A2:49
-tftp 0x82000000 uImage-hi3531-dhb-ax-ethernet
-bootm 0x82000000
-```
-
-**`bootdelay` is 1 second.** The RAM-only bring-up image needs `reboot -f`
-because its custom PID 1 does not handle BusyBox's normal reboot signal; the
-Expect tool selects that path automatically. It sends a key every 0.25 seconds
-through reset and stops only after matching a new `hisilicon #` prompt. For
-manual boot, do the same; reacting to "Hit any key to stop autoboot" is too
-slow.
-
-### The TFTP gotcha: ensure tftpd-hpa is running
-
-`tftpd-hpa` on the Pi is not enabled at boot, so after the Pi restarts it is
-**inactive** and every transfer stalls at `Downloading: *` with no data — the
-board looks broken but the server simply is not listening. `dvr-boot.exp`
-starts the service and verifies the staged image during preflight. Before a
-manual boot, start it explicitly:
-
-```sh
-ssh raspberrypi 'sudo systemctl start tftpd-hpa'
-# verify: systemctl is-active tftpd-hpa; sudo ss -ulnp | grep :69
-```
-
-A quick way to tell the server apart from the board: `tftp 192.168.4.34` from
-your own machine and `get` the image. If that times out too, it is the Pi, not
-the DVR.
+The helper handles staging, checksum verification, the TFTP service, U-Boot
+interaction, and boot checks. Run `tools/dvr-boot.exp --help` for options.
 
 ## Publishing and iterating with the NFS root
 
-The Pi exports `/srv/dhb-ax` read-write to the mainline system. The DVR has a
-DHCP reservation at `192.168.4.77`; `192.168.7.240` is its legacy static
-address. The normal Buildroot system mounts
-`192.168.4.34:/srv/dhb-ax/rootfs` as its root filesystem. Its kernel and
-appended DTB still load into RAM over TFTP, so neither board flash nor SATA is
-involved.
-
-Build and publish a complete root filesystem with:
+The normal Buildroot system uses the root filesystem exported by the Raspberry
+Pi. Build and publish it with:
 
 ```sh
 scripts/buildroot.sh
 scripts/publish-nfs-root.sh
 ```
 
-The publisher uses `rsync` for the tar archive, extracts it with numeric owners
-in a staging directory on the Pi, validates critical files and promotes it by
-rename. It refuses a full publication while the DVR has an active NFS session:
-boot the retained rescue uImage first. It keeps the previous tree at
-`/srv/dhb-ax/.rootfs.previous` for rollback. The Pi has little free space, so
-remove that copy only after the new root has booted successfully and no client
-can still be using it.
-
-For ordinary driver work, copy modules or bulk output through the share rather
-than republishing the root, rebooting, or scraping serial output. From the
-rescue image, mount it with:
-
-```sh
-mkdir -p /mnt
-mount -t nfs -o soft,timeo=100,retrans=3,nolock,vers=3 \
-      192.168.4.34:/srv/dhb-ax /mnt
-```
-
-Do not use the default hard mount for this optional `/mnt` mount: if the link
-drops, it can block the rescue shell uninterruptibly and force a reset. The
-actual NFS root intentionally uses a hard TCP mount; silently returning I/O
-errors from the root filesystem would be worse.
+The publisher handles transfer, validation, safe replacement, and rollback.
+Follow its error messages if the running DVR must be moved to the rescue image
+first. For ordinary driver work, copy the specific modules or files through the
+share instead of republishing the complete root filesystem.
 
 ## Nothing writes to the board
 
