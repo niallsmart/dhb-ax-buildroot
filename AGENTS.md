@@ -81,12 +81,28 @@ Facts that affect low-level work:
 
 ## Talking to the DVR
 
+When the normal Buildroot system is running, use OpenSSH directly. The DVR has
+a DHCP reservation at `192.168.4.77`, and root login is public-key only:
+
+```sh
+ssh -o BatchMode=yes root@192.168.4.77 'uname -a'
+scp path/to/file root@192.168.4.77:/tmp/
+```
+
+This is the default path for commands, file transfer and interactive work. It
+is faster and more flexible than sending shell commands through the UART. The
+authorized key comes from the ignored local build input at
+`artifacts/local/ssh/authorized_keys`.
+
+Use the UART for U-Boot, boot logs, recovery, or when Linux networking or sshd
+is unavailable. The rescue and vendor systems may not provide SSH.
+
 The `dvr` tmux session owns the UART through one long-lived SSH and picocom
 connection. Start or attach to it with `just dvr`. Leave it running.
 
 - Use `tools/dvr-exec.sh` for one command at a Linux shell.
 - Use `tools/dvr-boot.exp` to reboot, stop U-Boot and TFTP-boot a kernel.
-- Use `just dvr` for interactive work.
+- Use `just dvr` for an interactive serial console.
 
 ```sh
 tools/dvr-exec.sh 'cat /proc/mtd'
@@ -210,8 +226,8 @@ copies of it. Kernels are loaded into DRAM over TFTP and run from there.
   `flashcp`, `flash_eraseall`, `nandwrite`, or similar commands.
 - Never write to the attached SATA disk, mount it read-write, or run `fsck` on
   it.
-- `tools/dvr-exec.sh` does not enforce any of this. It sends whatever it is
-  given, so check a command before sending it.
+- Neither SSH nor `tools/dvr-exec.sh` enforces any of this. Check every command
+  before sending it.
 
 Safe operations include U-Boot `printenv`, `nand info`, `nand bad`, `nand
 read`, `sf probe`, `sf read`, `md` and `ping`; temporary `setenv` changes
