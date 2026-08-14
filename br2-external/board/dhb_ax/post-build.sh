@@ -18,15 +18,21 @@ set -eu
 target=${1:-$TARGET_DIR}
 local_ssh=${2:-}
 
-# SSH credentials are deliberately machine-local. The host private key must
-# survive rebuilds so clients see a stable identity, but it must never enter
-# source control. The authorized key is copied beside it for the same simple,
-# explicit build contract.
+# SSH credentials are deliberately machine-local. The host private keys must
+# survive rebuilds so clients see a stable identity, but they must never enter
+# source control. Supplying every key type expected by ssh-keygen -A also keeps
+# the standard Buildroot sshd init script from generating keys at boot. The
+# authorized key is copied beside them under the same explicit build contract.
 if [ -z "$local_ssh" ]; then
 	echo "post-build: local SSH input directory argument is missing" >&2
 	exit 1
 fi
-for file in ssh_host_ed25519_key authorized_keys; do
+host_keys="
+ssh_host_rsa_key
+ssh_host_ecdsa_key
+ssh_host_ed25519_key
+"
+for file in $host_keys authorized_keys; do
 	if [ ! -f "$local_ssh/$file" ]; then
 		echo "post-build: missing local SSH input: $local_ssh/$file" >&2
 		exit 1
@@ -37,8 +43,9 @@ install -d -m 0700 "$target/root/.ssh"
 install -m 0600 "$local_ssh/authorized_keys" \
 	"$target/root/.ssh/authorized_keys"
 install -d -m 0755 "$target/etc/ssh"
-install -m 0600 "$local_ssh/ssh_host_ed25519_key" \
-	"$target/etc/ssh/ssh_host_ed25519_key"
+for file in $host_keys; do
+	install -m 0600 "$local_ssh/$file" "$target/etc/ssh/$file"
+done
 
 # Anything here that survives to this point gets deleted.
 writers="
