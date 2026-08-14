@@ -23,14 +23,25 @@ RUN apt-get update \
       locales \
       perl \
       python3 \
+      python3-dev \
+      python3-venv \
       rsync \
       sed \
+      swig \
       tar \
       unzip \
       wget \
       which \
       xz-utils \
+      yamllint \
  && rm -rf /var/lib/apt/lists/*
+
+# Linux's dt_binding_check and dtbs_check targets use the dt-schema tools.
+# Keep them in an isolated, version-pinned environment so the checks are
+# reproducible and do not depend on Debian's system Python package set.
+RUN python3 -m venv /opt/dtschema \
+ && /opt/dtschema/bin/pip install --no-cache-dir dtschema==2026.6
+ENV PATH="/opt/dtschema/bin:${PATH}"
 
 # Buildroot's configure scripts misbehave under a non-UTF-8 locale.
 RUN sed -i 's/^# en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen
