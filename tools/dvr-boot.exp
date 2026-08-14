@@ -1,17 +1,19 @@
 #!/usr/bin/expect -f
 # Reliably RAM-boot a staged kernel on the DVR through the Raspberry Pi UART.
 #
-# The image argument is a filename beneath /srv/tftp on the Pi. This tool does
-# not stage images and never saves the U-Boot environment or writes board
-# storage.
+# The image argument is a filename beneath /srv/tftp on the Pi. With --stage,
+# the tool first publishes a local image there. It never saves the U-Boot
+# environment or writes board storage.
 
 proc usage {{status 0}} {
     set stream stdout
     if {$status != 0} { set stream stderr }
     puts $stream {usage: dvr-boot.exp [options] TFTP_IMAGE
+       dvr-boot.exp [options] --stage LOCAL_IMAGE
 
 Options:
-  --check                 Run preflight checks only; do not access the UART
+  --check                 Run read-only preflight checks; do not access the UART
+  --stage LOCAL_IMAGE     Stage a local image under its basename before booting
   --host HOST             Pi SSH host (default: raspberrypi)
   --session NAME          persistent tmux console to use (default: dvr)
   --transcript PATH       Append serial output to PATH
@@ -48,12 +50,20 @@ set serverip 192.168.4.34
 set ethaddr 00:18:AE:3C:A2:49
 set boot_timeout 120
 set check_only 0
+set local_image ""
 set image ""
 
 for {set i 0} {$i < [llength $argv]} {incr i} {
     set arg [lindex $argv $i]
     switch -- $arg {
         --check { set check_only 1 }
+        --stage {
+            if {$local_image ne ""} {
+                puts stderr "error: --stage may be specified only once"
+                usage 2
+            }
+            set local_image [option_value argv i $arg]
+        }
         --host { set host [option_value argv i $arg] }
         --session { set session [option_value argv i $arg] }
         --transcript { set transcript [option_value argv i $arg] }
@@ -78,6 +88,18 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
     }
 }
 
+if {$local_image ne ""} {
+    if {$image ne ""} {
+        puts stderr "error: use either TFTP_IMAGE or --stage LOCAL_IMAGE, not both"
+        usage 2
+    }
+    if {![file exists $local_image] || ![file isfile $local_image] ||
+        ![file readable $local_image]} {
+        puts stderr "error: local image is not a readable regular file: $local_image"
+        exit 2
+    }
+    set image [file tail $local_image]
+}
 if {$image eq ""} { usage 2 }
 if {![regexp {^[A-Za-z0-9_.@-]+$} $host]} {
     puts stderr "error: unsafe SSH host: $host"
@@ -119,6 +141,55 @@ proc ssh_command {host command} {
     return 1
 }
 
+proc local_sha256 {path} {
+    if {[catch {exec shasum -a 256 -- $path} output]} { return "" }
+    if {![regexp -nocase {^([0-9a-f]{64})[ \t]} $output match digest]} {
+        return ""
+    }
+    return [string tolower $digest]
+}
+
+proc remote_sha256 {host image} {
+    set command "sha256sum /srv/tftp/$image"
+    if {[catch {exec ssh -o BatchMode=yes $host $command} output]} { return "" }
+    if {![regexp -nocase {^([0-9a-f]{64})[ \t]} $output match digest]} {
+        return ""
+    }
+    return [string tolower $digest]
+}
+
+proc stage_image {host local_image image} {
+    set remote_temp "/tmp/dvr-boot-[pid]-$image"
+    set remote_incoming "/srv/tftp/.dvr-boot-[pid]-$image.incoming"
+
+    puts "Staging $local_image on $host..."
+    if {[catch {
+        exec scp -q -o BatchMode=yes -- $local_image "$host:$remote_temp"
+    } output]} {
+        if {$output ne ""} { puts stderr $output }
+        puts stderr "error: could not copy the image to $host"
+        return 0
+    }
+
+    set install_command "sudo install -m0644 $remote_temp $remote_incoming && sudo mv -f $remote_incoming /srv/tftp/$image"
+    if {![ssh_command $host $install_command]} {
+        ssh_command $host "sudo rm -f $remote_temp $remote_incoming"
+        puts stderr "error: could not install the image beneath /srv/tftp"
+        return 0
+    }
+    ssh_command $host "rm -f $remote_temp"
+    return 1
+}
+
+set local_digest ""
+if {$local_image ne ""} {
+    set local_digest [local_sha256 $local_image]
+    if {$local_digest eq ""} {
+        puts stderr "error: could not calculate SHA-256 for $local_image"
+        exit 2
+    }
+}
+
 puts "Preflight: $host:/srv/tftp/$image"
 if {![ssh_command $host {if grep -q '^ttyAMA0' /proc/consoles; then echo 'error: ttyAMA0 is a Pi console'; exit 1; fi}]} {
     exit 3
@@ -136,12 +207,6 @@ if {$check_only} {
     }
 }
 
-set image_check "test -r /srv/tftp/$image"
-if {![ssh_command $host $image_check]} {
-    puts stderr "error: image is not readable beneath /srv/tftp: $image"
-    exit 3
-}
-
 if {[catch {exec tmux has-session -t $session}]} {
     puts stderr "error: no tmux session '$session'; start it with: just dvr"
     exit 3
@@ -149,6 +214,32 @@ if {[catch {exec tmux has-session -t $session}]} {
 set pane_state [string trim [exec tmux display-message -p -t $session {#{pane_current_command} #{pane_dead}}]]
 if {$pane_state ne "ssh 0"} {
     puts stderr "error: tmux session '$session' is not a live SSH console ($pane_state)"
+    exit 3
+}
+
+if {$local_image ne ""} {
+    if {!$check_only && ![stage_image $host $local_image $image]} {
+        exit 3
+    }
+    set staged_digest [remote_sha256 $host $image]
+    if {$staged_digest eq ""} {
+        puts stderr "error: could not calculate SHA-256 for $host:/srv/tftp/$image"
+        exit 3
+    }
+    if {$staged_digest ne $local_digest} {
+        if {$check_only} {
+            puts stderr "error: staged image does not match $local_image; run without --check to publish it"
+        } else {
+            puts stderr "error: staged image checksum does not match $local_image"
+        }
+        exit 3
+    }
+    puts "SHA-256 verified: $local_digest"
+}
+
+set image_check "test -r /srv/tftp/$image"
+if {![ssh_command $host $image_check]} {
+    puts stderr "error: image is not readable beneath /srv/tftp: $image"
     exit 3
 }
 
