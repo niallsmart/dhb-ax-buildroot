@@ -23,8 +23,8 @@ Options:
   --boot-timeout SECONDS  Linux prompt timeout (default: 120)
   --help                  Show this help
 
-The named tmux session remains the sole owner of the UART. This tool attaches
-as another tmux client for the duration of the boot, then detaches.}
+The named tmux session remains the sole owner of the UART. This tool reads its
+pane and sends keys through tmux without restarting the session.}
     exit $status
 }
 
@@ -163,23 +163,23 @@ if {[catch {exec mkdir $tool_lock}]} {
     exit 4
 }
 set lock_held 1
-set console_active 0
-set console_spawn_id ""
+set transcript_marker ""
+set command_sequence 0
 
-proc detach_console {} {
-    global console_active console_spawn_id lock_held tool_lock
+proc close_console {} {
+    global session transcript transcript_marker lock_held tool_lock
 
-    if {$console_active} {
-        # Detach this tmux client with the default C-b d binding. The session,
-        # picocom process and scrollback remain alive.
-        catch {send -i $console_spawn_id -- "\002d"}
-        set old_timeout $::timeout
-        set ::timeout 3
-        catch {expect -i $console_spawn_id eof}
-        set ::timeout $old_timeout
-        catch {close -i $console_spawn_id}
-        catch {wait -i $console_spawn_id}
-        set console_active 0
+    if {$transcript ne "" && $transcript_marker ne ""} {
+        if {![catch {exec tmux capture-pane -p -t $session -S -} text]} {
+            set marker_at [string last $transcript_marker $text]
+            if {$marker_at >= 0} {
+                set text [string range $text [expr {$marker_at + [string length $transcript_marker]}] end]
+            }
+            if {![catch {set transcript_file [open $transcript a]}]} {
+                puts $transcript_file $text
+                close $transcript_file
+            }
+        }
     }
 
     if {$lock_held} {
@@ -190,39 +190,93 @@ proc detach_console {} {
 
 proc abort_boot {message code} {
     puts stderr "error: $message"
-    detach_console
+    close_console
     exit $code
+}
+
+proc console_send {text} {
+    global session
+
+    set press_enter [string match "*\r" $text]
+    if {$press_enter} {
+        set text [string range $text 0 end-1]
+    }
+    if {$text ne "" && [catch {exec tmux send-keys -t $session -l -- $text} output]} {
+        abort_boot "could not send keys through tmux: $output" 4
+    }
+    if {$press_enter && [catch {exec tmux send-keys -t $session Enter} output]} {
+        abort_boot "could not send Enter through tmux: $output" 4
+    }
+}
+
+proc pane_history {} {
+    global session
+    if {[catch {exec tmux capture-pane -p -t $session -S -300} text]} {
+        return ""
+    }
+    return $text
+}
+
+proc pane_last_line {} {
+    global session
+    if {[catch {exec tmux capture-pane -p -t $session -S 0} text]} {
+        return ""
+    }
+    set text [string trimright $text " \t\r\n"]
+    if {$text eq ""} { return "" }
+    return [string trim [lindex [split $text "\n"] end] " \t\r"]
+}
+
+# Poll the current pane instead of attaching another terminal. A marker limits
+# history matches to output from the command that was just sent.
+proc wait_pane {cases seconds {marker ""}} {
+    set deadline [expr {[clock milliseconds] + ($seconds * 1000)}]
+    set marker_seen [expr {$marker eq ""}]
+
+    while {[clock milliseconds] < $deadline} {
+        set history [pane_history]
+        if {$marker ne ""} {
+            set marker_at [string last $marker $history]
+            if {$marker_at >= 0} {
+                set marker_seen 1
+                set history [string range $history [expr {$marker_at + [string length $marker]}] end]
+            } elseif {!$marker_seen} {
+                after 50
+                continue
+            }
+        }
+
+        set last [pane_last_line]
+        foreach {tag source pattern} $cases {
+            set value $history
+            if {$source eq "last"} { set value $last }
+            if {[regexp -- $pattern $value]} { return $tag }
+        }
+        after 50
+    }
+    return timeout
 }
 
 trap {abort_boot "interrupted" 130} {SIGINT SIGTERM SIGHUP}
 
-if {$transcript ne ""} { log_file -a $transcript }
-log_user 1
-set timeout 5
-
-puts "Attaching to persistent tmux console '$session'..."
-set env(TERM) xterm-256color
-if {[catch {spawn tmux attach-session -t $session} output]} {
-    abort_boot "could not attach to tmux console: $output" 4
-}
-set console_spawn_id $spawn_id
-set console_active 1
-
 # Synchronize with U-Boot, a Linux shell, or a login prompt. The factory and
 # mainline systems use different prompts, so handle both without assuming
-# which kernel is currently running. Do not anchor prompts at end-of-line:
-# tmux's client stream writes terminal control sequences after visible text.
-send -- "\r"
+# which kernel is currently running.
+console_send "\r"
 set shell_ready 0
 set uboot_ready 0
 for {set i 0} {$i < 12 && !$shell_ready && !$uboot_ready} {incr i} {
-    expect {
-        -re {hisilicon # *} { set uboot_ready 1 }
-        -re {(~|/) # *} { set shell_ready 1 }
-        -re {[^ \r\n]+ login: *} { send -- "root\r" }
-        -re {Password: *} { send -- "1001chin\r" }
-        timeout { send -- "\r" }
-        eof { abort_boot "tmux console closed while synchronizing" 5 }
+    set state [wait_pane [list \
+        uboot last {^hisilicon # *$} \
+        shell last {^((~|/) )?# *$} \
+        login last {^[^ ]+ login: *$} \
+        password last {^Password: *$}] 5]
+    switch -- $state {
+        uboot { set uboot_ready 1 }
+        shell { set shell_ready 1 }
+        login { console_send "root\r" }
+        password { console_send "1001chin\r" }
+        timeout { console_send "\r" }
     }
 }
 if {!$shell_ready && !$uboot_ready} {
@@ -234,36 +288,32 @@ if {!$uboot_ready} {
     # The RAM-only image runs its shell beneath a custom PID 1 which does not
     # implement BusyBox init's reboot signal handling.  -f performs the reboot
     # syscall directly and also works from the factory BusyBox environment.
-    send -- "reboot -f\r"
+    console_send "reboot -f\r"
     set deadline [expr {[clock milliseconds] + 60000}]
-    set old_timeout $timeout
-    set timeout 0
     while {[clock milliseconds] < $deadline && !$uboot_ready} {
-        send -- " "
+        console_send " "
         after 250
-        expect {
-            -re {hisilicon # *} { set uboot_ready 1 }
-            eof { abort_boot "tmux console closed during reboot" 6 }
-            timeout {}
-        }
+        if {[regexp {^hisilicon # *$} [pane_last_line]]} { set uboot_ready 1 }
     }
-    set timeout $old_timeout
 }
 if {!$uboot_ready} {
     abort_boot "did not reach the U-Boot prompt within 60 seconds" 6
 }
 
 proc uboot_command {command} {
-    global timeout
-    send -- "$command\r"
-    set old_timeout $timeout
-    set timeout 10
-    expect {
-        -re {hisilicon # *} {}
-        eof { abort_boot "tmux console closed after: $command" 7 }
-        timeout { abort_boot "U-Boot command timed out: $command" 7 }
+    global command_sequence
+    incr command_sequence
+    set marker "__DVR_CMD_[pid]_${command_sequence}__"
+    console_send "echo $marker; $command\r"
+    set result [wait_pane [list uboot last {^hisilicon # *$}] 10 $marker]
+    if {$result ne "uboot"} {
+        abort_boot "U-Boot command timed out: $command" 7
     }
-    set timeout $old_timeout
+}
+
+if {$transcript ne ""} {
+    set transcript_marker "__DVR_BOOT_[pid]_[clock seconds]__"
+    uboot_command "echo $transcript_marker"
 }
 
 puts "Configuring temporary U-Boot networking..."
@@ -273,33 +323,39 @@ uboot_command "setenv serverip $serverip"
 uboot_command "setenv ethaddr $ethaddr"
 
 puts "Loading $image at $load_address..."
-send -- "tftp $load_address $image\r"
-set timeout 120
-expect {
-    -re {Bytes transferred = [0-9]+} {}
-    -re {(TFTP error|Retry count exceeded|Access violation|File not found)} {
-        abort_boot "TFTP reported a transfer failure" 8
-    }
-    eof { abort_boot "tmux console closed during TFTP" 8 }
-    timeout { abort_boot "TFTP did not complete within 120 seconds" 8 }
+incr command_sequence
+set tftp_marker "__DVR_TFTP_[pid]_${command_sequence}__"
+console_send "echo $tftp_marker; tftp $load_address $image\r"
+set result [wait_pane [list \
+    success history {Bytes transferred = [0-9]+} \
+    failure history {(TFTP error|Retry count exceeded|Access violation|File not found)}] \
+    120 $tftp_marker]
+if {$result eq "failure"} {
+    abort_boot "TFTP reported a transfer failure" 8
 }
-expect {
-    -re {hisilicon # *} {}
-    eof { abort_boot "tmux console closed after TFTP" 8 }
-    timeout { abort_boot "U-Boot prompt did not return after TFTP" 8 }
+if {$result ne "success"} {
+    abort_boot "TFTP did not complete within 120 seconds" 8
+}
+if {[wait_pane [list uboot last {^hisilicon # *$}] 10] ne "uboot"} {
+    abort_boot "U-Boot prompt did not return after TFTP" 8
 }
 
 puts "Booting from RAM..."
-send -- "bootm $load_address\r"
-set timeout $boot_timeout
-expect {
-    -re {(~|/) # *} {}
-    -re {[^ \r\n]+ login: *} {}
-    -re {Kernel panic - not syncing} { abort_boot "kernel panic" 9 }
-    eof { abort_boot "tmux console closed during kernel boot" 9 }
-    timeout { abort_boot "Linux login or shell prompt did not appear within $boot_timeout seconds" 9 }
+incr command_sequence
+set boot_marker "__DVR_BOOTM_[pid]_${command_sequence}__"
+console_send "echo $boot_marker; bootm $load_address\r"
+set result [wait_pane [list \
+    shell last {^((~|/) )?# *$} \
+    login last {^[^ ]+ login: *$} \
+    panic history {Kernel panic - not syncing}] \
+    $boot_timeout $boot_marker]
+if {$result eq "panic"} {
+    abort_boot "kernel panic" 9
+}
+if {$result ni {shell login}} {
+    abort_boot "Linux login or shell prompt did not appear within $boot_timeout seconds" 9
 }
 
 puts "Linux login or shell prompt reached successfully."
-detach_console
+close_console
 exit 0
