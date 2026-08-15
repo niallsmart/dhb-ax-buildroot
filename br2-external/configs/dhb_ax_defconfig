@@ -1,4 +1,4 @@
-# Buildroot configuration for the DHB-AX board (HiSilicon Hi3531, "godnet").
+# Buildroot configuration for the DHB-AX board (HiSilicon Hi3531).
 #
 # Build with scripts/buildroot.sh.
 #
