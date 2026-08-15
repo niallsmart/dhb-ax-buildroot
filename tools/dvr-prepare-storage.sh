@@ -6,7 +6,7 @@
 # justification for erasing a disk.
 set -eu
 
-target=${DVR_SSH:-root@192.168.4.77}
+target=${DVR_SSH:-root@dvr}
 
 if [ "${1:-}" != "--destroy-all-data" ] || [ "$#" -ne 1 ]; then
 	echo "usage: $0 --destroy-all-data" >&2

@@ -78,21 +78,21 @@ When the vendor Linux 3.0.8 system is running, Telnet access is allowed and is
 usually more convenient than the serial shell:
 
 ```sh
-telnet 192.168.4.77
+telnet dvr
 ```
 
-Log in as `root` with password `1001chin`. The DHCP reservation is
-`192.168.4.77`; the legacy static address is `192.168.7.240`. Telnet is
+Log in as `root` with password `1001chin`. The `dvr` hostname resolves to the
+DHCP reservation; the legacy static address is `192.168.7.240`. Telnet is
 unencrypted, so use it only on the local trusted network.
 
 ### Buildroot Linux
 
-When the normal Buildroot system is running, use OpenSSH directly. The DVR has
-a DHCP reservation at `192.168.4.77`, and root login is public-key only:
+When the normal Buildroot system is running, use OpenSSH directly through the
+`dvr` hostname. Root login is public-key only:
 
 ```sh
-ssh -o BatchMode=yes root@192.168.4.77 'uname -a'
-scp path/to/file root@192.168.4.77:/tmp/
+ssh -o BatchMode=yes root@dvr 'uname -a'
+scp path/to/file root@dvr:/tmp/
 ```
 
 This is the default path for commands, file transfer and interactive work. It
