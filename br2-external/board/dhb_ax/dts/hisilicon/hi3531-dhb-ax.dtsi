@@ -21,7 +21,7 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyAMA0,115200 earlycon=pl011,0x20080000 keep_bootcon ignore_loglevel rdinit=/init";
+		/* U-Boot supplies root= and mem=; Linux uses mem= to replace ATAG_MEM. */
 		stdout-path = "serial0:115200n8";
 	};
 
