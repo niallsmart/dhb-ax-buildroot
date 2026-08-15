@@ -1,7 +1,7 @@
 From 7ec971cb47453bf9bfcbfa754ee6858010f8ad80 Mon Sep 17 00:00:00 2001
 From: Niall Smart <niall.smart@gmail.com>
 Date: Thu, 13 Aug 2026 17:00:00 -0400
-Subject: ARM: hisi: add Hi3531 SMP operations
+Subject: [LOCAL ONLY] ARM: hisi: add Hi3531 SMP operations
 
 Vendor U-Boot has already released CPU1 and left it polling
 SYS_CTRL + 0x134 for an entry point.  Starting it therefore requires only
