@@ -22,14 +22,16 @@ buildroot/
 /artifacts/
 
 # Large binary assets, kept locally but not in source control.
-#   backups/    verified flash images -- irreplaceable, back up separately
-#   rootfs/     extracted vendor root filesystem
-#   pcb/        board photographs
 #   vm-assets/  vendor tooling VM
+vm-assets/
+
+# backups/, rootfs/ and pcb/ now live only in the sibling guide. The rules stay
+# as a guard: nothing here reads them, so a copy appearing in this tree is an
+# accident, and backups/ holds irreplaceable flash images that must not be
+# committed. Back those up separately from either repository.
 backups/
 rootfs/
 pcb/
-vm-assets/
 
 # Content extracted from vendor firmware. Kept locally for analysis, not
 # redistributed: it is third-party copyrighted material, the same reason

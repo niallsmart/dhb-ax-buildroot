@@ -14,11 +14,11 @@ This file is for repository workflow, device access and safety constraints.
   device trees, patch queue, rootfs overlay, and post-build/image scripts.
 - `scripts/` contains source/bootstrap and build operations; `tools/` contains
   board interaction and provisioning commands.
-- `pcb/` contains board and component photographs.
-- `rootfs/` is the extracted vendor filesystem and is a reference, not the
-  rootfs built for the port.
-- `backups/` contains the verified factory-flash images; see the safety rules
-  below.
+- Board photographs, the extracted vendor filesystem and the verified
+  factory-flash images live in the sibling guide as `../dhb-ax-guide/pcb/`,
+  `../dhb-ax-guide/rootfs/` and `../dhb-ax-guide/backups/`. They describe the
+  hardware rather than build it, and nothing here reads them. The vendor rootfs
+  is a reference, not the rootfs built for the port.
 - `kernel/` and `buildroot/` are derived source trees. They are regenerated
   from pinned inputs; make lasting kernel changes in the `br2-external/` patch
   queue rather than editing these trees as source.
@@ -170,7 +170,7 @@ saved U-Boot environment are not.
 
 - Never run `saveenv`, `sf write`, `sf erase`, `nand write`, `nand erase`,
   `flashcp`, `flash_eraseall`, `nandwrite`, or similar commands.
-- Do not modify the verified originals under `backups/`.
+- Do not modify the verified originals under `../dhb-ax-guide/backups/`.
 - Access helpers do not enforce this boundary. Check commands before sending
   them to U-Boot or Linux.
 
