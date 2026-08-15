@@ -1,5 +1,10 @@
 #!/usr/bin/expect -f
-# Reliably boot a kernel on the DVR through the Raspberry Pi UART.
+# Boot sequence for the DVR, over the Raspberry Pi UART.
+#
+# Not run directly: tools/dvr-boot.sh resolves local.env and hands off to
+# this script via `exec expect -f tools/dvr-boot.exp "$@"`, exporting
+# DHB_AX_PI_IPADDR, DHB_AX_DVR_IPADDR, DHB_AX_DVR_NETMASK and
+# DHB_AX_DVR_ETHADDR into the environment first.
 #
 # By default the image argument is a filename beneath /srv/tftp on the Pi.
 # With --stage, the tool first publishes a local image there. With --usb, it
@@ -9,9 +14,9 @@
 proc usage {{status 0}} {
     set stream stdout
     if {$status != 0} { set stream stderr }
-    puts $stream {usage: dvr-boot.exp [options] TFTP_IMAGE
-       dvr-boot.exp [options] --stage LOCAL_IMAGE
-       dvr-boot.exp [options] --usb [USB_IMAGE]
+    puts $stream {usage: dvr-boot.sh [options] TFTP_IMAGE
+       dvr-boot.sh [options] --stage LOCAL_IMAGE
+       dvr-boot.sh [options] --usb [USB_IMAGE]
 
 Options:
   --check                 Run read-only preflight checks; do not access the UART
@@ -47,60 +52,6 @@ proc option_value {argv_name index_name option} {
         usage 2
     }
     return [lindex $args $index]
-}
-
-# The Pi address and U-Boot network parameters have no built-in default:
-# they live in local.env, alongside DHB_AX_ROOT_PASSWD -- see
-# local.env.example. This is a plain-assignment KEY=value reader, not a
-# shell parser; it only needs to understand the subset of POSIX shell that
-# file itself uses.
-proc load_local_env {path} {
-    set values [dict create]
-    set fh [open $path r]
-    while {[gets $fh line] >= 0} {
-        set line [string trim $line]
-        if {$line eq "" || [string index $line 0] eq "#"} { continue }
-        if {![regexp {^([A-Za-z_][A-Za-z0-9_]*)=(.*)$} $line -> key value]} {
-            continue
-        }
-        set value [string trim $value]
-        if {[string length $value] >= 2} {
-            set first [string index $value 0]
-            set last [string index $value end]
-            if {($first eq "'" && $last eq "'") || ($first eq {"} && $last eq {"})} {
-                set value [string range $value 1 end-1]
-            }
-        }
-        dict set values $key $value
-    }
-    close $fh
-    return $values
-}
-
-set repo_root [file dirname [file dirname [file normalize $argv0]]]
-set local_env_path [file join $repo_root local.env]
-set local_env [dict create]
-set local_env_loaded 0
-
-# Loads local.env on first use, not at startup, so --help never needs it.
-# Every value this tool takes from local.env goes through here: there is no
-# code-level fallback, only a clear complaint about what to set and where.
-proc require_env {key} {
-    global local_env local_env_loaded local_env_path
-    if {!$local_env_loaded} {
-        if {![file readable $local_env_path]} {
-            puts stderr "error: no machine-local configuration at $local_env_path"
-            puts stderr "create it with: install -m 600 local.env.example local.env"
-            exit 2
-        }
-        set local_env [load_local_env $local_env_path]
-        set local_env_loaded 1
-    }
-    if {![dict exists $local_env $key] || [dict get $local_env $key] eq ""} {
-        puts stderr "error: local.env must set $key; see local.env.example"
-        exit 2
-    }
-    return [dict get $local_env $key]
 }
 
 # Left blank here and resolved after option parsing below: a value given on
@@ -164,12 +115,12 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
     }
 }
 
-if {$host eq ""} { set host [require_env DHB_AX_PI_IPADDR] }
-if {$ipaddr eq ""} { set ipaddr [require_env DHB_AX_DVR_IPADDR] }
+if {$host eq ""} { set host $env(DHB_AX_PI_IPADDR) }
+if {$ipaddr eq ""} { set ipaddr $env(DHB_AX_DVR_IPADDR) }
 set dvr_ssh "root@$ipaddr"
-if {$netmask eq ""} { set netmask [require_env DHB_AX_DVR_NETMASK] }
-if {$serverip eq ""} { set serverip [require_env DHB_AX_PI_IPADDR] }
-if {$ethaddr eq ""} { set ethaddr [require_env DHB_AX_DVR_ETHADDR] }
+if {$netmask eq ""} { set netmask $env(DHB_AX_DVR_NETMASK) }
+if {$serverip eq ""} { set serverip $env(DHB_AX_PI_IPADDR) }
+if {$ethaddr eq ""} { set ethaddr $env(DHB_AX_DVR_ETHADDR) }
 
 if {$local_image ne ""} {
     if {$usb_mode} {

@@ -95,7 +95,7 @@ connection. Start or attach to it with `just dvr`. Leave it running.
 
 - Use `just dvr` for an interactive console.
 - Use `tools/dvr-console-exec.sh` to run one command at a Linux shell.
-- Use `tools/dvr-boot.exp` to boot a kernel from USB or TFTP.
+- Use `tools/dvr-boot.sh` to boot a kernel from USB or TFTP.
 
 ```sh
 tools/dvr-console-exec.sh 'cat /proc/mtd'
@@ -137,18 +137,18 @@ Automatic boot is deliberately deferred. For now, manually boot the installed
 USB kernel through the serial console:
 
 ```sh
-tools/dvr-boot.exp --usb
+tools/dvr-boot.sh --usb
 ```
 
 For TFTP development or recovery, stage and boot a local image through the
 Raspberry Pi with:
 
 ```sh
-tools/dvr-boot.exp --stage \
+tools/dvr-boot.sh --stage \
     artifacts/buildroot/uImage-hi3531-dhb-ax
 ```
 
-Run `tools/dvr-boot.exp --help` for image checks, root selection and other
+Run `tools/dvr-boot.sh --help` for image checks, root selection and other
 options.
 
 ## Installing the USB and HDD system
@@ -182,7 +182,7 @@ scripts/buildroot.sh
 scripts/publish-nfs-root.sh
 ```
 
-Boot that root with `tools/dvr-boot.exp --usb --root nfs`. For ordinary driver
+Boot that root with `tools/dvr-boot.sh --usb --root nfs`. For ordinary driver
 work, copy specific modules or files rather than republishing the complete
 root filesystem.
 
