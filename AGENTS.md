@@ -29,26 +29,50 @@ Fetch and build with:
 
 ```sh
 scripts/bootstrap-sources.sh    # once, or when a derived tree is absent
+install -m 600 local.env.example local.env  # once; then set DHB_AX_ROOT_PASSWD
 scripts/buildroot.sh
 ```
 
+`local.env` is the gitignored machine-local configuration, read by
+`scripts/buildroot-in-container.sh`. It carries the root password
+hash, and the build exits rather than proceed without one. Add
+further per-machine values as `DHB_AX_*` keys, documenting each in the
+tracked `local.env.example`. Nothing secret goes in `br2-external/`: that
+tree is public, and `buildroot.sh savedefconfig` rewrites the defconfig from
+`.config`.
+
 The output image is `artifacts/buildroot/uImage-hi3531-dhb-ax`.
 
-The board directory moved from `board/dhb_ax/` to `board/dhb-ax/`, which moves
-`BR2_GLOBAL_PATCH_DIR` and `BR2_LINUX_KERNEL_CUSTOM_DTS_DIR`. Buildroot does not
-re-extract the kernel when those change, so it will wrap a fresh `uImage` around
-the stale DTB. **The next build must start with**
-`scripts/buildroot.sh linux-dirclean` and an empty `artifacts/buildroot/`.
-Confirm from `/proc/device-tree/model` on the booted board, then delete this
-paragraph.
+# Commit Conventions
 
-## Commit messages
+Keep each commit to one logical change, and add a body only when the reason or supporting evidence is not obvious.
 
-Use a short, imperative subject, such as `buildroot: verify the kernel archive`
-or `tools: reuse the persistent DVR console`. Add a component prefix when it
-makes the subject clearer, but do not force one. Keep each commit to one logical
-change, and add a body only when the reason or supporting evidence is not
-obvious. Do not add a `Signed-off-by` line unless it is required.
+Use a short, imperative subject, such as "buildroot: verify the kernel archive" or "tools: reuse the persistent DVR console". Add a component prefix when it makes the subject clearer, but do not force one.
+
+Do not add a Signed-off-by line unless it is required.
+
+## Comments and documentation
+
+Write what is true of the tree as it stands. A comment outlives the commit
+that introduced it and the reader rarely has the diff in view, so a line
+describing the change rather than the state stops making sense almost at once:
+
+    no:  The serial console runs a getty, and until this was set root had
+         no password.
+    yes: This is what the getty on the serial console authenticates against.
+
+"now", "used to", "previously", "no longer" and "currently" are the usual
+signs. That material belongs in the commit message, where it is dated and sits
+beside the diff that justifies it.
+
+The same applies to comparisons with whatever the code replaced. A reader who
+never saw the old arrangement gains nothing from being told this one differs;
+explain the mechanism instead, and give a reason only where the choice is
+surprising on its own terms.
+
+Deliberately temporary text is the exception, and has to name the thing that
+retires it -- as the `linux-dirclean` paragraph above names the check that
+lets the next person delete it.
 
 ## Working on the device
 
@@ -66,6 +90,11 @@ changes. Put reusable hardware conclusions in the official porting guide.
 
 Use the UART for U-Boot, boot logs, recovery, or when Linux networking or sshd
 is unavailable.
+
+Under the Buildroot system the console getty asks for a password: log in as
+`root` with the password whose hash is in `local.env`. The tools below assume
+a session that is already logged in, so only interactive `just dvr` attaches
+need it.
 
 The `dvr` tmux session owns the UART through one long-lived SSH and picocom
 connection. Start or attach to it with `just dvr`. Leave it running.
