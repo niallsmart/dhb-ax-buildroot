@@ -44,8 +44,7 @@ scripts/bootstrap-sources.sh    # once, or when a derived tree is absent
 scripts/buildroot.sh
 ```
 
-The output image is
-`artifacts/buildroot/uImage-hi3531-dhb-ax-ethernet`.
+The output image is `artifacts/buildroot/uImage-hi3531-dhb-ax-full`.
 
 ## Commit messages
 
@@ -84,8 +83,10 @@ Facts that affect low-level work:
   and entry address is `0x80008000`.
 - The runtime MAC is `00:18:AE:3C:A2:49`; the value stored in U-Boot is only a
   placeholder.
-- The attached 1 TB SATA disk contains the owner's recordings and must remain
-  read-only.
+- The 1 TB WDC SATA disk is the Buildroot ext4 root filesystem. Its stable
+  partition identifier is `ca264b64-5738-4e60-a0ab-b3c3a4c789c1`.
+- The front-panel 8 GB Corsair USB drive has one FAT32 partition. Its `/uImage`
+  is the normal kernel image.
 
 ## Talking to the DVR
 
@@ -99,7 +100,7 @@ connection. Start or attach to it with `just dvr`. Leave it running.
 
 - Use `just dvr` for an interactive console.
 - Use `tools/dvr-exec.sh` to run one command at a Linux shell.
-- Use `tools/dvr-boot.exp` to RAM-boot a staged kernel.
+- Use `tools/dvr-boot.exp` to boot a kernel from USB or TFTP.
 
 ```sh
 tools/dvr-exec.sh 'cat /proc/mtd'
@@ -135,14 +136,23 @@ is faster and more flexible than sending shell commands through the UART. The
 authorized key comes from the ignored local build input at
 `artifacts/local/ssh/authorized_keys`.
 
-## Booting a kernel over TFTP (the Raspberry Pi)
+## Booting a kernel
+
+Automatic boot is deliberately deferred. For now, manually boot the installed
+USB kernel through the serial console:
+
+```sh
+tools/dvr-boot.exp --usb
+```
+
+### TFTP development and recovery
 
 The Raspberry Pi at `raspberrypi` hosts the TFTP server and serial connection.
 Stage and boot a local image with:
 
 ```sh
 tools/dvr-boot.exp --stage \
-    artifacts/buildroot/uImage-hi3531-dhb-ax-ethernet
+    artifacts/buildroot/uImage-hi3531-dhb-ax-full
 ```
 
 Use `--check --stage` to compare the local and staged images without changing
@@ -150,42 +160,63 @@ anything or accessing the UART. An already-staged image can still be booted by
 name:
 
 ```sh
-tools/dvr-boot.exp uImage-hi3531-dhb-ax-ethernet
+tools/dvr-boot.exp uImage-hi3531-dhb-ax-full
 ```
 
 The helper handles staging, checksum verification, the TFTP service, U-Boot
-interaction, and boot checks. Run `tools/dvr-boot.exp --help` for options.
+interaction, bootargs verification, and boot checks. USB defaults to the HDD
+root and TFTP to the Pi's NFS root. Use `--root hdd` or `--root nfs` to
+override that pairing; for example, `--usb --root nfs` avoids U-Boot Ethernet
+when testing the NFS root. Run `tools/dvr-boot.exp --help` for all options.
 
-## Publishing and iterating with the NFS root
+## Provisioning the USB and HDD
 
-The normal Buildroot system uses the root filesystem exported by the Raspberry
-Pi. Build and publish it with:
+The normal Buildroot system uses the USB kernel and HDD root. The one-time
+provisioning tools are intentionally explicit and refuse to run unless Linux
+is currently using an NFS root:
+
+```sh
+tools/dvr-prepare-storage.sh --destroy-all-data
+tools/dvr-install-system.sh
+```
+
+The first command destroys and recreates both storage devices after matching
+their model, capacity, removability and hardware path. The second installs the
+current `rootfs.tar` and uImage onto empty prepared filesystems.
+
+## NFS development and recovery
+
+The Raspberry Pi can still export a temporary root filesystem for provisioning
+or recovery. When using a kernel built with the NFS-root command line, publish
+the userspace with:
 
 ```sh
 scripts/buildroot.sh
 scripts/publish-nfs-root.sh
 ```
 
+The normal kernel supports either root; `dvr-boot.exp` supplies the selected
+root and the verified two-bank memory map through volatile U-Boot `bootargs`.
+
 The publisher handles transfer, validation, safe replacement, and rollback.
 Follow its error messages if the running DVR must be moved to the rescue image
 first. For ordinary driver work, copy the specific modules or files through the
 share instead of republishing the complete root filesystem.
 
-## Nothing writes to the board
+## Protecting the factory flash
 
 The factory firmware still boots and the flash images in `backups/` are the only
-copies of it. Kernels are loaded into DRAM over TFTP and run from there.
+copies of it. The USB drive and SATA HDD are approved Linux storage; the SPI NOR
+and NAND are not.
 
 - Never run `saveenv`, `sf write`, `sf erase`, `nand write`, `nand erase`,
   `flashcp`, `flash_eraseall`, `nandwrite`, or similar commands.
-- Never write to the attached SATA disk, mount it read-write, or run `fsck` on
-  it.
 - Neither SSH nor `tools/dvr-exec.sh` enforces any of this. Check every command
   before sending it.
 
 Safe operations include U-Boot `printenv`, `nand info`, `nand bad`, `nand
 read`, `sf probe`, `sf read`, `md` and `ping`; temporary `setenv` changes
-without `saveenv`; loading data into DRAM and booting it with `bootm`;
-read-only filesystem mounts; temporary files in RAM; and volatile SoC register
-writes with `devmem`. A command being technically safe does not make it useful:
+without `saveenv`; loading data into DRAM and booting it with `bootm`; normal
+filesystem work on the USB and HDD; temporary files in RAM; and volatile SoC
+register writes with `devmem`. A command being technically safe does not make it useful:
 send only the minimum operation needed for the task.

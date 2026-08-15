@@ -10,27 +10,30 @@ revision is only knowable from the hardware itself. Filenames and device tree
 nodes throughout use the hyphenated `dhb-ax`, which suits paths and DT naming;
 the silkscreen text is the authority for what the board actually is.
 
-Working and verified on hardware: both Cortex-A9 cores, gigabit Ethernet,
-SATA behind a port multiplier with FAT32 read access, all nineteen GPIO banks,
+Working and verified on hardware: both Cortex-A9 cores, 1 GiB of RAM, gigabit
+Ethernet, SATA behind a port multiplier, USB host, all nineteen GPIO banks,
 bit-banged I2C reaching the board's battery-backed clock, loadable modules,
-NFS, and a software reset that returns to U-Boot without a power cycle.
+NFS, and a software reset that returns to U-Boot without a power cycle. U-Boot
+loads the normal kernel from a FAT32 USB drive and Linux mounts a writable ext4
+root filesystem from the 1 TB SATA HDD.
 
-Two variants build from the same tree:
+Two device-tree variants build from the same tree:
 
-- **minimal** — one core, GIC, SP804 timer, PL011 console, BusyBox initramfs.
-  The original proof that the board boots at all; kept as a fallback.
-- **ethernet** — everything else: both CPU cores, GMAC1 Ethernet,
+- **minimal** — the original CPU, GIC, SP804 and PL011 bring-up description.
+  It is retained as historical scaffolding, but the current external-root
+  kernel needs the full device tree to reach its SATA root.
+- **full** — the normal full-system image: both CPU cores, GMAC1 Ethernet,
   SATA behind a port multiplier, FAT32, all nineteen GPIO banks, bit-banged
-  I2C with the board's real-time clock, loadable modules and NFS. The name is
-  now a misnomer; it is simply the full variant.
+  I2C with the board's real-time clock, loadable modules, USB and NFS.
 
 The media hardware — capture, encode, decode, scaling, HDMI — is out of scope
 throughout: undocumented, unsupported by mainline, and the bulk of what the
 vendor loads. This port is a general-purpose ARM system on DVR hardware, not
 a working DVR.
 
-Nothing in this tree writes to the DVR's flash or to an attached disk. Every
-image is loaded into RAM over TFTP.
+Nothing in this tree writes the DVR's SPI NOR or NAND. The USB drive and SATA
+HDD were explicitly repurposed as Linux storage on 2026-08-14. Automatic boot
+is not configured yet; the USB image is selected manually at U-Boot.
 
 ## Hardware source
 
@@ -54,7 +57,7 @@ Important confirmed values used by the device trees:
 | Block | Physical address | Interrupt/rate |
 |---|---:|---:|
 | RAM (DDR0) | `0x80000000` | 512 MiB; all of it used |
-| RAM (DDR1) | `0xc0000000` | 512 MiB; **not declared**, see `memory-map.md` |
+| RAM (DDR1) | `0xc0000000` | 512 MiB; all of it used, see `memory-map.md` |
 | GIC CPU interface | `0x20300100` | — |
 | GIC distributor | `0x20301000` | — |
 | SP804 timer pair | `0x20000000` | GIC SPI 3 / 155 MHz |
@@ -146,11 +149,12 @@ had a working soft reset.
 
 ## Files
 
-- `../br2-external/board/dhb_ax/dts/hi3531-dhb-ax.dtsi`: shared board
+- `../br2-external/board/dhb_ax/dts/hisilicon/hi3531-dhb-ax.dtsi`: shared board
   description.
-- `../br2-external/board/dhb_ax/dts/hi3531-dhb-ax.dts`: minimal variant.
-- `../br2-external/board/dhb_ax/dts/hi3531-dhb-ax-ethernet.dts`: minimal plus
-  GMAC1.
+- `../br2-external/board/dhb_ax/dts/hisilicon/hi3531-dhb-ax.dts`: minimal
+  variant.
+- `../br2-external/board/dhb_ax/dts/hisilicon/hi3531-dhb-ax-full.dts`: full
+  validated hardware description.
 - `../br2-external/board/dhb_ax/patches/linux/`: the patch queue, applied in
   order. Three patches add a glue driver as a new file alongside the Kconfig
   and Makefile entries that build it, so a driver and its build wiring cannot
@@ -235,11 +239,11 @@ than rebuilding the toolchain. `scripts/buildroot.sh --clean` discards them.
 Finished artifacts land in the repository-root `artifacts/buildroot/`:
 
 ```text
-uImage-hi3531-dhb-ax-ethernet           U-Boot-ready image
+uImage-hi3531-dhb-ax-full               U-Boot-ready image
 zImage                                  bare zImage
-hi3531-dhb-ax-ethernet.dtb              device tree blob
-rootfs.cpio, rootfs.tar                 the initramfs, and the same content
-                                        as a tarball for NFS export
+hi3531-dhb-ax-full.dtb                  device tree blob
+rootfs.tar                              userspace installed on the SATA root;
+                                        also usable for an NFS recovery root
 ```
 
 The U-Boot-ready result is a legacy ARM `uImage` loaded and entered at
@@ -248,9 +252,9 @@ the old U-Boot to continue passing ATAGs without needing explicit FDT
 commands. `br2-external/board/dhb_ax/post-image.sh` does that wrapping;
 Buildroot's own `BR2_LINUX_KERNEL_APPENDED_UIMAGE` cannot be used here, for
 reasons recorded in that script. Whole-file hashes are not reproducible: the
-legacy image header carries a build timestamp. The DTB is reproducible, and
-has been `eb45cceec28d4ae5034177cdd342bbafa0e0e97ded56a207e7353e7bb5ebcd58`
-across every build since the port worked.
+legacy image header carries a build timestamp. The current full DTB is
+reproducible with SHA-256
+`2470b0f971e305904211f05192fb31183c41682fdcefcef6e703398f33c28afc`.
 
 To change a driver or the device tree, edit it under
 `br2-external/board/dhb_ax/` and rebuild. To change a patch, regenerate it
@@ -287,6 +291,37 @@ controller or flash filesystem was enabled.
 
 ## Booting an image
 
+The normal manual boot loads the installed USB image. The helper handles the
+fast autoboot interruption and does not save any environment variables:
+
+```sh
+tools/dvr-boot.exp --usb
+```
+
+The equivalent commands at the U-Boot prompt are:
+
+```text
+setenv bootargs console=ttyAMA0,115200 earlycon=pl011,0x20080000 keep_bootcon ignore_loglevel mem=512M@0x80000000 mem=512M@0xc0000000
+setenv bootargs ${bootargs} root=PARTUUID=ca264b64-5738-4e60-a0ab-b3c3a4c789c1 rootfstype=ext4 rootwait rw
+usb reset
+fatload usb 0:1 0x82000000 uImage
+bootm 0x82000000
+```
+
+The split keeps each input line below the old U-Boot console-buffer limit.
+`dvr-boot.exp` reads `bootargs` back and compares the complete value before it
+loads or boots an image.
+
+The first verified boot read 3,542,217 bytes from FAT32, discovered the WDC
+disk through the JMicron port multiplier, and mounted
+`PARTUUID=ca264b64-5738-4e60-a0ab-b3c3a4c789c1` as writable ext4. Buildroot
+then obtained `192.168.4.77` by DHCP and started OpenSSH. The root filesystem
+reported 915.8 GiB available. SATA, SCSI disk, GPT and ext4 support are built
+into the kernel; they are available before the root filesystem and do not
+depend on `insmod`.
+
+For TFTP development or recovery, the original procedure remains available:
+
 Stage the image in the Pi's TFTP root and start the temporary TFTP server.
 Cold-reset the DVR and interrupt autoboot, recheck the Pi address, then set
 only volatile environment values:
@@ -296,9 +331,16 @@ setenv ipaddr 192.168.7.241
 setenv netmask 255.255.252.0
 setenv serverip 192.168.4.34
 setenv ethaddr 00:18:AE:3C:A2:49
-tftp 0x82000000 uImage-hi3531-dhb-ax-ethernet
+setenv bootargs console=ttyAMA0,115200 earlycon=pl011,0x20080000 keep_bootcon ignore_loglevel mem=512M@0x80000000 mem=512M@0xc0000000
+setenv bootargs ${bootargs} root=/dev/nfs nfsroot=192.168.4.34:/srv/dhb-ax/rootfs,vers=3,tcp,nolock ip=::::dhb-ax:eth0:dhcp rw
+tftp 0x82000000 uImage-hi3531-dhb-ax-full
 bootm 0x82000000
 ```
+
+Loading and root selection are independent. `tools/dvr-boot.exp --usb --root
+nfs` loads the installed USB kernel but mounts the Pi's NFS export, which is
+useful when U-Boot Ethernet is unavailable after a warm restart. USB defaults
+to the HDD root; TFTP defaults to the NFS root.
 
 `ping` is deliberately absent from that sequence: it has crashed this U-Boot
 mid-session. Go straight to `tftp`, which reports its own errors.
@@ -323,7 +365,7 @@ followed by `b`.
 
 ## Verified Ethernet bring-up
 
-The Ethernet image booted from DRAM on 2026-08-03 and passed traffic. Full
+The full image booted from DRAM on 2026-08-03 and passed Ethernet traffic. Full
 console log in `../artifacts/legacy/boot-log-ethernet-r2.txt`. What the hardware
 confirmed:
 
@@ -506,7 +548,9 @@ the interrupt number, which had been inferred rather than read from a header.
 The only error-shaped log lines are `hard resetting link` and `failed to
 resume link` for the four empty multiplier slots, which are expected.
 
-Nothing in this tree has written to the disk.
+Those results describe the original recording layout. On 2026-08-14 the owner
+explicitly approved destroying it: the disk was repartitioned as GPT with one
+full-capacity Linux partition and formatted ext4 for the Buildroot root.
 
 ### Populating the unused drive bays — notes, not yet acted on
 
@@ -570,14 +614,14 @@ Adding the *second* multiplier to reach ten drives is a different and much
 larger job: a whole additional chip plus its support circuitry, which is why
 `ata1` reports link down today. Not assessed.
 
-### Filesystem
+### Original filesystem (historical)
 
-The four partitions really are FAT32, not just the type byte: the boot
+The four original partitions really were FAT32, not just the type byte: the boot
 sector carries the standard `EB 58 90` jump, an OEM name of `MSDOS5.0` and
 `FAT32   ` at offset 82. FAT32 has no journal, so a read-only mount cannot
 replay anything, which makes `-o ro` genuinely read-only here.
 
-All four mount and read correctly:
+All four mounted and read correctly before they were intentionally erased:
 
 ```text
 sda1..sda4   232.8G, 99% full, vfat ro
@@ -841,12 +885,28 @@ board file rather than a measurement. It should not be trusted.
 
 The first 512 MiB build changed nothing — still 220 MB. `atags_to_fdt.c`
 copies U-Boot's `ATAG_MEM` into the FDT, **overwriting the memory node**, so
-the vendor's hardcoded 256 MiB beat the device tree. The memory declaration
-here had been decorative for the whole project.
+the vendor's hardcoded 256 MiB beat the device tree. The initial workaround
+disabled `CONFIG_ARM_ATAG_DTB_COMPAT` and forced a compiled command line.
 
-Fixed by setting `CONFIG_ARM_ATAG_DTB_COMPAT=n`. Nothing is lost:
-`CONFIG_CMDLINE_FORCE` already ignores the ATAG command line, and the
-appended-DTB support that matters is the separate `CONFIG_ARM_APPENDED_DTB`.
+The current boot design deliberately enables ATAG-to-DTB compatibility so
+one kernel can accept either HDD or NFS root arguments from U-Boot. Every boot
+first replaces `bootargs` with the console and verified memory ranges:
+
+```text
+mem=512M@0x80000000 mem=512M@0xc0000000
+```
+
+The ARM `mem=` parser discards the automatically discovered map when it sees
+the first argument, then adds DDR0 and DDR1 explicitly. A second `setenv`
+appends the selected root arguments. The helper verifies the resulting value
+with `printenv bootargs` before `bootm`; no environment change is saved.
+`CONFIG_ATAGS` remains disabled; only the decompressor's appended-DTB
+compatibility converter is needed.
+
+Both root modes were validated with the same kernel. `/proc/cmdline` matched
+the value assembled by U-Boot, `/proc/iomem` reported the two 512 MiB banks,
+and `MemTotal` was 1,032,240 KiB. HDD mode mounted `/dev/sda1` as ext4; NFS
+mode mounted `192.168.4.34:/srv/dhb-ax/rootfs` over NFSv3/TCP.
 
 ### No memory is reserved
 
@@ -987,6 +1047,12 @@ Both sockets have been exercised at both speeds: a microSD card reader and a
 Corsair Flash Voyager at high speed on EHCI, in each socket, and an FTDI
 serial adapter at full speed on OHCI.
 
+The front-panel Corsair drive is now the boot medium. Vendor U-Boot 2010.06
+recognises its MBR partition as FAT32, and `fatload usb 0:1 0x82000000 uImage`
+loaded and booted the 3,542,217-byte kernel successfully. Linux does not need
+USB mass-storage support to mount the SATA root, so `usb_storage` remains a
+normal module rather than part of the built-in root path.
+
 ### On USB throughput
 
 That device reads at roughly 1.8 MB/s, which looks alarming next to SATA's
@@ -1048,8 +1114,9 @@ rough order of value per unit of work. Everything above the line is done.
 | Both CPU cores | device tree only; no new code |
 | GPIO, 19 banks | mainline PL061 plus patch 0008 |
 | I2C and wall-clock time | bit-banged bus to an external DS1307 |
-| Ethernet, SATA, FAT32 | see the sections above |
+| Ethernet and SATA | ext4 HDD root; original FAT32 layout retained as history |
 | USB 2.0 and 1.1 | PHY driver; controllers are stock |
+| USB kernel and ext4 SATA root | manual U-Boot load; automatic boot deferred |
 
 Remaining, in order:
 

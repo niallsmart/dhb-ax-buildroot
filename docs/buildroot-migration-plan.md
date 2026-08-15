@@ -508,7 +508,7 @@ expects?** Yes. Reading `linux/linux.mk:503-530`, it does exactly what
 point and image name read back from the kernel's own uImage. It also forces
 `CONFIG_ARM_APPENDED_DTB` on. Set `BR2_LINUX_KERNEL_UIMAGE_LOADADDR` to
 `0x80008000` and the result should match; the output is named
-`uImage.hi3531-dhb-ax-ethernet` rather than the current filename.
+`uImage.hi3531-dhb-ax-ethernet` under the variant name used at the time.
 
 **Is a post-image script needed?** Not for the image layout, on the above
 reading. Confirm at Stage 3 by comparing against the `pre-buildroot` build —
