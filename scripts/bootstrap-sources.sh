@@ -13,7 +13,7 @@
 # and one derived tree:
 #
 #   kernel/linux-6.18.42-pristine/   never modified; the reference the patch
-#                                    queue in br2-external/board/dhb_ax/patches
+#                                    queue in br2-external/board/dhb-ax/patches
 #                                    is diffed against
 #
 # Buildroot extracts and patches its own copy of the kernel on every build, so

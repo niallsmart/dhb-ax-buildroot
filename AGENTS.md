@@ -1,10 +1,10 @@
 # Working on this repo
 
 Start with `README.md` for the project overview. The sibling
-`../hi3531-porting-guide/doc/README.md` indexes the official hardware and
-porting guide. That guide is an early release: prefer specific, repeatable
-hardware evidence when it disagrees, and update the guide rather than changing
-working source to match it.
+`../dhb-ax-guide/doc/README.md` indexes the official hardware and porting guide.
+That guide is an early release: prefer specific, repeatable hardware evidence
+when it disagrees, and update the guide rather than changing working source to
+match it.
 
 This file is for repository workflow, device access and safety constraints.
 
@@ -33,6 +33,14 @@ scripts/buildroot.sh
 ```
 
 The output image is `artifacts/buildroot/uImage-hi3531-dhb-ax`.
+
+The board directory moved from `board/dhb_ax/` to `board/dhb-ax/`, which moves
+`BR2_GLOBAL_PATCH_DIR` and `BR2_LINUX_KERNEL_CUSTOM_DTS_DIR`. Buildroot does not
+re-extract the kernel when those change, so it will wrap a fresh `uImage` around
+the stale DTB. **The next build must start with**
+`scripts/buildroot.sh linux-dirclean` and an empty `artifacts/buildroot/`.
+Confirm from `/proc/device-tree/model` on the booted board, then delete this
+paragraph.
 
 ## Commit messages
 

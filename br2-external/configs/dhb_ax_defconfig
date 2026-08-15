@@ -3,7 +3,7 @@
 # Build with scripts/buildroot.sh.
 #
 # Stage 3: the kernel is built from the patch queue and device trees under
-# board/dhb_ax/, and packaged as the appended-DTB uImage the vendor U-Boot
+# board/dhb-ax/, and packaged as the appended-DTB uImage the vendor U-Boot
 # needs.  Stage 4 adds the userspace tools the roadmap wants.
 
 # Target.  Dual Cortex-A9.  The vendor 3.0.8 godnet_defconfig sets CONFIG_VFP
@@ -47,10 +47,10 @@ BR2_KERNEL_HEADERS_AS_KERNEL=y
 BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_6_18=y
 
 # The patch queue.  Buildroot looks for <dir>/<package>/*.patch, so the eleven
-# kernel patches live in board/dhb_ax/patches/linux/.  They are applied to a
+# kernel patches live in board/dhb-ax/patches/linux/.  They are applied to a
 # freshly extracted tree every time, which is what removes the need for the
 # reverse-apply idempotency check the old build carries.
-BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/patches"
+BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/patches"
 
 # Kernel.  The tarball is the one bootstrap-sources.sh already pins, reused
 # rather than downloaded a second time.  /work is the repository root as
@@ -65,7 +65,7 @@ BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="file:///work/kernel/linux-6.18.42.tar.xz"
 BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
-BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/linux.config"
+BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/linux.config"
 
 # The vendor U-Boot 2010.06 has no FDT commands and passes ATAGs, so the DTB
 # rides appended to the zImage inside a legacy uImage.
@@ -74,10 +74,10 @@ BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/li
 # its two loops over LINUX_DTS_NAME disagree about basename, which breaks as
 # soon as a device tree sits in a subdirectory -- and ours must, because patch
 # 0001 wires them into arch/arm/boot/dts/hisilicon/Makefile.  The kernel is
-# built as a plain zImage and board/dhb_ax/post-image.sh does the append and
+# built as a plain zImage and board/dhb-ax/post-image.sh does the append and
 # the mkimage wrap, with the same arguments the old build used.
 BR2_LINUX_KERNEL_ZIMAGE=y
-BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/post-image.sh"
+BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/post-image.sh"
 
 # post-image.sh needs mkimage.  Buildroot selects host-uboot-tools
 # automatically for the uImage kernel targets, and we do not use those, so it
@@ -90,13 +90,13 @@ BR2_PACKAGE_HOST_UBOOT_TOOLS=y
 # DTBs to the Makefile.  Matching the kernel's own layout means that patch
 # needs no change.
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
-BR2_LINUX_KERNEL_CUSTOM_DTS_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/dts"
+BR2_LINUX_KERNEL_CUSTOM_DTS_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/dts"
 
 # Emit the generated userspace as rootfs.tar for installation on the SATA HDD
 # or publication as an NFS root.
 BR2_TARGET_ROOTFS_TAR=y
 # BR2_TARGET_ROOTFS_CPIO is not set
-BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/rootfs-overlay"
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/rootfs-overlay"
 BR2_INIT_BUSYBOX=y
 BR2_TARGET_GENERIC_GETTY=y
 BR2_TARGET_GENERIC_HOSTNAME="dhb-ax"
@@ -180,5 +180,5 @@ BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT=y
 
 # post-build.sh retains storage/filesystem tools but removes any flash writers
 # that a package default might reintroduce.
-BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb_ax/post-build.sh"
+BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/post-build.sh"
 BR2_ROOTFS_POST_BUILD_SCRIPT_ARGS="$(BR2_EXTERNAL_DHB_AX_PATH)/../artifacts/local/ssh"
