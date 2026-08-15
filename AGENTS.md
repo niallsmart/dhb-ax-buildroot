@@ -1,11 +1,10 @@
 # Working on this repo
 
-Start with `README.md` for the project overview. `docs/porting.md` is the
-authority on this port's implementation, validation status and remaining work.
-The sibling `../hi3531-porting-guide/doc/README.md` indexes the official
-hardware and porting guide. That guide is an early release: prefer specific,
-repeatable hardware evidence when it disagrees, and update the guide rather
-than changing working source to match it.
+Start with `README.md` for the project overview. The sibling
+`../hi3531-porting-guide/doc/README.md` indexes the official hardware and
+porting guide. That guide is an early release: prefer specific, repeatable
+hardware evidence when it disagrees, and update the guide rather than changing
+working source to match it.
 
 This file is for repository workflow, device access and safety constraints.
 
@@ -15,7 +14,7 @@ This file is for repository workflow, device access and safety constraints.
   device trees, patch queue, rootfs overlay, and post-build/image scripts.
 - `scripts/` contains source/bootstrap and build operations; `tools/` contains
   board interaction and provisioning commands.
-- `docs/reference/` and `pcb/` contain captured hardware evidence.
+- `pcb/` contains board and component photographs.
 - `rootfs/` is the extracted vendor filesystem and is a reference, not the
   rootfs built for the port.
 - `backups/` contains the verified factory-flash images; see the safety rules
@@ -50,8 +49,8 @@ before interpreting runtime results. Avoid multi-register `devmem` loops over
 the serial console: echo interleaving can produce plausible but garbled output.
 Prefer individual reads and cross-check surprising values.
 
-Update `docs/porting.md` when a maintained implementation or its verified
-status changes. Put reusable hardware evidence in `docs/reference/`.
+Update `README.md` when the maintained implementation or its verified status
+changes. Put reusable hardware conclusions in the official porting guide.
 
 ## Talking to the DVR
 

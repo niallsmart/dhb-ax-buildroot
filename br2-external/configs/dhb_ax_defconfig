@@ -1,6 +1,6 @@
 # Buildroot configuration for the DHB-AX board (HiSilicon Hi3531, "godnet").
 #
-# Build with scripts/buildroot.sh.  See docs/buildroot-migration-plan.md.
+# Build with scripts/buildroot.sh.
 #
 # Stage 3: the kernel is built from the patch queue and device trees under
 # board/dhb_ax/, and packaged as the appended-DTB uImage the vendor U-Boot
