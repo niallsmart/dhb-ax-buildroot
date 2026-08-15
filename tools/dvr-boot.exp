@@ -1,19 +1,24 @@
 #!/usr/bin/expect -f
-# Reliably RAM-boot a staged kernel on the DVR through the Raspberry Pi UART.
+# Reliably boot a kernel on the DVR through the Raspberry Pi UART.
 #
-# The image argument is a filename beneath /srv/tftp on the Pi. With --stage,
-# the tool first publishes a local image there. It never saves the U-Boot
-# environment or writes board storage.
+# By default the image argument is a filename beneath /srv/tftp on the Pi.
+# With --stage, the tool first publishes a local image there. With --usb, it
+# loads an existing image from the USB FAT filesystem. It never saves the
+# U-Boot environment or writes board storage.
 
 proc usage {{status 0}} {
     set stream stdout
     if {$status != 0} { set stream stderr }
     puts $stream {usage: dvr-boot.exp [options] TFTP_IMAGE
        dvr-boot.exp [options] --stage LOCAL_IMAGE
+       dvr-boot.exp [options] --usb [USB_IMAGE]
 
 Options:
   --check                 Run read-only preflight checks; do not access the UART
   --stage LOCAL_IMAGE     Stage a local image under its basename before booting
+  --usb                   Load from USB FAT (default: /uImage; root: HDD)
+  --usb-device DEVICE     U-Boot USB device and partition (default: 0:1)
+  --root MODE             Root filesystem: hdd or nfs (default follows loader)
   --host HOST             Pi SSH host (default: raspberrypi)
   --session NAME          persistent tmux console to use (default: dvr)
   --transcript PATH       Append serial output to PATH
@@ -26,7 +31,8 @@ Options:
   --help                  Show this help
 
 The named tmux session remains the sole owner of the UART. This tool reads its
-pane and sends keys through tmux without restarting the session.}
+pane and sends keys through tmux without restarting the session. USB defaults
+to the HDD root and TFTP to the Pi's NFS root; --root overrides either default.}
     exit $status
 }
 
@@ -52,11 +58,17 @@ set boot_timeout 120
 set check_only 0
 set local_image ""
 set image ""
+set usb_mode 0
+set usb_device 0:1
+set root_mode ""
 
 for {set i 0} {$i < [llength $argv]} {incr i} {
     set arg [lindex $argv $i]
     switch -- $arg {
         --check { set check_only 1 }
+        --usb { set usb_mode 1 }
+        --usb-device { set usb_device [option_value argv i $arg] }
+        --root { set root_mode [option_value argv i $arg] }
         --stage {
             if {$local_image ne ""} {
                 puts stderr "error: --stage may be specified only once"
@@ -80,7 +92,7 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
                 usage 2
             }
             if {$image ne ""} {
-                puts stderr "error: only one TFTP image may be specified"
+                puts stderr "error: only one image may be specified"
                 usage 2
             }
             set image $arg
@@ -89,6 +101,10 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
 }
 
 if {$local_image ne ""} {
+    if {$usb_mode} {
+        puts stderr "error: --stage and --usb cannot be used together"
+        usage 2
+    }
     if {$image ne ""} {
         puts stderr "error: use either TFTP_IMAGE or --stage LOCAL_IMAGE, not both"
         usage 2
@@ -100,7 +116,15 @@ if {$local_image ne ""} {
     }
     set image [file tail $local_image]
 }
+if {$image eq "" && $usb_mode} { set image uImage }
 if {$image eq ""} { usage 2 }
+if {$root_mode eq ""} {
+    set root_mode [expr {$usb_mode ? "hdd" : "nfs"}]
+}
+if {$root_mode ni {hdd nfs}} {
+    puts stderr "error: --root must be hdd or nfs"
+    exit 2
+}
 if {![regexp {^[A-Za-z0-9_.@-]+$} $host]} {
     puts stderr "error: unsafe SSH host: $host"
     exit 2
@@ -111,7 +135,11 @@ if {![regexp {^[A-Za-z0-9_.-]+$} $session]} {
 }
 if {![regexp {^[A-Za-z0-9][A-Za-z0-9._/-]*$} $image] ||
     [lsearch -exact [split $image /] ..] >= 0} {
-    puts stderr "error: image must be a safe relative path below /srv/tftp"
+    puts stderr "error: image must be a safe relative path"
+    exit 2
+}
+if {![regexp {^[0-9]+:[0-9]+$} $usb_device]} {
+    puts stderr "error: USB device must have U-Boot form N:P (for example 0:1)"
     exit 2
 }
 if {![regexp {^0x[0-9A-Fa-f]+$} $load_address]} {
@@ -190,20 +218,26 @@ if {$local_image ne ""} {
     }
 }
 
-puts "Preflight: $host:/srv/tftp/$image"
+if {$usb_mode} {
+    puts "Preflight: USB $usb_device/$image"
+} else {
+    puts "Preflight: $host:/srv/tftp/$image"
+}
 if {![ssh_command $host {if grep -q '^ttyAMA0' /proc/consoles; then echo 'error: ttyAMA0 is a Pi console'; exit 1; fi}]} {
     exit 3
 }
 
-if {$check_only} {
-    if {![ssh_command $host {systemctl is-active --quiet tftpd-hpa}]} {
-        puts stderr "error: tftpd-hpa is not active"
-        exit 3
-    }
-} else {
-    if {![ssh_command $host {sudo systemctl start tftpd-hpa && systemctl is-active --quiet tftpd-hpa}]} {
-        puts stderr "error: could not start tftpd-hpa"
-        exit 3
+if {!$usb_mode} {
+    if {$check_only} {
+        if {![ssh_command $host {systemctl is-active --quiet tftpd-hpa}]} {
+            puts stderr "error: tftpd-hpa is not active"
+            exit 3
+        }
+    } else {
+        if {![ssh_command $host {sudo systemctl start tftpd-hpa && systemctl is-active --quiet tftpd-hpa}]} {
+            puts stderr "error: could not start tftpd-hpa"
+            exit 3
+        }
     }
 }
 
@@ -237,10 +271,12 @@ if {$local_image ne ""} {
     puts "SHA-256 verified: $local_digest"
 }
 
-set image_check "test -r /srv/tftp/$image"
-if {![ssh_command $host $image_check]} {
-    puts stderr "error: image is not readable beneath /srv/tftp: $image"
-    exit 3
+if {!$usb_mode} {
+    set image_check "test -r /srv/tftp/$image"
+    if {![ssh_command $host $image_check]} {
+        puts stderr "error: image is not readable beneath /srv/tftp: $image"
+        exit 3
+    }
 }
 
 if {$check_only} {
@@ -303,6 +339,14 @@ proc console_send {text} {
 proc pane_history {} {
     global session
     if {[catch {exec tmux capture-pane -p -t $session -S -300} text]} {
+        return ""
+    }
+    return $text
+}
+
+proc pane_history_joined {} {
+    global session
+    if {[catch {exec tmux capture-pane -p -J -t $session -S -300} text]} {
         return ""
     }
     return $text
@@ -376,15 +420,25 @@ if {!$shell_ready && !$uboot_ready} {
 
 if {!$uboot_ready} {
     puts "Rebooting and interrupting autoboot..."
-    # The RAM-only image runs its shell beneath a custom PID 1 which does not
-    # implement BusyBox init's reboot signal handling.  -f performs the reboot
-    # syscall directly and also works from the factory BusyBox environment.
-    console_send "reboot -f\r"
+    # Let a normal init stop services and unmount local filesystems cleanly.
+    # The RAM-only rescue image has a custom PID 1 that ignores this request;
+    # if its shell prompt returns, fall back to the reboot syscall directly.
+    console_send "reboot\r"
     set deadline [expr {[clock milliseconds] + 60000}]
+    set force_deadline [expr {[clock milliseconds] + 3000}]
+    set force_sent 0
     while {[clock milliseconds] < $deadline && !$uboot_ready} {
         console_send " "
         after 250
-        if {[regexp {^hisilicon # *$} [pane_last_line]]} { set uboot_ready 1 }
+        set last [pane_last_line]
+        if {[regexp {^hisilicon # *$} $last]} {
+            set uboot_ready 1
+        } elseif {!$force_sent && [clock milliseconds] >= $force_deadline &&
+                  [regexp {^((~|/) )?# *$} $last]} {
+            puts "Normal reboot was not handled; forcing reboot..."
+            console_send "reboot -f\r"
+            set force_sent 1
+        }
     }
 }
 if {!$uboot_ready} {
@@ -402,33 +456,103 @@ proc uboot_command {command} {
     }
 }
 
+proc configure_bootargs {root_bootargs} {
+    global command_sequence
+
+    set common_bootargs {console=ttyAMA0,115200 earlycon=pl011,0x20080000 keep_bootcon ignore_loglevel mem=512M@0x80000000 mem=512M@0xc0000000}
+    set expected "$common_bootargs $root_bootargs"
+
+    # Keep both input lines well below old U-Boot's possible 256-byte console
+    # buffer. The second command expands the value installed by the first.
+    uboot_command "setenv bootargs $common_bootargs"
+    uboot_command "setenv bootargs \${bootargs} $root_bootargs"
+
+    # Read the complete value back. -J joins tmux display wraps so a long but
+    # intact environment value can still be compared exactly.
+    incr command_sequence
+    set marker "__DVR_ARGS_[pid]_${command_sequence}__"
+    console_send "echo $marker; printenv bootargs\r"
+    if {[wait_pane [list uboot last {^hisilicon # *$}] 10 $marker] ne "uboot"} {
+        abort_boot "U-Boot bootargs verification timed out" 7
+    }
+
+    set history [pane_history_joined]
+    set marker_at [string last $marker $history]
+    if {$marker_at < 0} {
+        abort_boot "could not isolate U-Boot bootargs output" 7
+    }
+    set history [string range $history [expr {$marker_at + [string length $marker]}] end]
+    set actual ""
+    foreach line [split $history "\n"] {
+        set line [string trimright $line " \t\r"]
+        if {[string match "bootargs=*" $line]} {
+            set actual [string range $line [string length "bootargs="] end]
+        }
+    }
+    if {$actual ne $expected} {
+        abort_boot "U-Boot bootargs mismatch: expected '$expected', got '$actual'" 7
+    }
+    puts "Verified U-Boot bootargs."
+}
+
 if {$transcript ne ""} {
     set transcript_marker "__DVR_BOOT_[pid]_[clock seconds]__"
     uboot_command "echo $transcript_marker"
 }
 
-puts "Configuring temporary U-Boot networking..."
-uboot_command "setenv ipaddr $ipaddr"
-uboot_command "setenv netmask $netmask"
-uboot_command "setenv serverip $serverip"
-uboot_command "setenv ethaddr $ethaddr"
+if {$root_mode eq "hdd"} {
+    set root_bootargs {root=PARTUUID=ca264b64-5738-4e60-a0ab-b3c3a4c789c1 rootfstype=ext4 rootwait rw}
+    puts "Configuring temporary HDD-root bootargs..."
+} else {
+    set root_bootargs "root=/dev/nfs nfsroot=$serverip:/srv/dhb-ax/rootfs,vers=3,tcp,nolock ip=::::dhb-ax:eth0:dhcp rw"
+    puts "Configuring temporary NFS-root bootargs..."
+}
+configure_bootargs $root_bootargs
 
-puts "Loading $image at $load_address..."
-incr command_sequence
-set tftp_marker "__DVR_TFTP_[pid]_${command_sequence}__"
-console_send "echo $tftp_marker; tftp $load_address $image\r"
-set result [wait_pane [list \
-    success history {Bytes transferred = [0-9]+} \
-    failure history {(TFTP error|Retry count exceeded|Access violation|File not found)}] \
-    120 $tftp_marker]
-if {$result eq "failure"} {
-    abort_boot "TFTP reported a transfer failure" 8
-}
-if {$result ne "success"} {
-    abort_boot "TFTP did not complete within 120 seconds" 8
-}
-if {[wait_pane [list uboot last {^hisilicon # *$}] 10] ne "uboot"} {
-    abort_boot "U-Boot prompt did not return after TFTP" 8
+if {$usb_mode} {
+    puts "Scanning USB storage..."
+    uboot_command "usb reset"
+    puts "Loading USB $usb_device/$image at $load_address..."
+    incr command_sequence
+    set load_marker "__DVR_USB_[pid]_${command_sequence}__"
+    console_send "echo $load_marker; fatload usb $usb_device $load_address $image\r"
+    set result [wait_pane [list \
+        success history {[0-9]+ bytes read} \
+        failure history {(Bad device|Unable to read|no USB devices available|\*\* Invalid partition)}] \
+        120 $load_marker]
+    if {$result eq "failure"} {
+        abort_boot "USB FAT load reported a failure" 8
+    }
+    if {$result ne "success"} {
+        abort_boot "USB FAT load did not complete within 120 seconds" 8
+    }
+    if {[wait_pane [list uboot last {^hisilicon # *$}] 10] ne "uboot"} {
+        abort_boot "U-Boot prompt did not return after USB FAT load" 8
+    }
+} else {
+    puts "Configuring temporary U-Boot networking..."
+    uboot_command "setenv ipaddr $ipaddr"
+    uboot_command "setenv netmask $netmask"
+    uboot_command "setenv serverip $serverip"
+    uboot_command "setenv ethaddr $ethaddr"
+
+    puts "Loading $image at $load_address..."
+    incr command_sequence
+    set load_marker "__DVR_TFTP_[pid]_${command_sequence}__"
+    console_send "echo $load_marker; tftp $load_address $image\r"
+    set result [wait_pane [list \
+        success history {Bytes transferred = [0-9]+} \
+        failure history {(TFTP error|Retry count exceeded|Access violation|File not found)}] \
+        120 $load_marker]
+    if {$result eq "failure"} {
+        abort_boot "TFTP reported a transfer failure" 8
+    }
+    if {$result ne "success"} {
+        abort_boot "TFTP did not complete within 120 seconds" 8
+    }
+    if {[wait_pane [list uboot last {^hisilicon # *$}] 10] ne "uboot"} {
+        abort_boot "U-Boot prompt did not return after TFTP" 8
+    }
 }
 
 puts "Booting from RAM..."
