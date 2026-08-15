@@ -504,7 +504,7 @@ if {$root_mode eq "hdd"} {
     set root_bootargs {root=PARTUUID=ca264b64-5738-4e60-a0ab-b3c3a4c789c1 rootfstype=ext4 rootwait rw}
     puts "Configuring temporary HDD-root bootargs..."
 } else {
-    set root_bootargs "root=/dev/nfs nfsroot=$serverip:/srv/dhb-ax/rootfs,vers=3,tcp,nolock ip=::::dhb-ax:eth0:dhcp rw"
+    set root_bootargs "root=/dev/nfs nfsroot=$serverip:/srv/dhb-ax/rootfs,vers=3,tcp,nolock ip=${ipaddr}:::${netmask}:dhb-ax:eth0:off rw"
     puts "Configuring temporary NFS-root bootargs..."
 }
 configure_bootargs $root_bootargs

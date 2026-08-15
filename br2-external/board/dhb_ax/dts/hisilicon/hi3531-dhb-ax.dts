@@ -363,7 +363,6 @@
 		phy-mode = "rgmii";
 		phy-handle = <&phy1>;
 		max-speed = <1000>;
-		local-mac-address = [00 18 ae 3c a2 49];
 		/*
 		 * Depths are informational here: dwmac1000 ignores the FIFO
 		 * size when setting the DMA operation mode.

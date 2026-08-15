@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# Set the board's factory MAC address before the interface is configured.
+#
+# The factory address is held in SPI-NOR at 0x0BFC20, in the board parameter
+# block.  This kernel cannot read it: the device tree describes no flash
+# controller, so there is no MTD device to read from.  Until flash nodes and an
+# nvmem cell exist, the address is carried here instead of in the device tree,
+# which describes the board rather than any individual unit.
+#
+# This is a PER-UNIT value.  Change it when building for another DHB_AX board,
+# or the two will collide on the same network.
+#
+# Runs before udhcpc, so the DHCP request carries the correct address and the
+# reservation matches.  It has no effect on an NFS root, where the kernel
+# configures the interface before userspace starts; that path uses static
+# addressing instead -- see tools/dvr-boot.exp.
+
+set -e
+
+[ "$IFACE" = "eth0" ] || exit 0
+
+MAC="00:18:ae:3c:a2:49"
+
+ip link set dev "$IFACE" address "$MAC"
