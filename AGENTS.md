@@ -1,41 +1,30 @@
 # Working on this repo
 
-Start with `README.md` for the project overview, and `docs/porting.md`
-for anything about the port itself. This file captures the repository and
-operational context needed to work on the code and board safely.
+Start with `README.md` for the project overview. `docs/porting.md` is the
+authority on this port's implementation, validation status and remaining work.
+The sibling `../hi3531-porting-guide/doc/README.md` indexes the official
+hardware and porting guide. That guide is an early release: prefer specific,
+repeatable hardware evidence when it disagrees, and update the guide rather
+than changing working source to match it.
 
-The target is an LTS `LTD2704XE-P` DVR built on a Shenzhen TVT `DHB_AX V1.2`
-motherboard around the HiSilicon Hi3531 platform. The factory system is Linux
-3.0.8 with binary vendor modules; the port is Linux 6.18.42 LTS with Buildroot.
-The goal is a useful general-purpose ARM system. Video capture, encode/decode,
-scaling and HDMI are undocumented, have no mainline support, and are
-deliberately out of scope.
+This file is for repository workflow, device access and safety constraints.
 
 ## Repository map and build
 
-- `docs/porting.md` is the authority on port status, implementation and
-  remaining work. Read it before changing the port.
-- `docs/reference/` contains evidence captured from the vendor system,
-  PCB and SoC.
 - `br2-external/` is the maintained board support: defconfig, kernel config,
   device trees, patch queue, rootfs overlay, and post-build/image scripts.
-- `scripts/` contains the source bootstrap and containerised Buildroot build.
-- `artifacts/buildroot/` contains ignored current build outputs;
-  `artifacts/legacy/` preserves ignored pre-Buildroot outputs for comparison.
-- `docs/buildroot-migration-plan.md` explains the current build architecture;
-  `docs/investigation.md` records the reverse-engineering and backup process;
-  `docs/memory-map.md` covers DRAM and reserved regions; and `docs/video.md`
-  documents the unsupported display path.
+- `scripts/` contains source/bootstrap and build operations; `tools/` contains
+  board interaction and provisioning commands.
+- `docs/reference/` and `pcb/` contain captured hardware evidence.
 - `rootfs/` is the extracted vendor filesystem and is a reference, not the
   rootfs built for the port.
-- `backups/` contains the only verified copies of the factory flash. It is the
-  irreplaceable part of the workspace. Analyse copies; do not modify the
-  verified originals.
+- `backups/` contains the verified factory-flash images; see the safety rules
+  below.
 - `kernel/` and `buildroot/` are derived source trees. They are regenerated
-  from pinned inputs by `scripts/bootstrap-sources.sh` and are not worth
-  backing up.
-- `pcb/` contains board/chip photographs; `tools/` contains the raw NAND reader
-  and validator plus other investigation utilities.
+  from pinned inputs; make lasting kernel changes in the `br2-external/` patch
+  queue rather than editing these trees as source.
+- `artifacts/buildroot/` contains ignored current outputs;
+  `artifacts/legacy/` contains ignored historical outputs.
 
 Fetch and build with:
 
@@ -54,39 +43,15 @@ makes the subject clearer, but do not force one. Keep each commit to one logical
 change, and add a body only when the reason or supporting evidence is not
 obvious. Do not add a `Signed-off-by` line unless it is required.
 
-## Reasoning from hardware evidence
+## Working on the device
 
-No public documentation for this SoC is available. Cross-check conclusions
-instead of treating any one source as complete:
+The board can run the vendor 3.0.8 kernel or the mainline port. Run `uname -r`
+before interpreting runtime results. Avoid multi-register `devmem` loops over
+the serial console: echo interleaving can produce plausible but garbled output.
+Prefer individual reads and cross-check surprising values.
 
-1. The reference HiSilicon 3.0.8 tree describes the chip family, not
-   necessarily this board.
-2. The vendor kernel and filesystem show what was built and driven, but omit
-   hardware the product did not use.
-3. A running factory system gives real interrupts and register state, but only
-   for drivers that claimed the hardware.
-4. PrimeCell IDs identify accessible blocks, but a clock-gated block can read
-   like an absent one.
-5. PCB inspection settles fitted parts, but not their runtime configuration.
-
-The board can run either the vendor 3.0.8 kernel or the mainline port. Check
-`uname -r` before interpreting runtime results. Avoid multi-register `devmem`
-loops over the serial console: echo interleaving can produce plausible but
-garbled output. Prefer individual reads and cross-check surprising values.
-
-Facts that affect low-level work:
-
-- The SoC has two Cortex-A9 cores and 1 GiB of DRAM in two 512 MiB banks:
-  DDR0 at `0x80000000`, DDR1 at `0xc0000000`. The port declares both banks and
-  uses the ARM 2G/2G virtual split; runtime validation reports the full 1 GiB.
-- Vendor U-Boot is 2010.06, its prompt is `hisilicon #`, and the kernel load
-  and entry address is `0x80008000`.
-- The runtime MAC is `00:18:AE:3C:A2:49`; the value stored in U-Boot is only a
-  placeholder.
-- The 1 TB WDC SATA disk is the Buildroot ext4 root filesystem. Its stable
-  partition identifier is `ca264b64-5738-4e60-a0ab-b3c3a4c789c1`.
-- The front-panel 8 GB Corsair USB drive has one FAT32 partition. Its `/uImage`
-  is the normal kernel image.
+Update `docs/porting.md` when a maintained implementation or its verified
+status changes. Put reusable hardware evidence in `docs/reference/`.
 
 ## Talking to the DVR
 
@@ -136,7 +101,7 @@ is faster and more flexible than sending shell commands through the UART. The
 authorized key comes from the ignored local build input at
 `artifacts/local/ssh/authorized_keys`.
 
-## Booting a kernel
+## Booting and deployment
 
 Automatic boot is deliberately deferred. For now, manually boot the installed
 USB kernel through the serial console:
@@ -145,29 +110,16 @@ USB kernel through the serial console:
 tools/dvr-boot.exp --usb
 ```
 
-### TFTP development and recovery
-
-The Raspberry Pi at `raspberrypi` hosts the TFTP server and serial connection.
-Stage and boot a local image with:
+For TFTP development or recovery, stage and boot a local image through the
+Raspberry Pi with:
 
 ```sh
 tools/dvr-boot.exp --stage \
     artifacts/buildroot/uImage-hi3531-dhb-ax-full
 ```
 
-Use `--check --stage` to compare the local and staged images without changing
-anything or accessing the UART. An already-staged image can still be booted by
-name:
-
-```sh
-tools/dvr-boot.exp uImage-hi3531-dhb-ax-full
-```
-
-The helper handles staging, checksum verification, the TFTP service, U-Boot
-interaction, bootargs verification, and boot checks. USB defaults to the HDD
-root and TFTP to the Pi's NFS root. Use `--root hdd` or `--root nfs` to
-override that pairing; for example, `--usb --root nfs` avoids U-Boot Ethernet
-when testing the NFS root. Run `tools/dvr-boot.exp --help` for all options.
+Run `tools/dvr-boot.exp --help` for image checks, root selection and other
+options.
 
 ## Provisioning the USB and HDD
 
@@ -180,43 +132,34 @@ tools/dvr-prepare-storage.sh --destroy-all-data
 tools/dvr-install-system.sh
 ```
 
-The first command destroys and recreates both storage devices after matching
-their model, capacity, removability and hardware path. The second installs the
-current `rootfs.tar` and uImage onto empty prepared filesystems.
+The first command destroys and recreates both approved storage devices. The
+second installs the current `rootfs.tar` and full uImage. Read each tool before
+changing its device-identification checks.
 
 ## NFS development and recovery
 
-The Raspberry Pi can still export a temporary root filesystem for provisioning
-or recovery. When using a kernel built with the NFS-root command line, publish
-the userspace with:
+The Raspberry Pi can export a root filesystem for development, provisioning or
+recovery:
 
 ```sh
 scripts/buildroot.sh
 scripts/publish-nfs-root.sh
 ```
 
-The normal kernel supports either root; `dvr-boot.exp` supplies the selected
-root and the verified two-bank memory map through volatile U-Boot `bootargs`.
-
-The publisher handles transfer, validation, safe replacement, and rollback.
-Follow its error messages if the running DVR must be moved to the rescue image
-first. For ordinary driver work, copy the specific modules or files through the
-share instead of republishing the complete root filesystem.
+Boot that root with `tools/dvr-boot.exp --usb --root nfs`. For ordinary driver
+work, copy specific modules or files rather than republishing the complete
+root filesystem.
 
 ## Protecting the factory flash
 
-The factory firmware still boots and the flash images in `backups/` are the only
-copies of it. The USB drive and SATA HDD are approved Linux storage; the SPI NOR
-and NAND are not.
+The USB drive and SATA HDD are approved Linux storage. The SPI NOR, NAND and
+saved U-Boot environment are not.
 
 - Never run `saveenv`, `sf write`, `sf erase`, `nand write`, `nand erase`,
   `flashcp`, `flash_eraseall`, `nandwrite`, or similar commands.
-- Neither SSH nor `tools/dvr-exec.sh` enforces any of this. Check every command
-  before sending it.
+- Do not modify the verified originals under `backups/`.
+- Access helpers do not enforce this boundary. Check commands before sending
+  them to U-Boot or Linux.
 
-Safe operations include U-Boot `printenv`, `nand info`, `nand bad`, `nand
-read`, `sf probe`, `sf read`, `md` and `ping`; temporary `setenv` changes
-without `saveenv`; loading data into DRAM and booting it with `bootm`; normal
-filesystem work on the USB and HDD; temporary files in RAM; and volatile SoC
-register writes with `devmem`. A command being technically safe does not make it useful:
-send only the minimum operation needed for the task.
+Volatile `setenv`, RAM loading and `bootm` are allowed; do not follow them with
+`saveenv`. Normal filesystem work on the USB drive and HDD is allowed.
