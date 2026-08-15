@@ -23,7 +23,7 @@ Options:
   --session NAME          persistent tmux console to use (default: dvr)
   --transcript PATH       Append serial output to PATH
   --load-address ADDRESS  U-Boot load address (default: 0x82000000)
-  --ipaddr ADDRESS        DVR address used by U-Boot (default: 192.168.7.241)
+  --ipaddr ADDRESS        DVR address used by U-Boot (default: 192.168.4.77)
   --netmask ADDRESS       U-Boot network mask (default: 255.255.252.0)
   --serverip ADDRESS      TFTP server address (default: 192.168.4.34)
   --ethaddr ADDRESS       Temporary U-Boot MAC (default: 00:18:AE:3C:A2:49)
@@ -50,7 +50,7 @@ set host raspberrypi
 set session dvr
 set transcript ""
 set load_address 0x82000000
-set ipaddr 192.168.7.241
+set ipaddr 192.168.4.77
 set netmask 255.255.252.0
 set serverip 192.168.4.34
 set ethaddr 00:18:AE:3C:A2:49

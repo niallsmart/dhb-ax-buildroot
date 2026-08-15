@@ -82,7 +82,7 @@ telnet dvr
 ```
 
 Log in as `root` with password `1001chin`. The `dvr` hostname resolves to the
-DHCP reservation; the legacy static address is `192.168.7.240`. Telnet is
+DHCP reservation; the legacy static address is `192.168.4.77`. Telnet is
 unencrypted, so use it only on the local trusted network.
 
 ### Buildroot Linux
