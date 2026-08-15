@@ -1,4 +1,4 @@
-From: DHB-AX local port <local@invalid>
+From: DHB_AX local port <local@invalid>
 Subject: [LOCAL ONLY] net: stmmac: derive PTP and MMC bases from the MAC block
 
 The PTP, MMC and EST register blocks sit at fixed offsets from the MAC

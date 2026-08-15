@@ -1,4 +1,4 @@
-From: DHB-AX local port <local@invalid>
+From: DHB_AX local port <local@invalid>
 Subject: [LOCAL ONLY] ARM: hisi: initialize the Hi3531 UART clock mux
 
 U-Boot leaves the UART on its 3 MHz source.  Clear CRG bit 13 during OF

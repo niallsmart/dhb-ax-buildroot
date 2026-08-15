@@ -1,4 +1,4 @@
-From: DHB-AX local port <local@invalid>
+From: DHB_AX local port <local@invalid>
 Subject: [LOCAL ONLY] net: stmmac: address the MAC block through pcsr
 
 Hi3531 puts the shared MDIO registers at the platform resource base and the

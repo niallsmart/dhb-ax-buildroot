@@ -1,4 +1,4 @@
-From: DHB-AX local port <local@invalid>
+From: DHB_AX local port <local@invalid>
 Subject: [LOCAL ONLY] net: stmmac: add HiSilicon Hi3531 glue
 
 Glue driver for the two DWMAC1000 instances on the Hi3531, plus its

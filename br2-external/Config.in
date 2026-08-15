@@ -1,5 +1,5 @@
 #
-# BR2_EXTERNAL Kconfig for the DHB-AX board.
+# BR2_EXTERNAL Kconfig for the DHB_AX board.
 #
 # Nothing here yet.  Board-specific packages, if any are ever needed, get
 # sourced from this file:

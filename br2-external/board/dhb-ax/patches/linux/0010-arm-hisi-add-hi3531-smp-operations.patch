@@ -1,4 +1,4 @@
-From: DHB-AX local port <local@invalid>
+From: DHB_AX local port <local@invalid>
 Subject: [LOCAL ONLY] ARM: hisi: add Hi3531 SMP operations
 
 Vendor U-Boot has already released CPU1 and left it polling

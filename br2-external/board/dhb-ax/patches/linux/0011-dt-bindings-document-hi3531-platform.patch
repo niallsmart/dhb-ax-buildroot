@@ -1,4 +1,4 @@
-From: DHB-AX local port <local@invalid>
+From: DHB_AX local port <local@invalid>
 Subject: [LOCAL ONLY] dt-bindings: document Hi3531 platform interfaces
 
 Document the board and SoC identity, the secondary-CPU enable method and the
@@ -105,7 +105,7 @@ index 5408763..d9b5872 100644
          items:
            - const: hisilicon,hip07-d05
  
-+      - description: Hi3531 based TVT DHB-AX DVR board
++      - description: Hi3531 based TVT DHB_AX DVR board
 +        items:
 +          - const: tvt,dhb-ax
 +          - const: hisilicon,hi3531

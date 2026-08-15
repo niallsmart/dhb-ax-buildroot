@@ -1,5 +1,5 @@
 #
-# BR2_EXTERNAL makefile for the DHB-AX board.
+# BR2_EXTERNAL makefile for the DHB_AX board.
 #
 # Buildroot includes this after its own package infrastructure.  It is empty
 # because the board needs no out-of-tree packages; the line below picks them

@@ -1,4 +1,4 @@
-From: DHB-AX local port <local@invalid>
+From: DHB_AX local port <local@invalid>
 Subject: [LOCAL ONLY] phy: hisilicon: add Hi3531 USB PHY
 
 USB 2.0 PHY provider for the Hi3531, plus its Kconfig symbol and

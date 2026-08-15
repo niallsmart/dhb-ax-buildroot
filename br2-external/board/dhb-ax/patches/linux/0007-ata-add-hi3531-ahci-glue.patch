@@ -1,4 +1,4 @@
-From: DHB-AX local port <local@invalid>
+From: DHB_AX local port <local@invalid>
 Subject: [LOCAL ONLY] ata: add HiSilicon Hi3531 AHCI glue
 
 AHCI platform glue reproducing the vendor hi_sata_init() bring-up

@@ -1,5 +1,5 @@
-From: DHB-AX local port <local@invalid>
-Subject: [LOCAL ONLY] ARM: dts: build the DHB-AX device trees
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] ARM: dts: build the DHB_AX device trees
 
 Both variants are built from the same source tree, so add both in one hunk:
 splitting them across two patches makes neither able to apply nor reverse-

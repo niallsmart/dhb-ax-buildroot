@@ -1,4 +1,4 @@
-From: DHB-AX local port <local@invalid>
+From: DHB_AX local port <local@invalid>
 Subject: [LOCAL ONLY] net: stmmac: add a per-instance DMA register base
 
 DMA operations and the descriptor helpers are handed priv->ioaddr, which
