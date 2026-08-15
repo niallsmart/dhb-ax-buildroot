@@ -3,27 +3,29 @@
 #
 # Not run directly: tools/dvr-boot.sh resolves local.env and hands off to
 # this script via `exec expect -f tools/dvr-boot.exp "$@"`, exporting
-# DHB_AX_PI_IPADDR, DHB_AX_DVR_IPADDR, DHB_AX_DVR_NETMASK and
-# DHB_AX_DVR_ETHADDR into the environment first.
+# DHB_AX_PI_IPADDR, DHB_AX_DVR_IPADDR, DHB_AX_DVR_NETMASK,
+# DHB_AX_DVR_ETHADDR and DVR_BOOT_REPO_ROOT into the environment first.
 #
-# By default the image argument is a filename beneath /srv/tftp on the Pi.
-# With --stage, the tool first publishes a local image there. With --usb, it
-# loads an existing image from the USB FAT filesystem. It never saves the
-# U-Boot environment or writes board storage.
+# The usb subcommand loads an existing image from the USB FAT filesystem.
+# The tftp subcommand stages a local image to the Pi first. Neither saves
+# the U-Boot environment or writes board storage.
 
 proc usage {{status 0}} {
     set stream stdout
     if {$status != 0} { set stream stderr }
-    puts $stream {usage: dvr-boot.sh [options] TFTP_IMAGE
-       dvr-boot.sh [options] --stage LOCAL_IMAGE
-       dvr-boot.sh [options] --usb [USB_IMAGE]
+    puts $stream {usage: dvr-boot.sh [options] usb [USB_IMAGE]
+       dvr-boot.sh [options] tftp [LOCAL_IMAGE]
+
+Subcommands:
+  usb [USB_IMAGE]     Load from USB FAT (default: /uImage; root: HDD)
+  tftp [LOCAL_IMAGE]  Stage a local image (default: artifacts/buildroot/
+                      uImage-hi3531-dhb-ax) to the Pi under its basename,
+                      verify it, and boot it over TFTP (root: NFS)
 
 Options:
   --check                 Run read-only preflight checks; do not access the UART
-  --stage LOCAL_IMAGE     Stage a local image under its basename before booting
-  --usb                   Load from USB FAT (default: /uImage; root: HDD)
-  --usb-device DEVICE     U-Boot USB device and partition (default: 0:1)
-  --root MODE             Root filesystem: hdd or nfs (default follows loader)
+  --usb-device DEVICE     U-Boot USB device and partition (default: 0:1); usb only
+  --root MODE             Root filesystem: hdd or nfs (default follows subcommand)
   --host HOST             Pi SSH address (default: $DHB_AX_PI_IPADDR)
   --session NAME          persistent tmux console to use (default: dvr)
   --transcript PATH       Append serial output to PATH
@@ -39,8 +41,7 @@ local.env must define whichever value a flag above does not override. See
 local.env.example.
 
 The named tmux session remains the sole owner of the UART. This tool reads its
-pane and sends keys through tmux without restarting the session. USB defaults
-to the HDD root and TFTP to the Pi's NFS root; --root overrides either default.}
+pane and sends keys through tmux without restarting the session.}
     exit $status
 }
 
@@ -71,9 +72,9 @@ set serverip ""
 set ethaddr ""
 set boot_timeout 120
 set check_only 0
+set subcommand ""
 set local_image ""
 set image ""
-set usb_mode 0
 set usb_device 0:1
 set root_mode ""
 
@@ -81,16 +82,8 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
     set arg [lindex $argv $i]
     switch -- $arg {
         --check { set check_only 1 }
-        --usb { set usb_mode 1 }
         --usb-device { set usb_device [option_value argv i $arg] }
         --root { set root_mode [option_value argv i $arg] }
-        --stage {
-            if {$local_image ne ""} {
-                puts stderr "error: --stage may be specified only once"
-                usage 2
-            }
-            set local_image [option_value argv i $arg]
-        }
         --host { set host [option_value argv i $arg] }
         --session { set session [option_value argv i $arg] }
         --transcript { set transcript [option_value argv i $arg] }
@@ -106,14 +99,28 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
                 puts stderr "error: unknown option: $arg"
                 usage 2
             }
-            if {$image ne ""} {
+            if {$subcommand eq ""} {
+                if {$arg ni {usb tftp}} {
+                    puts stderr "error: unknown subcommand: $arg"
+                    usage 2
+                }
+                set subcommand $arg
+            } elseif {$image eq "" && $local_image eq ""} {
+                if {$subcommand eq "usb"} {
+                    set image $arg
+                } else {
+                    set local_image $arg
+                }
+            } else {
                 puts stderr "error: only one image may be specified"
                 usage 2
             }
-            set image $arg
         }
     }
 }
+
+if {$subcommand eq ""} { usage 2 }
+set usb_mode [expr {$subcommand eq "usb"}]
 
 if {$host eq ""} { set host $env(DHB_AX_PI_IPADDR) }
 if {$ipaddr eq ""} { set ipaddr $env(DHB_AX_DVR_IPADDR) }
@@ -122,14 +129,11 @@ if {$netmask eq ""} { set netmask $env(DHB_AX_DVR_NETMASK) }
 if {$serverip eq ""} { set serverip $env(DHB_AX_PI_IPADDR) }
 if {$ethaddr eq ""} { set ethaddr $env(DHB_AX_DVR_ETHADDR) }
 
-if {$local_image ne ""} {
-    if {$usb_mode} {
-        puts stderr "error: --stage and --usb cannot be used together"
-        usage 2
-    }
-    if {$image ne ""} {
-        puts stderr "error: use either TFTP_IMAGE or --stage LOCAL_IMAGE, not both"
-        usage 2
+if {$usb_mode} {
+    if {$image eq ""} { set image uImage }
+} else {
+    if {$local_image eq ""} {
+        set local_image [file join $env(DVR_BOOT_REPO_ROOT) artifacts/buildroot/uImage-hi3531-dhb-ax]
     }
     if {![file exists $local_image] || ![file isfile $local_image] ||
         ![file readable $local_image]} {
@@ -138,8 +142,6 @@ if {$local_image ne ""} {
     }
     set image [file tail $local_image]
 }
-if {$image eq "" && $usb_mode} { set image uImage }
-if {$image eq ""} { usage 2 }
 if {$root_mode eq ""} {
     set root_mode [expr {$usb_mode ? "hdd" : "nfs"}]
 }
@@ -231,15 +233,6 @@ proc stage_image {host local_image image} {
     return 1
 }
 
-set local_digest ""
-if {$local_image ne ""} {
-    set local_digest [local_sha256 $local_image]
-    if {$local_digest eq ""} {
-        puts stderr "error: could not calculate SHA-256 for $local_image"
-        exit 2
-    }
-}
-
 if {$usb_mode} {
     puts "Preflight: USB $usb_device/$image"
 } else {
@@ -273,8 +266,13 @@ if {$pane_state ne "ssh 0"} {
     exit 3
 }
 
-if {$local_image ne ""} {
-    if {!$check_only && ![stage_image $host $local_image $image]} {
+if {$local_image ne "" && !$check_only} {
+    set local_digest [local_sha256 $local_image]
+    if {$local_digest eq ""} {
+        puts stderr "error: could not calculate SHA-256 for $local_image"
+        exit 2
+    }
+    if {![stage_image $host $local_image $image]} {
         exit 3
     }
     set staged_digest [remote_sha256 $host $image]
@@ -283,11 +281,7 @@ if {$local_image ne ""} {
         exit 3
     }
     if {$staged_digest ne $local_digest} {
-        if {$check_only} {
-            puts stderr "error: staged image does not match $local_image; run without --check to publish it"
-        } else {
-            puts stderr "error: staged image checksum does not match $local_image"
-        }
+        puts stderr "error: staged image checksum does not match $local_image"
         exit 3
     }
     puts "SHA-256 verified: $local_digest"
