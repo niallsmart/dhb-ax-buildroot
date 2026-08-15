@@ -31,9 +31,9 @@ if [ ! -x "$mkimage" ]; then
 	exit 1
 fi
 
-for dtb in "$images"/*.dtb; do
-	[ -f "$dtb" ] || continue
-	stem=$(basename "$dtb" .dtb)
+for stem in hi3531-dhb-ax hi3531-dhb-ax-full; do
+	dtb=$images/$stem.dtb
+	test -f "$dtb"
 	appended=$images/zImage-$stem-appended-dtb
 	uimage=$images/uImage-$stem
 
