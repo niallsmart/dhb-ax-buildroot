@@ -20,9 +20,9 @@ board `hisilicon,hi3531`, following mainline convention, in place of the
 vendor's `godnet`, which is HiSilicon's name for their own Hi3531 reference
 board rather than this one.
 
-The sibling `../dhb-ax-guide/doc/README.md` is the technical reference for the
-SoC and board. This repository contains the maintained Linux and Buildroot
-implementation.
+The [DHB_AX hardware guide](https://github.com/niallsmart/dhb-ax-guide/blob/main/doc/README.md)
+is the technical reference for the SoC and board. This repository contains the
+maintained Linux and Buildroot implementation.
 
 ## Status
 
