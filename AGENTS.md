@@ -120,20 +120,26 @@ tools/dvr-boot.exp --stage \
 Run `tools/dvr-boot.exp --help` for image checks, root selection and other
 options.
 
-## Provisioning the USB and HDD
+## Installing the USB and HDD system
 
-The normal Buildroot system uses the USB kernel and HDD root. The one-time
-provisioning tools are intentionally explicit and refuse to run unless Linux
-is currently using an NFS root:
+The normal Buildroot system uses the USB kernel and HDD root. Partition both
+devices once, then install a clean system while Linux is using its NFS root:
 
 ```sh
 tools/dvr-prepare-storage.sh --destroy-all-data
 tools/dvr-install-system.sh
 ```
 
-The first command destroys and recreates both approved storage devices. The
-second installs the current `rootfs.tar` and full uImage. Read each tool before
-changing its device-identification checks.
+The first command destroys and recreates both approved storage devices. It is
+not part of routine deployment. The second reformats the existing HDD
+partition, installs the current `rootfs.tar`, and updates the USB uImage. For
+kernel-only iteration from either the HDD or NFS system, use:
+
+```sh
+tools/dvr-install-system.sh --kernel-only
+```
+
+Read each tool before changing its device-identification checks.
 
 ## NFS development and recovery
 
