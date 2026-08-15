@@ -1,9 +1,9 @@
 #!/bin/sh
 # Run a command on the DVR's serial console and print only that command's output.
 #
-#   tools/dvr-exec.sh 'uname -a'
-#   tools/dvr-exec.sh 'cat /proc/mtd'
-#   SESSION=dvr2 TIMEOUT=30 tools/dvr-exec.sh 'dmesg | tail -40'
+#   tools/dvr-console-exec.sh 'uname -a'
+#   tools/dvr-console-exec.sh 'cat /proc/mtd'
+#   SESSION=dvr2 TIMEOUT=30 tools/dvr-console-exec.sh 'dmesg | tail -40'
 #
 # The console is a durable picocom session running under tmux (see `just dvr`).
 # Full scrollback is useful for forensics; this helper instead wraps one command

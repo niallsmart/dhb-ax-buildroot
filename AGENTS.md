@@ -63,11 +63,11 @@ The `dvr` tmux session owns the UART through one long-lived SSH and picocom
 connection. Start or attach to it with `just dvr`. Leave it running.
 
 - Use `just dvr` for an interactive console.
-- Use `tools/dvr-exec.sh` to run one command at a Linux shell.
+- Use `tools/dvr-console-exec.sh` to run one command at a Linux shell.
 - Use `tools/dvr-boot.exp` to boot a kernel from USB or TFTP.
 
 ```sh
-tools/dvr-exec.sh 'cat /proc/mtd'
+tools/dvr-console-exec.sh 'cat /proc/mtd'
 ```
 
 tmux scrollback is the console history; use `tmux capture-pane` for forensics.
