@@ -1,2 +1,0 @@
-# Kernel IP autoconfiguration brings up loopback and configures eth0 before
-# mounting the NFS root. There is nothing for userspace ifup to repeat.
