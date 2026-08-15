@@ -25,6 +25,7 @@ fi
 buildroot=${BUILDROOT:-/buildroot}
 output=${BR_OUTPUT:-/output}
 external=${BR2_EXTERNAL:-/work/br2-external}
+env_file=${DHB_AX_ENV:-/work/local.env}
 # Keep finished images outside the Buildroot output volume so they are easy to
 # stage and survive container recreation. The parent is gitignored.
 artifacts=/work/artifacts/buildroot
@@ -33,13 +34,55 @@ test -f "$buildroot/Makefile"
 test -f "$external/external.desc"
 mkdir -p "$output" /dl "$artifacts"
 
+# Machine-local configuration, holding the values that a public repository
+# must not carry.  Validate it here rather than leaving make to discover the
+# problem: every failure below otherwise ends the same way, with an empty
+# BR2_TARGET_GENERIC_ROOT_PASSWD, and an empty root password is not a build
+# error -- Buildroot writes "root::" and produces an image anybody can log
+# into over the UART.  A silent downgrade to passwordless is the one outcome
+# worth spending a check on.
+if [ ! -f "$env_file" ]; then
+	echo "no machine-local configuration at $env_file" >&2
+	echo "create it with: install -m 600 local.env.example local.env" >&2
+	exit 1
+fi
+
+# shellcheck source=/dev/null
+. "$env_file"
+
+case "${DHB_AX_ROOT_PASSWD:-}" in
+'')
+	echo "$env_file: DHB_AX_ROOT_PASSWD is unset or empty" >&2
+	echo "generate a hash with: openssl passwd -6" >&2
+	exit 1
+	;;
+'$1$'* | '$5$'* | '$6$'*) ;;
+*)
+	# Buildroot treats anything without a crypt prefix as cleartext and
+	# runs it through host-mkpasswd, which would work but puts the
+	# password in the build log.  Refuse instead of quietly accepting a
+	# weaker arrangement than the one this file documents.
+	echo "$env_file: DHB_AX_ROOT_PASSWD is not a crypt hash" >&2
+	echo "expected it to start with \$1\$, \$5\$ or \$6\$" >&2
+	echo "generate one with: openssl passwd -6" >&2
+	exit 1
+	;;
+esac
+
+# The defconfig refers to $(DHB_AX_ROOT_PASSWD); this supplies it.  The hash
+# is handed over as a $(shell) call that re-reads local.env, not as the hash
+# itself, because make expands the $ in a crypt hash as variable references
+# and mangles it -- see the comment in configs/dhb_ax_defconfig.  $$ escapes
+# the shell variable so make passes it through to /bin/sh untouched.
+root_passwd_var='DHB_AX_ROOT_PASSWD=$(shell . '"$env_file"' && printf %s "$$DHB_AX_ROOT_PASSWD")'
+
 # Buildroot is mounted read-only, so every invocation is an out-of-tree build.
 # BR2_EXTERNAL only has to be passed when the configuration is created; it is
 # recorded in the output tree afterwards, but passing it every time is
 # harmless and keeps the two calls identical.
 br() {
 	make -C "$buildroot" O="$output" BR2_EXTERNAL="$external" \
-		BR2_DL_DIR=/dl "$@"
+		BR2_DL_DIR=/dl "$root_passwd_var" "$@"
 }
 
 # Buildroot does not remove an old filesystem image when its format is later

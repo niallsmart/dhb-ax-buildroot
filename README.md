@@ -41,8 +41,13 @@ ranked by value and effort.
 
 ```sh
 scripts/bootstrap-sources.sh
+install -m 600 local.env.example local.env   # then set DHB_AX_ROOT_PASSWD
 scripts/buildroot.sh
 ```
+
+`local.env` holds machine-local configuration and is gitignored. The build
+refuses to start without a root password hash in it, so the serial console
+cannot be left open by accident; `local.env.example` documents the keys.
 
 Maintained board support lives in `br2-external/`. `kernel/` and `buildroot/`
 are regenerated source trees. Build outputs are written to

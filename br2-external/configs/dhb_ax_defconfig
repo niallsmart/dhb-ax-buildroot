@@ -101,6 +101,23 @@ BR2_INIT_BUSYBOX=y
 BR2_TARGET_GENERIC_GETTY=y
 BR2_TARGET_GENERIC_HOSTNAME="dhb-ax"
 
+# Root password for the getty on the serial console. SSH is public-key only
+# and ignores this; the UART is the path with no key to offer.
+#
+# The hash is not written here. This repository is public, and
+# `buildroot.sh savedefconfig` rewrites this file from .config, so a secret
+# reaching .config is one routine command away from being committed. What
+# both files hold is the make variable reference below; the value comes from
+# the gitignored local.env, and scripts/buildroot-in-container.sh refuses to
+# build without it.
+#
+# It has to arrive through $(shell). A crypt hash cannot survive a plain make
+# variable -- make reads the $6, $5 and $1 in it as variable references and
+# expands them to nothing, so "$6$Salt$hash" arrives as "alt$hash". $(shell)
+# output is the exception: make does not rescan it.
+BR2_TARGET_ENABLE_ROOT_LOGIN=y
+BR2_TARGET_GENERIC_ROOT_PASSWD="$(DHB_AX_ROOT_PASSWD)"
+
 # Obtain the reserved address on eth0 through the normal Buildroot init script.
 # When root is NFS over eth0, Buildroot's nfs_check prevents ifup from
 # reconfiguring eth0 and disrupting the root mount.
