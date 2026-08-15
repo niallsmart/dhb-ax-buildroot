@@ -15,7 +15,7 @@ diff --git a/arch/arm/boot/dts/hisilicon/Makefile b/arch/arm/boot/dts/hisilicon/
 -	hi3519-demb.dtb
 +	hi3519-demb.dtb \
 +	hi3531-dhb-ax.dtb \
-+	hi3531-dhb-ax-full.dtb
++	hi3531-dhb-ax-minimal.dtb
  dtb-$(CONFIG_ARCH_HIX5HD2) += \
  	hisi-x5hd2-dkb.dtb
  dtb-$(CONFIG_ARCH_SD5203) += \

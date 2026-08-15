@@ -31,7 +31,7 @@ if [ ! -x "$mkimage" ]; then
 	exit 1
 fi
 
-for stem in hi3531-dhb-ax hi3531-dhb-ax-full; do
+for stem in hi3531-dhb-ax hi3531-dhb-ax-minimal; do
 	dtb=$images/$stem.dtb
 	test -f "$dtb"
 	appended=$images/zImage-$stem-appended-dtb

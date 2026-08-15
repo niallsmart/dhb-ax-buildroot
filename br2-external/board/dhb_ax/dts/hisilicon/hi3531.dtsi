@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Shared base for the LTS LTD2704XE-P DVR, built on the Shenzhen TVT
- * motherboard marked DHB_AX V1.2 (HiSilicon Hi3531 "godnet").
+ * HiSilicon Hi3531 SoC.
+ *
+ * Boards including this file set their own model and compatible.
  *
  * Only hardware confirmed against the running DVR's /proc/iomem,
- * /proc/interrupts and early boot log is described here.
+ * /proc/interrupts and early boot log is described here.  The vendor
+ * U-Boot and 3.0.8 kernel call this platform "godnet".
  */
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 
 / {
-	compatible = "tvt,dhb-ax", "hisilicon,hi3531";
-
 	#address-cells = <1>;
 	#size-cells = <1>;
 	interrupt-parent = <&gic>;

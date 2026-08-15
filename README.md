@@ -1,10 +1,14 @@
 # Linux port for the LTS LTD2704XE-P DVR
 
-Running mainline Linux on an LTS LTD2704XE-P four-channel HD-SDI digital
-video recorder.
+Running mainline Linux on a four-channel analog CVBS digital video recorder,
+sold as the LTS LTD2704XE-P.
 
-This DVR is built on a Shenzhen TVT motherboard silkscreened
-**`DHB_AX V1.2`**, using the HiSilicon Hi3531 (`godnet`) platform. It shipped
+The board is a Shenzhen TVT Digital motherboard silkscreened
+**`DHB_AX V1.2`**, built on the HiSilicon Hi3531. TVT is the original design
+manufacturer, and the same board ships under other retail brands. The vendor
+U-Boot and 3.0.8 kernel call the platform `godnet`, which is HiSilicon's name
+for their own Hi3531 reference board; mainline identifies it as
+`hisilicon,hi3531`. It shipped
 with Linux 3.0.8 and a stack of binary-only vendor modules. This project
 replaces that with Linux 6.18.42 LTS. U-Boot loads the kernel from USB flash,
 Linux mounts its Buildroot root filesystem from the internal SATA HDD, and
@@ -32,4 +36,4 @@ scripts/buildroot.sh
 Maintained board support lives in `br2-external/`. `kernel/` and `buildroot/`
 are regenerated source trees. Build outputs are written to
 `artifacts/buildroot/`; the normal boot image is
-`uImage-hi3531-dhb-ax-full`.
+`uImage-hi3531-dhb-ax`.

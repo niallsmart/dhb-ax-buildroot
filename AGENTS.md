@@ -32,7 +32,7 @@ scripts/bootstrap-sources.sh    # once, or when a derived tree is absent
 scripts/buildroot.sh
 ```
 
-The output image is `artifacts/buildroot/uImage-hi3531-dhb-ax-full`.
+The output image is `artifacts/buildroot/uImage-hi3531-dhb-ax`.
 
 ## Commit messages
 
@@ -114,7 +114,7 @@ Raspberry Pi with:
 
 ```sh
 tools/dvr-boot.exp --stage \
-    artifacts/buildroot/uImage-hi3531-dhb-ax-full
+    artifacts/buildroot/uImage-hi3531-dhb-ax
 ```
 
 Run `tools/dvr-boot.exp --help` for image checks, root selection and other
