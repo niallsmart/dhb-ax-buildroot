@@ -48,6 +48,10 @@ proc option_value {argv_name index_name option} {
 
 set host raspberrypi
 set session dvr
+# SSH target for the DVR itself, as distinct from $host, which is the Pi.
+# Buildroot's console login is answered through this rather than typed.
+set dvr_ssh root@dvr
+if {[info exists env(DVR_SSH)]} { set dvr_ssh $env(DVR_SSH) }
 set transcript ""
 set load_address 0x82000000
 set ipaddr 192.168.4.77
@@ -400,21 +404,29 @@ trap {abort_boot "interrupted" 130} {SIGINT SIGTERM SIGHUP}
 console_send "\r"
 set shell_ready 0
 set uboot_ready 0
-for {set i 0} {$i < 12 && !$shell_ready && !$uboot_ready} {incr i} {
+set ssh_reboot 0
+# The hostname in the login prompt says which system is running. The vendor
+# 3.0.8 sets none, so it greets as "(none) login:"; Buildroot uses the
+# BR2_TARGET_GENERIC_HOSTNAME from configs/dhb_ax_defconfig. Only the vendor
+# password is known to this tool -- Buildroot's is a hash in local.env, which
+# cannot be typed at a prompt -- so the two prompts are answered differently.
+for {set i 0} {$i < 12 && !$shell_ready && !$uboot_ready && !$ssh_reboot} {incr i} {
     set state [wait_pane [list \
         uboot last {^hisilicon # *$} \
         shell last {^((~|/) )?# *$} \
-        login last {^[^ ]+ login: *$} \
+        vendor_login last {^\(none\) login: *$} \
+        buildroot_login last {^dhb-ax login: *$} \
         password last {^Password: *$}] 5]
     switch -- $state {
         uboot { set uboot_ready 1 }
         shell { set shell_ready 1 }
-        login { console_send "root\r" }
+        vendor_login { console_send "root\r" }
         password { console_send "1001chin\r" }
+        buildroot_login { set ssh_reboot 1 }
         timeout { console_send "\r" }
     }
 }
-if {!$shell_ready && !$uboot_ready} {
+if {!$shell_ready && !$uboot_ready && !$ssh_reboot} {
     abort_boot "could not identify the current DVR console state" 5
 }
 
@@ -423,7 +435,16 @@ if {!$uboot_ready} {
     # Let a normal init stop services and unmount local filesystems cleanly.
     # The RAM-only rescue image has a custom PID 1 that ignores this request;
     # if its shell prompt returns, fall back to the reboot syscall directly.
-    console_send "reboot\r"
+    if {$ssh_reboot} {
+        # Buildroot sitting at its login prompt. Root SSH is public-key, so
+        # the same clean shutdown is available without a console session.
+        # The connection dies with the system, so the exit status says
+        # nothing useful; reaching U-Boot below is the real confirmation.
+        puts "Buildroot login prompt; requesting reboot over SSH ($dvr_ssh)..."
+        ssh_command $dvr_ssh reboot
+    } else {
+        console_send "reboot\r"
+    }
     set deadline [expr {[clock milliseconds] + 60000}]
     set force_deadline [expr {[clock milliseconds] + 3000}]
     set force_sent 0
