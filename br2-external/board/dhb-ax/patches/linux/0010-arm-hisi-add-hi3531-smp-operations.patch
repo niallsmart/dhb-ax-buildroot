@@ -1,6 +1,4 @@
-From 7ec971cb47453bf9bfcbfa754ee6858010f8ad80 Mon Sep 17 00:00:00 2001
-From: Niall Smart <niall.smart@gmail.com>
-Date: Thu, 13 Aug 2026 17:00:00 -0400
+From: DHB-AX local port <local@invalid>
 Subject: [LOCAL ONLY] ARM: hisi: add Hi3531 SMP operations
 
 Vendor U-Boot has already released CPU1 and left it polling
@@ -16,11 +14,7 @@ and restart the core.
 Add a dedicated method which performs only the two operations established for
 Hi3531.  Deliberately provide no hotplug callbacks: after CPU1 leaves U-Boot's
 poll loop there is no validated way to put it back there.
-
 ---
- arch/arm/mach-hisi/platsmp.c | 44 ++++++++++++++++++++++++++++++++++++
- 1 file changed, 44 insertions(+)
-
 diff --git a/arch/arm/mach-hisi/platsmp.c b/arch/arm/mach-hisi/platsmp.c
 --- a/arch/arm/mach-hisi/platsmp.c
 +++ b/arch/arm/mach-hisi/platsmp.c
@@ -82,5 +76,3 @@ diff --git a/arch/arm/mach-hisi/platsmp.c b/arch/arm/mach-hisi/platsmp.c
  CPU_METHOD_OF_DECLARE(hi3xxx_smp, "hisilicon,hi3620-smp", &hi3xxx_smp_ops);
  CPU_METHOD_OF_DECLARE(hix5hd2_smp, "hisilicon,hix5hd2-smp", &hix5hd2_smp_ops);
  CPU_METHOD_OF_DECLARE(hip01_smp, "hisilicon,hip01-smp", &hip01_smp_ops);
--- 
-2.50.1
