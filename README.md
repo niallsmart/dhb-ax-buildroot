@@ -12,9 +12,13 @@ flash, Linux mounts its Buildroot root filesystem from the internal SATA HDD,
 and TFTP/NFS remain available for development and recovery. The port drives as
 much of the hardware as can be supported without vendor blobs.
 
-The vendor U-Boot and 3.0.8 kernel call the platform `godnet`, which is
-HiSilicon's name for their own Hi3531 reference board; mainline identifies this
-board as `hisilicon,hi3531`.
+The Hi3531 has no upstream support: `hi3531` appears nowhere in the mainline
+tree. What mainline does supply is drivers for the licensed IP the SoC is built
+from — PL011, PL022, PL061, SP804, GIC, `stmmac` and `ahci_platform` — so the
+patch queue is mostly per-SoC glue rather than new drivers. This port names the
+board `hisilicon,hi3531`, following mainline convention, in place of the
+vendor's `godnet`, which is HiSilicon's name for their own Hi3531 reference
+board rather than this one.
 
 The sibling `../dhb-ax-guide/doc/README.md` is the technical reference for the
 SoC and board. This repository contains the maintained Linux and Buildroot
