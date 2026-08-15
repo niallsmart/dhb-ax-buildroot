@@ -15,9 +15,9 @@ Linux mounts its Buildroot root filesystem from the internal SATA HDD, and
 TFTP/NFS remain available for development and recovery. The port drives as
 much of the hardware as can be supported without vendor blobs.
 
-The sibling `../hi3531-porting-guide/doc/README.md` is the technical reference
-for the SoC and board. This repository contains the maintained Linux and
-Buildroot implementation.
+The sibling `../dhb-ax-guide/doc/README.md` is the technical reference for the
+SoC and board. This repository contains the maintained Linux and Buildroot
+implementation.
 
 ## Status
 
