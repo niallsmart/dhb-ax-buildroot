@@ -33,6 +33,9 @@ Ethernet, SATA and ext4 root, EHCI/OHCI USB, all nineteen GPIO controllers, the
 bit-banged I²C bus and battery-backed RTC, NFS, and OpenSSH. The proprietary
 media pipeline is out of scope.
 
+[Remaining hardware work](doc/remaining-work.md) lists what is not yet driven,
+ranked by value and effort.
+
 ## Build
 
 ```sh
