@@ -6,7 +6,10 @@
 # justification for erasing a disk.
 set -eu
 
-target=${DVR_SSH:-root@dvr}
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+. "$repo/scripts/lib.sh"
+require_env_file "$repo/local.env" DHB_AX_DVR_IPADDR
+target=root@${DHB_AX_DVR_IPADDR}
 
 if [ "${1:-}" != "--destroy-all-data" ] || [ "$#" -ne 1 ]; then
 	echo "usage: $0 --destroy-all-data" >&2

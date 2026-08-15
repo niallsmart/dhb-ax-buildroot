@@ -41,7 +41,7 @@ ranked by value and effort.
 
 ```sh
 scripts/bootstrap-sources.sh
-install -m 600 local.env.example local.env   # then set DHB_AX_ROOT_PASSWD
+install -m 600 local.env.example local.env   # then fill in the required values
 scripts/buildroot.sh
 ```
 

@@ -19,16 +19,19 @@ Options:
   --usb                   Load from USB FAT (default: /uImage; root: HDD)
   --usb-device DEVICE     U-Boot USB device and partition (default: 0:1)
   --root MODE             Root filesystem: hdd or nfs (default follows loader)
-  --host HOST             Pi SSH host (default: raspberrypi)
+  --host HOST             Pi SSH address (default: $DHB_AX_PI_IPADDR)
   --session NAME          persistent tmux console to use (default: dvr)
   --transcript PATH       Append serial output to PATH
   --load-address ADDRESS  U-Boot load address (default: 0x82000000)
-  --ipaddr ADDRESS        DVR address used by U-Boot (default: 192.168.4.77)
-  --netmask ADDRESS       U-Boot network mask (default: 255.255.252.0)
-  --serverip ADDRESS      TFTP server address (default: 192.168.4.34)
-  --ethaddr ADDRESS       Temporary U-Boot MAC (default: 00:18:AE:3C:A2:49)
+  --ipaddr ADDRESS        DVR address used by U-Boot (default: $DHB_AX_DVR_IPADDR)
+  --netmask ADDRESS       U-Boot network mask (default: $DHB_AX_DVR_NETMASK)
+  --serverip ADDRESS      TFTP server address (default: $DHB_AX_PI_IPADDR)
+  --ethaddr ADDRESS       Temporary U-Boot MAC (default: $DHB_AX_DVR_ETHADDR)
   --boot-timeout SECONDS  Linux prompt timeout (default: 120)
   --help                  Show this help
+
+local.env must define whichever value a flag above does not override. See
+local.env.example.
 
 The named tmux session remains the sole owner of the UART. This tool reads its
 pane and sends keys through tmux without restarting the session. USB defaults
@@ -46,18 +49,75 @@ proc option_value {argv_name index_name option} {
     return [lindex $args $index]
 }
 
-set host raspberrypi
+# The Pi address and U-Boot network parameters have no built-in default:
+# they live in local.env, alongside DHB_AX_ROOT_PASSWD -- see
+# local.env.example. This is a plain-assignment KEY=value reader, not a
+# shell parser; it only needs to understand the subset of POSIX shell that
+# file itself uses.
+proc load_local_env {path} {
+    set values [dict create]
+    set fh [open $path r]
+    while {[gets $fh line] >= 0} {
+        set line [string trim $line]
+        if {$line eq "" || [string index $line 0] eq "#"} { continue }
+        if {![regexp {^([A-Za-z_][A-Za-z0-9_]*)=(.*)$} $line -> key value]} {
+            continue
+        }
+        set value [string trim $value]
+        if {[string length $value] >= 2} {
+            set first [string index $value 0]
+            set last [string index $value end]
+            if {($first eq "'" && $last eq "'") || ($first eq {"} && $last eq {"})} {
+                set value [string range $value 1 end-1]
+            }
+        }
+        dict set values $key $value
+    }
+    close $fh
+    return $values
+}
+
+set repo_root [file dirname [file dirname [file normalize $argv0]]]
+set local_env_path [file join $repo_root local.env]
+set local_env [dict create]
+set local_env_loaded 0
+
+# Loads local.env on first use, not at startup, so --help never needs it.
+# Every value this tool takes from local.env goes through here: there is no
+# code-level fallback, only a clear complaint about what to set and where.
+proc require_env {key} {
+    global local_env local_env_loaded local_env_path
+    if {!$local_env_loaded} {
+        if {![file readable $local_env_path]} {
+            puts stderr "error: no machine-local configuration at $local_env_path"
+            puts stderr "create it with: install -m 600 local.env.example local.env"
+            exit 2
+        }
+        set local_env [load_local_env $local_env_path]
+        set local_env_loaded 1
+    }
+    if {![dict exists $local_env $key] || [dict get $local_env $key] eq ""} {
+        puts stderr "error: local.env must set $key; see local.env.example"
+        exit 2
+    }
+    return [dict get $local_env $key]
+}
+
+# Left blank here and resolved after option parsing below: a value given on
+# the command line should not force local.env to define the same key.
+set host ""
 set session dvr
 # SSH target for the DVR itself, as distinct from $host, which is the Pi.
 # Buildroot's console login is answered through this rather than typed.
-set dvr_ssh root@dvr
-if {[info exists env(DVR_SSH)]} { set dvr_ssh $env(DVR_SSH) }
+# Reaches the DVR by IP address rather than hostname, sharing $ipaddr below;
+# resolved after option parsing regardless. The DVR's SSH user is always root.
+set dvr_ssh ""
 set transcript ""
 set load_address 0x82000000
-set ipaddr 192.168.4.77
-set netmask 255.255.252.0
-set serverip 192.168.4.34
-set ethaddr 00:18:AE:3C:A2:49
+set ipaddr ""
+set netmask ""
+set serverip ""
+set ethaddr ""
 set boot_timeout 120
 set check_only 0
 set local_image ""
@@ -103,6 +163,13 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
         }
     }
 }
+
+if {$host eq ""} { set host [require_env DHB_AX_PI_IPADDR] }
+if {$ipaddr eq ""} { set ipaddr [require_env DHB_AX_DVR_IPADDR] }
+set dvr_ssh "root@$ipaddr"
+if {$netmask eq ""} { set netmask [require_env DHB_AX_DVR_NETMASK] }
+if {$serverip eq ""} { set serverip [require_env DHB_AX_PI_IPADDR] }
+if {$ethaddr eq ""} { set ethaddr [require_env DHB_AX_DVR_ETHADDR] }
 
 if {$local_image ne ""} {
     if {$usb_mode} {

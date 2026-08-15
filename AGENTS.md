@@ -25,16 +25,10 @@ This file is for repository workflow, device access and safety constraints.
 - `artifacts/buildroot/` contains ignored current outputs;
   `artifacts/legacy/` contains ignored historical outputs.
 
-Fetch and build with:
 
-```sh
-scripts/bootstrap-sources.sh    # once, or when a derived tree is absent
-install -m 600 local.env.example local.env  # once; then set DHB_AX_ROOT_PASSWD
-scripts/buildroot.sh
-```
 
-`local.env` is the gitignored machine-local configuration, read by
-`scripts/buildroot-in-container.sh`. It carries the root password
+`local.env` is the gitignored machine-local configuration and needs to be
+configured by the user. It carries the root password
 hash, and the build exits rather than proceed without one. Add
 further per-machine values as `DHB_AX_*` keys, documenting each in the
 tracked `local.env.example`. Nothing secret goes in `br2-external/`: that

@@ -25,7 +25,6 @@ fi
 buildroot=${BUILDROOT:-/buildroot}
 output=${BR_OUTPUT:-/output}
 external=${BR2_EXTERNAL:-/work/br2-external}
-env_file=${DHB_AX_ENV:-/work/local.env}
 # Keep finished images outside the Buildroot output volume so they are easy to
 # stage and survive container recreation. The parent is gitignored.
 artifacts=/work/artifacts/buildroot
@@ -34,6 +33,9 @@ test -f "$buildroot/Makefile"
 test -f "$external/external.desc"
 mkdir -p "$output" /dl "$artifacts"
 
+# shellcheck source=scripts/lib.sh
+. "$(dirname -- "$0")/lib.sh"
+
 # Machine-local configuration, holding the values that a public repository
 # must not carry.  Validate it here rather than leaving make to discover the
 # problem: every failure below otherwise ends the same way, with an empty
@@ -41,14 +43,7 @@ mkdir -p "$output" /dl "$artifacts"
 # error -- Buildroot writes "root::" and produces an image anybody can log
 # into over the UART.  A silent downgrade to passwordless is the one outcome
 # worth spending a check on.
-if [ ! -f "$env_file" ]; then
-	echo "no machine-local configuration at $env_file" >&2
-	echo "create it with: install -m 600 local.env.example local.env" >&2
-	exit 1
-fi
-
-# shellcheck source=/dev/null
-. "$env_file"
+require_env_file "${DHB_AX_ENV:-/work/local.env}"
 
 case "${DHB_AX_ROOT_PASSWD:-}" in
 '')

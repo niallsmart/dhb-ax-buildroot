@@ -6,11 +6,9 @@
 logs
 __pycache__
 
-# Machine-local build configuration: the root password hash, and whatever
-# else later needs a per-machine value. Anchored so only the file at the
-# repository root is ignored, and so the tracked local.env.example template
-# beside it still gets committed.
-/local.env
+# machine-local build configuration, including the root password hash and
+# network configuration
+local.env
 
 # Regenerable source trees, ~4 GB.
 # Recreate with scripts/bootstrap-sources.sh

@@ -9,7 +9,9 @@ set -eu
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 default_rootfs=$repo/artifacts/buildroot/rootfs.tar
 default_uimage=$repo/artifacts/buildroot/uImage-hi3531-dhb-ax
-target=${DVR_SSH:-root@dvr}
+. "$repo/scripts/lib.sh"
+require_env_file "$repo/local.env" DHB_AX_DVR_IPADDR
+target=root@${DHB_AX_DVR_IPADDR}
 remote_rootfs=/tmp/dhb-ax-install-rootfs.tar
 remote_uimage=/tmp/dhb-ax-install-uImage
 
