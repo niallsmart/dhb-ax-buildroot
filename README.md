@@ -23,6 +23,8 @@ board rather than this one.
 The [DHB_AX hardware guide](https://github.com/niallsmart/dhb-ax-guide/blob/main/doc/README.md)
 is the technical reference for the SoC and board. This repository contains the
 maintained Linux and Buildroot implementation.
+[Why the work lives in two repositories](doc/repository-split.md) covers the
+division and where a given change belongs.
 
 ## Status
 
