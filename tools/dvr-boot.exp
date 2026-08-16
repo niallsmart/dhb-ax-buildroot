@@ -191,16 +191,34 @@ if {![string is integer -strict $boot_timeout] || $boot_timeout < 1} {
     exit 2
 }
 
-proc ssh_command {host command} {
-    if {[catch {exec ssh -o BatchMode=yes $host $command} output options]} {
-        if {$output ne ""} { puts stderr $output }
-        return 0
+# exec raises an error whenever a child writes to stderr, whatever its exit
+# status, so an SSH host key warning or a sudo lecture reaching this without
+# help reads as a command that failed. -errorcode separates the two: a child
+# that exits non-zero, dies on a signal or cannot be started reports
+# CHILDSTATUS, CHILDKILLED or POSIX, and one that only wrote to stderr
+# reports NONE. Returns {ok output}, where output holds stdout followed by
+# any stderr text, so the digest patterns below still anchor to stdout.
+proc run_command {args} {
+    if {[catch {exec {*}$args} output options]} {
+        if {[dict get $options -errorcode] ne "NONE"} {
+            return [list 0 $output]
+        }
     }
-    return 1
+    return [list 1 $output]
+}
+
+proc ssh_command {host command} {
+    lassign [run_command ssh -o BatchMode=yes $host $command] ok output
+    # Reported whether or not the command succeeded: none of the commands
+    # sent through here print to stdout when they work, so anything at all
+    # is either a diagnostic worth seeing or the reason for the failure.
+    if {$output ne ""} { puts stderr $output }
+    return $ok
 }
 
 proc local_sha256 {path} {
-    if {[catch {exec shasum -a 256 -- $path} output]} { return "" }
+    lassign [run_command shasum -a 256 -- $path] ok output
+    if {!$ok} { return "" }
     if {![regexp -nocase {^([0-9a-f]{64})[ \t]} $output match digest]} {
         return ""
     }
@@ -209,7 +227,8 @@ proc local_sha256 {path} {
 
 proc remote_sha256 {host image} {
     set command "sha256sum /srv/tftp/$image"
-    if {[catch {exec ssh -o BatchMode=yes $host $command} output]} { return "" }
+    lassign [run_command ssh -o BatchMode=yes $host $command] ok output
+    if {!$ok} { return "" }
     if {![regexp -nocase {^([0-9a-f]{64})[ \t]} $output match digest]} {
         return ""
     }
@@ -221,10 +240,10 @@ proc stage_image {host local_image image} {
     set remote_incoming "/srv/tftp/.dvr-boot-[pid]-$image.incoming"
 
     puts "Staging $local_image on $host..."
-    if {[catch {
-        exec scp -q -o BatchMode=yes -- $local_image "$host:$remote_temp"
-    } output]} {
-        if {$output ne ""} { puts stderr $output }
+    lassign [run_command \
+        scp -q -o BatchMode=yes -- $local_image "$host:$remote_temp"] ok output
+    if {$output ne ""} { puts stderr $output }
+    if {!$ok} {
         puts stderr "error: could not copy the image to $host"
         return 0
     }
