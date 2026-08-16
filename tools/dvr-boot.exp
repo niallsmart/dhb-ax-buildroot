@@ -581,10 +581,17 @@ if {$usb_mode} {
     console_send "echo $load_marker; tftp $load_address $image\r"
     set result [wait_pane [list \
         success history {Bytes transferred = [0-9]+} \
-        failure history {(TFTP error|Retry count exceeded|Access violation|File not found)}] \
+        failure history {(TFTP error|Retry count exceeded|Access violation|File not found)} \
+        phy_down history {PHY not link}] \
         120 $load_marker]
     if {$result eq "failure"} {
         abort_boot "TFTP reported a transfer failure" 8
+    }
+    if {$result eq "phy_down"} {
+        # Seen transiently right after reboot -- the PHY hadn't finished link
+        # negotiation yet when U-Boot tried to use it. Retrying has cleared it
+        # every time so far.
+        abort_boot "Ethernet PHY link is down; retry, it has been transient after reboot" 8
     }
     if {$result ne "success"} {
         abort_boot "TFTP did not complete within 120 seconds" 8
