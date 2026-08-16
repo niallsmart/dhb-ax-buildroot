@@ -522,8 +522,10 @@ proc uboot_command {command} {
     # bare rather than wrapped in a fake echo, but still leading: right
     # after autoboot is interrupted, the first character of the first line
     # sent is occasionally lost, and that has to cost a disposable token,
-    # never the command itself.
-    console_send "$marker; $command\r"
+    # never the command itself. The leading space is that token's own
+    # sacrifice: if it's what gets eaten, the marker arrives intact; hush
+    # ignores leading whitespace either way.
+    console_send " $marker; $command\r"
     set result [wait_pane [list uboot last {^hisilicon # *$}] 10 $marker]
     if {$result ne "uboot"} {
         abort_boot "U-Boot command timed out: $command" 7
@@ -547,7 +549,7 @@ proc configure_bootargs {root_bootargs} {
     # intact environment value can still be compared exactly.
     incr command_sequence
     set marker "__DVR_ARGS_[pid]_${command_sequence}__"
-    console_send "$marker; printenv bootargs\r"
+    console_send " $marker; printenv bootargs\r"
     if {[wait_pane [list uboot last {^hisilicon # *$}] 10 $marker] ne "uboot"} {
         abort_boot "U-Boot bootargs verification timed out" 7
     }
@@ -592,7 +594,7 @@ if {$usb_mode} {
     puts "Loading USB $usb_device/$image at $load_address..."
     incr command_sequence
     set load_marker "__DVR_USB_[pid]_${command_sequence}__"
-    console_send "$load_marker; fatload usb $usb_device $load_address $image\r"
+    console_send " $load_marker; fatload usb $usb_device $load_address $image\r"
     set result [wait_pane [list \
         success history {[0-9]+ bytes read} \
         failure history {(Bad device|Unable to read|no USB devices available|\*\* Invalid partition)}] \
@@ -616,7 +618,7 @@ if {$usb_mode} {
     puts "Loading $image at $load_address..."
     incr command_sequence
     set load_marker "__DVR_TFTP_[pid]_${command_sequence}__"
-    console_send "$load_marker; tftp $load_address $image\r"
+    console_send " $load_marker; tftp $load_address $image\r"
     set result [wait_pane [list \
         success history {Bytes transferred = [0-9]+} \
         failure history {(TFTP error|Retry count exceeded|Access violation|File not found)} \
@@ -642,7 +644,7 @@ if {$usb_mode} {
 puts "Booting from RAM..."
 incr command_sequence
 set boot_marker "__DVR_BOOTM_[pid]_${command_sequence}__"
-console_send "$boot_marker; bootm $load_address\r"
+console_send " $boot_marker; bootm $load_address\r"
 set result [wait_pane [list \
     shell history {^((~|/) )?#( |$)} \
     login history {^[^ ]+ login:} \
