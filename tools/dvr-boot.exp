@@ -22,20 +22,26 @@ Subcommands:
                       uImage-hi3531-dhb-ax) to the Pi under its basename,
                       verify it, and boot it over TFTP (root: NFS)
 
-Options:
+Common:
   --check                 Run read-only preflight checks; do not access the UART
-  --usb-device DEVICE     U-Boot USB device and partition (default: 0:1); usb only
   --root MODE             Root filesystem: hdd or nfs (default follows subcommand)
   --host HOST             Pi SSH address (default: $DHB_AX_PI_IPADDR)
   --session NAME          persistent tmux console to use (default: dvr)
   --transcript PATH       Append serial output to PATH
   --load-address ADDRESS  U-Boot load address (default: 0x82000000)
-  --ipaddr ADDRESS        DVR address used by U-Boot (default: $DHB_AX_DVR_IPADDR)
-  --netmask ADDRESS       U-Boot network mask (default: $DHB_AX_DVR_NETMASK)
-  --serverip ADDRESS      TFTP server address (default: $DHB_AX_PI_IPADDR)
-  --ethaddr ADDRESS       Temporary U-Boot MAC (default: $DHB_AX_DVR_ETHADDR)
+  --ipaddr ADDRESS        DVR address (default: $DHB_AX_DVR_IPADDR)
   --boot-timeout SECONDS  Linux prompt timeout (default: 120)
   --help                  Show this help
+
+usb only:
+  --usb-device DEVICE     U-Boot USB device and partition (default: 0:1)
+
+tftp, or either subcommand with --root nfs:
+  --netmask ADDRESS       U-Boot network mask (default: $DHB_AX_DVR_NETMASK)
+  --serverip ADDRESS      TFTP/NFS server address (default: $DHB_AX_PI_IPADDR)
+
+tftp only:
+  --ethaddr ADDRESS       Temporary U-Boot MAC (default: $DHB_AX_DVR_ETHADDR)
 
 local.env must define whichever value a flag above does not override. See
 local.env.example.
