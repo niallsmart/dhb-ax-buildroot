@@ -54,7 +54,6 @@ base=$1
 archive=$2
 incoming=$base/.rootfs.incoming
 current=$base/rootfs
-previous=$base/.rootfs.previous
 
 # The export has historically allowed both addresses below for the DVR. An
 # established NFS/TCP session from either means a full-root replacement is not
@@ -69,10 +68,10 @@ fi
 test -f "$archive"
 mkdir -p "$base"
 
-# No client is using this export, so fixed staging/rollback names are safe to
-# reclaim. Extraction happens beside the live name, making promotion a pair of
-# same-filesystem renames rather than a partially visible update.
-rm -rf -- "$incoming" "$previous"
+# No client is using this export, so the fixed staging name is safe to
+# reclaim. Extraction happens beside the live name so a failure there leaves
+# the current root untouched.
+rm -rf -- "$incoming"
 mkdir -m 0755 "$incoming"
 tar --numeric-owner -xpf "$archive" -C "$incoming"
 
@@ -84,20 +83,12 @@ test -f "$incoming/root/.ssh/authorized_keys"
 test "$(stat -c %a "$incoming/etc/ssh/ssh_host_ed25519_key")" = 600
 test "$(stat -c %a "$incoming/root/.ssh/authorized_keys")" = 600
 
-if [ -e "$current" ]; then
-	mv "$current" "$previous"
-fi
-if ! mv "$incoming" "$current"; then
-	[ ! -e "$previous" ] || mv "$previous" "$current"
-	exit 4
-fi
+rm -rf -- "$current"
+mv "$incoming" "$current"
 
 rm -f -- "$archive"
 sync
 echo "publish-nfs-root: promoted $current"
-if [ -e "$previous" ]; then
-	echo "publish-nfs-root: rollback tree retained at $previous"
-fi
 REMOTE
 
 echo "NFS root published successfully."
