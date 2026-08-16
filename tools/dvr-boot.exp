@@ -537,7 +537,25 @@ proc configure_bootargs {root_bootargs} {
 
     # No keep_bootcon: earlycon and ttyAMA0 are the same PL011 at 0x20080000,
     # so keeping the boot console registered printed every message twice.
-    set common_bootargs {console=ttyAMA0,115200 earlycon=pl011,0x20080000 ignore_loglevel mem=512M@0x80000000 mem=512M@0xc0000000}
+    #
+    # libata.force targets the three port-multiplier sub-ports with no SATA
+    # connector fitted at all (SATA1, SATA2, SATA5 -- see
+    # dhb-ax-guide/doc/07-sata-storage.md). Two params per port, since each
+    # addresses a different delay:
+    #   norst (ATA_LFLAG_NO_HRST | NO_SRST) skips the reset itself. disable
+    #   -- tried first -- does not: it is a device quirk, checked only after
+    #   a device has already been identified, so it never applies to a port
+    #   with nothing attached to identify.
+    #   nodbdelay (sets ATA_LFLAG_NO_DEBOUNCE_DELAY -- the "no" is part of
+    #   libata's own force keyword, not a double negative) is still needed
+    #   even with norst: sata_link_resume() retries the SControl write
+    #   independently of whether a reset follows, sleeping 200ms between
+    #   each of ATA_LINK_RESUME_TRIES (5) attempts -- the actual ~1s/port
+    #   this is after. nodbdelay drops the sleep, so the retries that can
+    #   never succeed on an empty port fail fast instead.
+    # SATA3 (ata2.02) is the populated drive; SATA4 (ata2.03) is left alone
+    # since it has a fitted connector and could take a second drive.
+    set common_bootargs {console=ttyAMA0,115200 earlycon=pl011,0x20080000 ignore_loglevel mem=512M@0x80000000 mem=512M@0xc0000000 libata.force=2.00:norst,2.00:nodbdelay,2.01:norst,2.01:nodbdelay,2.04:norst,2.04:nodbdelay}
     set expected "$common_bootargs $root_bootargs"
 
     # Keep both input lines well below old U-Boot's possible 256-byte console
