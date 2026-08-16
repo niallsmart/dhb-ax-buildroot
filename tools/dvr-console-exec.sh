@@ -5,7 +5,7 @@
 #   tools/dvr-console-exec.sh 'cat /proc/mtd'
 #   SESSION=dvr2 TIMEOUT=30 tools/dvr-console-exec.sh 'dmesg | tail -40'
 #
-# The console is a durable picocom session running under tmux (see `just dvr`).
+# The console is a durable picocom session running under tmux (see `just dvr-console`).
 # Full scrollback is useful for forensics; this helper instead wraps one command
 # in unique markers and returns only that command's output.
 #
@@ -30,7 +30,7 @@ case $SESSION in
 esac
 
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then
-	echo "error: no tmux session '$SESSION'; start it with: just dvr" >&2
+	echo "error: no tmux session '$SESSION'; start it with: just dvr-console" >&2
 	exit 1
 fi
 

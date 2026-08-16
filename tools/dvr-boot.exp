@@ -263,7 +263,7 @@ if {!$usb_mode} {
 }
 
 if {[catch {exec tmux has-session -t $session}]} {
-    puts stderr "error: no tmux session '$session'; start it with: just dvr"
+    puts stderr "error: no tmux session '$session'; start it with: just dvr-console"
     exit 3
 }
 set pane_state [string trim [exec tmux display-message -p -t $session {#{pane_current_command} #{pane_dead}}]]

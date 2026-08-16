@@ -87,13 +87,13 @@ is unavailable.
 
 Under the Buildroot system the console getty asks for a password: log in as
 `root` with the password whose hash is in `local.env`. The tools below assume
-a session that is already logged in, so only interactive `just dvr` attaches
+a session that is already logged in, so only interactive `just dvr-console` attaches
 need it.
 
 The `dvr` tmux session owns the UART through one long-lived SSH and picocom
-connection. Start or attach to it with `just dvr`. Leave it running.
+connection. Start or attach to it with `just dvr-console`. Leave it running.
 
-- Use `just dvr` for an interactive console.
+- Use `just dvr-console` for an interactive console.
 - Use `tools/dvr-console-exec.sh` to run one command at a Linux shell.
 - Use `tools/dvr-boot.sh` to boot a kernel from USB or TFTP.
 
@@ -137,15 +137,14 @@ Automatic boot is deliberately deferred. For now, manually boot the installed
 USB kernel through the serial console:
 
 ```sh
-tools/dvr-boot.sh --usb
+tools/dvr-boot.sh usb
 ```
 
 For TFTP development or recovery, stage and boot a local image through the
 Raspberry Pi with:
 
 ```sh
-tools/dvr-boot.sh --stage \
-    artifacts/buildroot/uImage-hi3531-dhb-ax
+tools/dvr-boot.sh tftp artifacts/buildroot/uImage-hi3531-dhb-ax
 ```
 
 Run `tools/dvr-boot.sh --help` for image checks, root selection and other
@@ -182,7 +181,7 @@ scripts/buildroot.sh
 scripts/publish-nfs-root.sh
 ```
 
-Boot that root with `tools/dvr-boot.sh --usb --root nfs`. For ordinary driver
+Boot that root with `tools/dvr-boot.sh usb --root nfs`. For ordinary driver
 work, copy specific modules or files rather than republishing the complete
 root filesystem.
 
