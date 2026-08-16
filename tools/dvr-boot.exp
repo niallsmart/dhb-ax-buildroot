@@ -533,7 +533,9 @@ proc uboot_command {command} {
 proc configure_bootargs {root_bootargs} {
     global command_sequence
 
-    set common_bootargs {console=ttyAMA0,115200 earlycon=pl011,0x20080000 keep_bootcon ignore_loglevel mem=512M@0x80000000 mem=512M@0xc0000000}
+    # No keep_bootcon: earlycon and ttyAMA0 are the same PL011 at 0x20080000,
+    # so keeping the boot console registered printed every message twice.
+    set common_bootargs {console=ttyAMA0,115200 earlycon=pl011,0x20080000 ignore_loglevel mem=512M@0x80000000 mem=512M@0xc0000000}
     set expected "$common_bootargs $root_bootargs"
 
     # Keep both input lines well below old U-Boot's possible 256-byte console
