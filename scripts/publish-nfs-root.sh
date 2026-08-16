@@ -9,17 +9,15 @@
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+. "$repo/scripts/lib.sh"
+require_env_file "$repo/local.env" DHB_AX_PI_IPADDR DHB_AX_DVR_IPADDR
+require_ipaddr DHB_AX_PI_IPADDR DHB_AX_DVR_IPADDR
+
 archive=${1:-$repo/artifacts/buildroot/rootfs.tar}
-host=${PI_HOST:-raspberrypi}
+host=$DHB_AX_PI_IPADDR
 base=${NFS_BASE:-/srv/dhb-ax}
 remote_archive=/tmp/dhb-ax-rootfs.tar
 
-case $host in
-	'' | [!A-Za-z0-9]* | *[!A-Za-z0-9_.@-]*)
-		echo "publish-nfs-root: refusing unsafe Pi host: $host" >&2
-		exit 2
-		;;
-esac
 case $base in
 	/srv/*) ;;
 	*)
@@ -44,6 +42,25 @@ if [ ! -f "$archive" ]; then
 	exit 2
 fi
 
+# Checked before anything is transferred, so a live NFS session costs one
+# quick round trip rather than a wasted upload.
+ssh -o BatchMode=yes "$host" sudo sh -s -- "$DHB_AX_DVR_IPADDR" <<'GUARD'
+set -eu
+
+dvr_ipaddr=$1
+
+# An established NFS/TCP session from the DVR means a full-root replacement
+# is not safe. ss can prefix IPv4 peers with ::ffff:, so match the address
+# anywhere rather than anchoring to the start of the peer field.
+dvr_ipaddr_pattern=$(printf '%s\n' "$dvr_ipaddr" | sed 's/\./\\./g')
+if ss -Htn state established '( sport = :2049 )' 2>/dev/null |
+	grep -Eq "${dvr_ipaddr_pattern}:[0-9]+"; then
+	echo "publish-nfs-root: DVR has an active NFS session" >&2
+	echo "boot the rescue uImage before publishing a complete rootfs" >&2
+	exit 3
+fi
+GUARD
+
 echo "Publishing $(basename "$archive") to $host:$base/rootfs"
 rsync --archive --checksum --progress -- "$archive" "$host:$remote_archive"
 
@@ -55,40 +72,17 @@ archive=$2
 incoming=$base/.rootfs.incoming
 current=$base/rootfs
 
-# The export has historically allowed both addresses below for the DVR. An
-# established NFS/TCP session from either means a full-root replacement is not
-# safe. ss can prefix IPv4 peers with ::ffff:, so match the address anywhere.
-if ss -Htn state established '( sport = :2049 )' 2>/dev/null |
-	grep -Eq '192\.168\.(4\.77|7\.240):[0-9]+'; then
-	echo "publish-nfs-root: DVR has an active NFS session" >&2
-	echo "boot the rescue uImage before publishing a complete rootfs" >&2
-	exit 3
-fi
-
-test -f "$archive"
-mkdir -p "$base"
-
-# No client is using this export, so the fixed staging name is safe to
-# reclaim. Extraction happens beside the live name so a failure there leaves
-# the current root untouched.
+mkdir -p "$base" "$current"
 rm -rf -- "$incoming"
 mkdir -m 0755 "$incoming"
 tar --numeric-owner -xpf "$archive" -C "$incoming"
 
-test -f "$incoming/bin/busybox"
-test -L "$incoming/sbin/init"
-test -f "$incoming/usr/sbin/sshd"
-test -f "$incoming/etc/ssh/ssh_host_ed25519_key"
-test -f "$incoming/root/.ssh/authorized_keys"
-test "$(stat -c %a "$incoming/etc/ssh/ssh_host_ed25519_key")" = 600
-test "$(stat -c %a "$incoming/root/.ssh/authorized_keys")" = 600
-
-rm -rf -- "$current"
-mv "$incoming" "$current"
-
-rm -f -- "$archive"
+# The guard above already confirmed no client can be using $current, so
+# mirroring straight onto it is safe: rsync only touches what changed.
+rsync --archive --delete --numeric-ids -- "$incoming/" "$current/"
+rm -rf -- "$incoming" "$archive"
 sync
-echo "publish-nfs-root: promoted $current"
+echo "publish-nfs-root: published $current"
 REMOTE
 
 echo "NFS root published successfully."
