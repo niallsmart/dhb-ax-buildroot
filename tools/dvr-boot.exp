@@ -358,9 +358,14 @@ proc console_send {text} {
     }
 }
 
+# 5000 lines: comfortably past what a full kernel boot needs. A duplicated
+# printk on this console means a single boot from bootm to login prompt has
+# run past 500 lines on its own -- a window sized for a handful of U-Boot
+# command responses lets the marker that scopes this search scroll out of it
+# before wait_pane ever gets to look for the prompt it's waiting on.
 proc pane_history {} {
     global session
-    if {[catch {exec tmux capture-pane -p -t $session -S -300} text]} {
+    if {[catch {exec tmux capture-pane -p -t $session -S -5000} text]} {
         return ""
     }
     return $text
@@ -368,7 +373,7 @@ proc pane_history {} {
 
 proc pane_history_joined {} {
     global session
-    if {[catch {exec tmux capture-pane -p -J -t $session -S -300} text]} {
+    if {[catch {exec tmux capture-pane -p -J -t $session -S -5000} text]} {
         return ""
     }
     return $text
@@ -407,7 +412,11 @@ proc wait_pane {cases seconds {marker ""}} {
         foreach {tag source pattern} $cases {
             set value $history
             if {$source eq "last"} { set value $last }
-            if {[regexp -- $pattern $value]} { return $tag }
+            # -line: history is multi-line, and several patterns anchor with
+            # ^/$ to mean "this whole line", not "the whole capture". -line
+            # binds those anchors per line instead of to the full string;
+            # harmless for last, which never contains a newline.
+            if {[regexp -line -- $pattern $value]} { return $tag }
         }
         after 50
     }
@@ -488,7 +497,14 @@ proc uboot_command {command} {
     global command_sequence
     incr command_sequence
     set marker "__DVR_CMD_[pid]_${command_sequence}__"
-    console_send "echo $marker; $command\r"
+    # This U-Boot has no echo command, so the marker isn't there to be
+    # printed -- it only needs to appear in the typed line itself, which the
+    # terminal shows regardless of whether the shell recognizes it. Sent
+    # bare rather than wrapped in a fake echo, but still leading: right
+    # after autoboot is interrupted, the first character of the first line
+    # sent is occasionally lost, and that has to cost a disposable token,
+    # never the command itself.
+    console_send "$marker; $command\r"
     set result [wait_pane [list uboot last {^hisilicon # *$}] 10 $marker]
     if {$result ne "uboot"} {
         abort_boot "U-Boot command timed out: $command" 7
@@ -510,7 +526,7 @@ proc configure_bootargs {root_bootargs} {
     # intact environment value can still be compared exactly.
     incr command_sequence
     set marker "__DVR_ARGS_[pid]_${command_sequence}__"
-    console_send "echo $marker; printenv bootargs\r"
+    console_send "$marker; printenv bootargs\r"
     if {[wait_pane [list uboot last {^hisilicon # *$}] 10 $marker] ne "uboot"} {
         abort_boot "U-Boot bootargs verification timed out" 7
     }
@@ -535,8 +551,9 @@ proc configure_bootargs {root_bootargs} {
 }
 
 if {$transcript ne ""} {
+    # Typed, not executed, same as every other marker -- see uboot_command.
     set transcript_marker "__DVR_BOOT_[pid]_[clock seconds]__"
-    uboot_command "echo $transcript_marker"
+    uboot_command $transcript_marker
 }
 
 if {$root_mode eq "hdd"} {
@@ -554,7 +571,7 @@ if {$usb_mode} {
     puts "Loading USB $usb_device/$image at $load_address..."
     incr command_sequence
     set load_marker "__DVR_USB_[pid]_${command_sequence}__"
-    console_send "echo $load_marker; fatload usb $usb_device $load_address $image\r"
+    console_send "$load_marker; fatload usb $usb_device $load_address $image\r"
     set result [wait_pane [list \
         success history {[0-9]+ bytes read} \
         failure history {(Bad device|Unable to read|no USB devices available|\*\* Invalid partition)}] \
@@ -578,7 +595,7 @@ if {$usb_mode} {
     puts "Loading $image at $load_address..."
     incr command_sequence
     set load_marker "__DVR_TFTP_[pid]_${command_sequence}__"
-    console_send "echo $load_marker; tftp $load_address $image\r"
+    console_send "$load_marker; tftp $load_address $image\r"
     set result [wait_pane [list \
         success history {Bytes transferred = [0-9]+} \
         failure history {(TFTP error|Retry count exceeded|Access violation|File not found)} \
@@ -604,10 +621,10 @@ if {$usb_mode} {
 puts "Booting from RAM..."
 incr command_sequence
 set boot_marker "__DVR_BOOTM_[pid]_${command_sequence}__"
-console_send "echo $boot_marker; bootm $load_address\r"
+console_send "$boot_marker; bootm $load_address\r"
 set result [wait_pane [list \
-    shell last {^((~|/) )?# *$} \
-    login last {^[^ ]+ login: *$} \
+    shell history {^((~|/) )?#( |$)} \
+    login history {^[^ ]+ login:} \
     panic history {Kernel panic - not syncing}] \
     $boot_timeout $boot_marker]
 if {$result eq "panic"} {
