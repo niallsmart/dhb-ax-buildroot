@@ -81,9 +81,6 @@ BR2_TARGET_GENERIC_HOSTNAME="dhb-ax"
 # The password hash comes from the gitignored local.env, and
 # scripts/buildroot-in-container.sh refuses to build without it.
 #
-# The hash is passed via a $(shell ...) command instead of a plain variable,
-# because make recursively expands `$` characters in variables, mangling the
-# the intended string. $(shell) output is not subject to variable expansion.
 BR2_TARGET_ENABLE_ROOT_LOGIN=y
 BR2_TARGET_GENERIC_ROOT_PASSWD="$(DHB_AX_ROOT_PASSWD)"
 

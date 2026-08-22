@@ -64,12 +64,10 @@ case "${DHB_AX_ROOT_PASSWD:-}" in
 	;;
 esac
 
-# The defconfig refers to $(DHB_AX_ROOT_PASSWD); this supplies it.  The hash
-# is handed over as a $(shell) call that re-reads local.env, not as the hash
-# itself, because make expands the $ in a crypt hash as variable references
-# and mangles it -- see the comment in configs/dhb_ax_defconfig.  $$ escapes
-# the shell variable so make passes it through to /bin/sh untouched.
-root_passwd_var='DHB_AX_ROOT_PASSWD=$(shell . '"$env_file"' && printf %s "$$DHB_AX_ROOT_PASSWD")'
+# The hash is handed over as a $(shell) call, because make interprets
+# the $ characters in a crypt hash as variable references and mangles
+# it. Using $(shell ...) avoids this problem.
+root_passwd_var='DHB_AX_ROOT_PASSWD=$(shell echo "$${DHB_AX_ROOT_PASSWD}")'
 
 # Buildroot is mounted read-only, so every invocation is an out-of-tree build.
 # BR2_EXTERNAL only has to be passed when the configuration is created; it is
