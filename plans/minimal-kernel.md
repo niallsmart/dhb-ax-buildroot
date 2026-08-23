@@ -1,16 +1,22 @@
 # Plan: minimal kernel with a built-in initramfs
 
 A second Buildroot target, `dhb_ax_minimal_defconfig`, producing a
-self-contained uImage that reaches a root shell over the serial console with
-no dependency on the HDD, a Raspberry Pi NFS export, or any root filesystem
-at all. It is a UART-only diagnostic image: something to boot when the normal
-kernel or root filesystem will not, to check the boot chain and the kernel
-itself before reaching for the existing NFS-root recovery flow in `AGENTS.md`,
-which still owns actual storage provisioning.
+self-contained uImage that reaches a root shell over the serial console or
+OpenSSH with no dependency on the HDD, a Raspberry Pi NFS export, or any
+external root filesystem. It is a diagnostic image: something to boot when
+the normal kernel or root filesystem will not, to check the boot chain and the
+kernel itself before reaching for the existing NFS-root recovery flow in
+`AGENTS.md`, which still owns actual storage provisioning. Ethernet is enabled
+for DHCP and SSH; storage, USB, GPIO and I²C remain outside its scope.
 
 The image still has to be *loaded* from somewhere -- the USB FAT partition or
 TFTP from the Pi. What it does not need is a root filesystem: the kernel
 mounts the initramfs it carries and never processes `root=`.
+
+The first implementation deliberately omitted networking. The networked
+diagnostic extension recorded in the execution results supersedes the
+UART-only package, DT and driver choices retained below as the original design
+record.
 
 This reuses the existing `br2-external` tree rather than a second Buildroot
 checkout: same patch queue, same kernel source, same board directory. See the
@@ -57,9 +63,10 @@ Two limits bound the result, and both need measuring rather than assuming:
 
 - The load window. `tools/dvr-boot.exp` loads the uImage at `0x82000000`,
   while `post-image.sh` declares mkimage load and entry addresses of
-  `0x80008000`. U-Boot therefore relocates the payload 32 MiB down before the
-  decompressor runs, and the decompressor then needs room for the decompressed
-  kernel and the initramfs pages it unpacks.
+  `0x80008000`. Vendor U-Boot refuses a payload whose destination range reaches
+  `0x80800000` with `kernel image will overwrite uboot`, so the appended zImage
+  and DTB must be smaller than `0x7f8000` (8,355,840) bytes. The minimal
+  post-image script enforces this before wrapping the payload.
 - The USB FAT partition, which has to hold this image alongside the production
   `/uImage` (see "Installing on USB" below).
 
@@ -167,14 +174,21 @@ relocation or decompression and hangs somewhere unhelpful.
 
 The minimal DTB's hardware scope drives the package list, not a general
 notion of "small": if a driver cannot bind, its userspace tool has nothing to
-do. The size budget above is the second constraint on the same list.
+do. The size budget above is the second constraint on the same list. Ethernet
+is the deliberate exception to the original UART-only scope.
 
-- No OpenSSH -- this is a UART-only image by design, and adding sshd would
-  need a network driver that is not compiled in.
+- OpenSSH uses the same server selection, default server config, host keys and
+  root authorized key as the production image. The shared `post-build-ssh.sh`
+  installs the machine-local key material for both targets. The outbound SSH
+  client is omitted from the diagnostic image because it is not needed for the
+  rescue interface and would push the payload over vendor U-Boot's limit.
+- Buildroot's `BR2_SYSTEM_DHCP="eth0"` supplies the normal network init script
+  and BusyBox `udhcpc`. The shared network overlay applies the unit's factory
+  MAC address before DHCP, preserving its production reservation.
 - No `mtd`, `i2c-tools`, `ethtool`, `e2fsprogs`, `dosfstools`, or
-  `util-linux` block/storage tooling -- none of SPI-NOR, I²C, Ethernet, SATA,
-  or USB is reachable from this DTB, so these packages would just be dead
-  weight in an image whose size is bounded.
+  `util-linux` block/storage tooling. Ethernet is reachable, but these
+  diagnostic and storage packages remain unnecessary for DHCP and SSH; SPI
+  NOR, I²C, SATA and USB remain disabled in the DTB.
 - Keep `BR2_INIT_BUSYBOX`, `BR2_TARGET_GENERIC_GETTY`, and the existing root
   password plumbing (`BR2_TARGET_ENABLE_ROOT_LOGIN`,
   `BR2_TARGET_GENERIC_ROOT_PASSWD="$(DHB_AX_ROOT_PASSWD)"`). Reusing
@@ -186,21 +200,18 @@ do. The size budget above is the second constraint on the same list.
   likely to be confused in exactly the situation this image exists for. The
   main build stays `dhb-ax`; leaving this unset would give the Buildroot
   default and say nothing.
-- No `BR2_ROOTFS_OVERLAY` -- the existing overlay
-  (`board/dhb-ax/rootfs-overlay/`) is entirely about hardware this image
-  cannot see: `fstab` mounts for HDD/USB partitions, a `modules-load.d` entry
-  for storage drivers, and a MAC-address script for `eth0`. None of it
-  applies here, so the minimal defconfig sets no overlay and takes Buildroot's
-  skeleton `/etc/fstab`, which mounts `proc`, `sysfs`, `devpts` and `tmpfs`
-  and nothing else -- which is what this image wants.
-- `post-build.sh` is specific to the main package set: it asserts that
-  `mtdinfo`, `ethtool`, `i2cdetect`, `debugfs`, `fsck.fat` and friends are
-  present, none of which this defconfig selects, and it installs the OpenSSH
-  host and authorized keys from `artifacts/local/ssh`. The minimal defconfig
-  sets no `BR2_ROOTFS_POST_BUILD_SCRIPT` -- there is no flash-writer risk to
-  guard against when the `mtd` package was never selected in the first place,
-  and no sshd to give keys to. It therefore also does not need
-  `artifacts/local/ssh` to exist.
+- The production overlay is split by responsibility. Both targets use
+  `rootfs-overlay-network` for the pre-DHCP MAC hook; only the main target uses
+  `rootfs-overlay` for HDD/USB mounts and storage module loading. The minimal
+  image otherwise keeps Buildroot's skeleton `/etc/fstab`.
+- `post-build.sh` remains specific to the main package set because it audits
+  production storage tools and removes flash writers. SSH key installation is
+  in the shared `post-build-ssh.sh`; the minimal defconfig runs only that
+  script and therefore requires the same `artifacts/local/ssh` input as main.
+- BusyBox's `CONFIG_FEATURE_SKIP_ROOTFS` is disabled with a minimal-only
+  fragment. BusyBox normally hides `rootfs` because most systems replace the
+  initial root with disk or NFS; this image keeps rootfs mounted for its whole
+  lifetime, so displaying it makes `df -k` accurately describe the image.
 
 ## Build tooling
 
@@ -436,9 +447,8 @@ that partition at once.
   no new default needed.
 - `dvr-boot.sh` requires `DHB_AX_DVR_ETHADDR` and the rest of the network keys
   from `local.env` unconditionally, before any subcommand is known. That is
-  unchanged and fine -- the keys exist on any machine that has run this
-  tooling -- but it means "no network needed" describes the booted image, not
-  the tool that launches it.
+  unchanged and fine: TFTP needs them before Linux starts, while the booted
+  image obtains its userspace address independently through DHCP.
 
 ## Sequence
 
@@ -498,17 +508,22 @@ that partition at once.
   rebuild in `shared-toolchain.md` left behind.
 - `tools/dvr-boot.sh usb uImage-minimal --root initramfs` and
   `tools/dvr-boot.sh tftp artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal --root initramfs`
-  both reach a `minimal login:` prompt on the serial console, with the HDD
-  left unmounted and no writes to board storage (no `saveenv`, matching the
-  existing boot-tooling constraints).
+  both reach a `minimal login:` prompt on the serial console, obtain the
+  production DHCP reservation and accept the production authorized SSH key,
+  with the HDD left unmounted and no writes to board storage (no `saveenv`,
+  matching the existing boot-tooling constraints).
 - `tools/dvr-boot.sh usb --root initramfs`, with no image named, exits with a
-  usage error before opening the UART.
+  usage error before opening the UART. The same is true of `tftp --root
+  initramfs` without a local image.
+- BusyBox has `CONFIG_FEATURE_SKIP_ROOTFS` disabled, so `/proc/mounts` and
+  `df -k` expose the initramfs as `rootfs` instead of hiding it.
 - The trim is verified against the *artifact*, not the boot log. `dmesg`
   silence proves nothing here: a platform driver only probes when an enabled,
   matching DT node exists, so the current full-config-plus-minimal-DTB image
   already produces exactly that dmesg. Instead:
-  - `grep -E 'stmmac|ahci|pl061|i2c_gpio|ehci|ohci' /proc/kallsyms` on the
-    booted image returns nothing.
+  - `grep -E 'ahci|pl061|i2c_gpio|ehci|ohci' /proc/kallsyms` on the booted
+    image returns nothing. `stmmac`, the Hi3531 DWMAC glue and the Realtek PHY
+    driver are present for the one enabled data-path peripheral.
   - The diff between the two built `.config` files shows the intended drivers
     off, and shows `CONFIG_ARM_APPENDED_DTB`,
     `CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_FROM_BOOTLOADER`,
@@ -516,7 +531,7 @@ that partition at once.
   - The minimal `zImage` is materially smaller than the main build's, by an
     amount recorded alongside the size budget.
 
-## Execution results (2026-08-23)
+## Execution results (initial UART-only image, 2026-08-23)
 
 The maintained minimal target builds cleanly and boots from both supported
 load paths. Its artifacts are:
@@ -548,6 +563,10 @@ the relevant release line is `Freeing unused kernel image (initmem) memory:
 1104K`; there is no separate `Freeing initrd memory` line. The final clean
 image starts syslog, klog, sysctl and crond only, with no network startup.
 
+Both load paths reject `--root initramfs` when no image is named. Their
+defaults select the production kernel, which has no built-in initramfs and
+would otherwise panic after booting without a `root=` argument.
+
 USB installation left the production `/uImage` in place and installed the
 diagnostic image and checksum as `/uImage-minimal` and
 `/uImage-minimal.sha256`. TFTP transferred the same 2,544,243-byte image after
@@ -559,3 +578,57 @@ Linux 6.18.42, hostname `dhb-ax`, and `/dev/root / ext4 rw,relatime`. The main
 artifact directory contains only the production uImage stem, and the
 configuration-specific clean/distclean volume selection was verified without
 removing the shared downloads or compiler cache during a per-target clean.
+
+### Networked diagnostic extension (2026-08-23)
+
+The diagnostic image now enables only the board's Ethernet data path in
+addition to its original CPU/timer/UART scope. Buildroot starts BusyBox
+`udhcpc` for `eth0`, followed by OpenSSH `sshd`; the shared pre-up hook applies
+the factory MAC before DHCP, and the SSH server config, host keys and root
+authorized key are byte-identical to the production inputs. The outbound SSH
+client is deliberately absent. BusyBox's `CONFIG_FEATURE_SKIP_ROOTFS` is off,
+so the permanent initramfs mount is visible to `df`.
+
+The final clean-build artifacts are:
+
+- `rootfs.cpio`: 10,841,088 bytes.
+- `zImage`: 7,292,320 bytes.
+- Appended zImage and DTB payload: 7,299,023 bytes, 1,056,817 bytes below the
+  vendor U-Boot ceiling.
+- `uImage-hi3531-dhb-ax-minimal`: 7,299,087 bytes, SHA-256
+  `c4e8f105b134b8ab1237ac0a7f328609ef672e846eb1c1a9cc4d29dddcf9a481`.
+
+The size check came from a failed hardware test, not an estimate: the first
+networked payload was 8,589,199 bytes and U-Boot rejected it with `kernel image
+will overwrite uboot`. `post-image-minimal.sh` now fails the build before
+`mkimage` when the payload is at least 8,355,840 bytes. The boot helper also
+waits for the hostname appropriate to the selected root mode and reports a
+U-Boot overlap or board reset instead of accepting a later vendor login prompt
+as success.
+
+The final TFTP boot reached `minimal login:`. Ethernet linked at 1 Gbit/s,
+DHCP assigned `192.168.4.77/22` with the factory MAC, and public-key SSH
+succeeded using the established host identity. Runtime checks reported:
+
+```
+hostname=minimal
+kernel=6.18.42
+rootfs / rootfs rw,size=514692k,nr_inodes=128673 0 0
+rootfs 514692 10700 503992 2% /
+```
+
+The live forbidden-driver check found none of `ahci`, `pl061`, `i2c_gpio`,
+`ehci` or `ohci`; `stmmac`, the Hi3531 DWMAC glue and RTL8211B PHY were active.
+The generated root contained no kernel modules or storage device setup. A main
+image rebuild after splitting the network overlay and SSH post-build script
+also passed its defconfig, post-build safety audit and image generation.
+
+The first long regression attempt began after vendor Linux had run. That
+environment later reset both the main and minimal mainline kernels at an
+interval consistent with the front-panel MCU watchdog. After a physical hard
+reset, the final TFTP image remained reachable over one continuous SSH session
+through 113 seconds of uptime, beyond the earlier reset interval. A subsequent
+warm transition through the main image left U-Boot reporting its known
+Ethernet PHY-link-down condition, so another physical hard reset is required
+before the requested final TFTP boot. The networked image was deliberately not
+installed to USB; this validation leaves the production USB files unchanged.

@@ -34,9 +34,10 @@ Ethernet, SATA and ext4 root, EHCI/OHCI USB, all nineteen GPIO controllers, the
 bit-banged I²C bus and battery-backed RTC, NFS, and OpenSSH. The proprietary
 media pipeline is out of scope. The production userspace uses musl 1.2.6 from
 the shared Buildroot SDK; the musl image is verified over NFS and from the
-installed USB-kernel/HDD-root system. A separate UART-only diagnostic kernel
-with a built-in initramfs is verified from USB and TFTP without mounting the
-HDD.
+installed USB-kernel/HDD-root system. A separate diagnostic kernel with a
+built-in initramfs is verified from USB and TFTP without mounting the HDD; it
+uses Ethernet for DHCP and OpenSSH while leaving storage and the other board
+peripherals disabled.
 
 [Remaining hardware work](doc/remaining-work.md) lists what is not yet driven,
 ranked by value and effort.
@@ -58,8 +59,10 @@ from the shared download volume instead of rebuilding gcc, binutils and musl.
 `main` is the default configuration, so its command may also be written as
 `scripts/buildroot.sh`. The minimal configuration is independent of the
 production root filesystem: it builds a reduced kernel and BusyBox initramfs
-that reach `minimal login:` on the UART with no SATA, USB, Ethernet, GPIO or
-I²C drivers.
+that reach `minimal login:` on the UART, obtain the board's normal DHCP lease,
+and serve the same public-key-only OpenSSH configuration as the main image.
+SATA, USB, GPIO and I²C drivers remain excluded. The image omits the outbound
+SSH client; SSH access to the board is the diagnostic requirement.
 
 Each configuration has its own output volume. Use `--config NAME --clean` to
 drop one output tree while retaining downloads, the staged SDK and the shared

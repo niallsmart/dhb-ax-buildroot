@@ -23,7 +23,7 @@ This file is for repository workflow, device access and safety constraints.
   from pinned inputs; make lasting kernel changes in the `br2-external/` patch
   queue rather than editing these trees as source.
 - `artifacts/buildroot/` contains ignored production-image outputs;
-  `artifacts/buildroot-minimal/` contains ignored UART diagnostic outputs;
+  `artifacts/buildroot-minimal/` contains ignored diagnostic outputs;
   `artifacts/toolchain/` contains the ignored shared SDK export, and
   `artifacts/legacy/` contains ignored historical outputs.
 
@@ -48,7 +48,8 @@ scripts/buildroot.sh --config minimal
 
 The first bootstrap prepares sources and exits non-zero when the SDK is not
 staged; the reported toolchain command is the next step. `main` is the default
-configuration. `minimal` builds the self-contained UART diagnostic image.
+configuration. `minimal` builds the self-contained diagnostic image with
+serial access, DHCP and OpenSSH.
 Each configuration has a separate output volume, while downloads and the
 compiler cache are shared. `--config NAME --clean` drops only the selected
 output volume; `--distclean` drops all build, download and cache volumes.
@@ -178,8 +179,12 @@ tools/dvr-boot.sh tftp artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal 
 tools/dvr-boot.sh usb uImage-minimal --root initramfs
 ```
 
-It has no network or storage drivers. Log in on the UART and leave a shell
-prompt before asking the boot tool to reboot it into another image.
+It has an Ethernet driver and obtains the same DHCP reservation as the main
+image by applying the board's factory MAC address before `udhcpc` starts.
+OpenSSH uses the same machine-local host and authorized keys as the main image,
+so `ssh -o BatchMode=yes root@dvr` works after DHCP completes. SATA, USB, GPIO
+and I²C drivers remain excluded; the UART is the fallback when networking is
+unavailable.
 
 Run `tools/dvr-boot.sh --help` for image checks, root selection and other
 options.

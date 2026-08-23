@@ -145,9 +145,14 @@ if {$root_mode ni {hdd nfs initramfs}} {
     puts stderr "error: --root must be hdd, nfs, or initramfs"
     exit 2
 }
-if {$usb_mode && $root_mode eq "initramfs" && !$image_explicit} {
-    puts stderr "error: usb --root initramfs requires an explicit USB image"
-    puts stderr "example: dvr-boot.sh usb uImage-minimal --root initramfs"
+if {$root_mode eq "initramfs" && !$image_explicit} {
+    if {$usb_mode} {
+        puts stderr "error: usb --root initramfs requires an explicit USB image"
+        puts stderr "example: dvr-boot.sh usb uImage-minimal --root initramfs"
+    } else {
+        puts stderr "error: tftp --root initramfs requires an explicit local image"
+        puts stderr "example: dvr-boot.sh tftp artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal --root initramfs"
+    }
     exit 2
 }
 
@@ -462,7 +467,7 @@ set uboot_ready 0
 set ssh_reboot 0
 # The hostname in the login prompt says which system is running. The vendor
 # 3.0.8 sets none, so it greets as "(none) login:"; Buildroot uses the
-# BR2_TARGET_GENERIC_HOSTNAME from configs/dhb_ax_defconfig. Only the vendor
+# BR2_TARGET_GENERIC_HOSTNAME from the selected defconfig. Only the vendor
 # password is known to this tool -- Buildroot's is a hash in local.env, which
 # cannot be typed at a prompt -- so the two prompts are answered differently.
 for {set i 0} {$i < 12 && !$shell_ready && !$uboot_ready && !$ssh_reboot} {incr i} {
@@ -470,7 +475,7 @@ for {set i 0} {$i < 12 && !$shell_ready && !$uboot_ready && !$ssh_reboot} {incr 
         uboot last {^hisilicon # *$} \
         shell last {^((~|/) )?# *$} \
         vendor_login last {^\(none\) login: *$} \
-        buildroot_login last {^dhb-ax login: *$} \
+        buildroot_login last {^(dhb-ax|minimal) login: *$} \
         password last {^Password: *$}] 5]
     switch -- $state {
         uboot { set uboot_ready 1 }
@@ -668,18 +673,30 @@ puts "Booting from RAM..."
 incr command_sequence
 set boot_marker "__DVR_BOOTM_[pid]_${command_sequence}__"
 console_send " $boot_marker; bootm $load_address\r"
+if {$root_mode eq "initramfs"} {
+    set expected_login {^minimal login: *$}
+} else {
+    set expected_login {^dhb-ax login: *$}
+}
 set result [wait_pane [list \
-    shell history {^((~|/) )?#( |$)} \
-    login history {^[^ ]+ login:} \
-    panic history {Kernel panic - not syncing}] \
+    login history $expected_login \
+    panic history {Kernel panic - not syncing} \
+    overlap history {kernel image will overwrite uboot} \
+    reset history {^U-Boot 2010\.06}] \
     $boot_timeout $boot_marker]
 if {$result eq "panic"} {
     abort_boot "kernel panic" 9
 }
-if {$result ni {shell login}} {
-    abort_boot "Linux login or shell prompt did not appear within $boot_timeout seconds" 9
+if {$result eq "overlap"} {
+    abort_boot "kernel payload overlaps vendor U-Boot" 9
+}
+if {$result eq "reset"} {
+    abort_boot "board reset before the expected Linux login prompt" 9
+}
+if {$result ne "login"} {
+    abort_boot "expected Linux login prompt did not appear within $boot_timeout seconds" 9
 }
 
-puts "Linux login or shell prompt reached successfully."
+puts "Expected Linux login prompt reached successfully."
 close_console
 exit 0

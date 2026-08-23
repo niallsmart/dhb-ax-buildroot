@@ -25,6 +25,16 @@ fi
 
 cat "$images/zImage" "$dtb" > "$appended"
 
+# The vendor U-Boot refuses a kernel payload whose destination range reaches
+# 0x80800000 ("kernel image will overwrite uboot"). The payload starts at
+# 0x80008000, leaving 0x7f8000 bytes for the appended zImage and DTB.
+max_payload=8355840
+payload_size=$(wc -c < "$appended")
+if [ "$payload_size" -ge "$max_payload" ]; then
+	echo "post-image-minimal: payload is $payload_size bytes; vendor U-Boot requires less than $max_payload" >&2
+	exit 1
+fi
+
 "$mkimage" -A arm -O linux -T kernel -C none \
 	-a 0x80008000 -e 0x80008000 \
 	-n "Linux-$version dhb-ax-minimal" \

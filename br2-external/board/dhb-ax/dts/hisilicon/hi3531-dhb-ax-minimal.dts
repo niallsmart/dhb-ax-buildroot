@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Minimal RAM-only bring-up: CPU, GIC, SP804 timer, PL011 UART0 only.
+ * Minimal RAM-only diagnostics: CPU, GIC, SP804 timer, PL011 UART0 and the
+ * wired Ethernet path.
  *
  * Every other on-chip block stays disabled as hi3531.dtsi leaves it, so this
- * DTB reaches a shell without touching GPIO, USB, SATA or Ethernet.
+ * DTB reaches a shell without touching GPIO, USB, SATA, SPI or I2C.
  *
  * Developed against an LTS LTD2704XE-P; the same board also ships under
  * other retail brands.
@@ -15,6 +16,10 @@
 / {
 	model = "TVT DHB_AX V1.2 (Hi3531 DVR, minimal)";
 	compatible = "tvt,dhb-ax", "hisilicon,hi3531";
+
+	aliases {
+		ethernet0 = &gmac1;
+	};
 
 	chosen {
 		/* U-Boot supplies mem=; Linux uses it to replace ATAG_MEM. */
@@ -35,4 +40,17 @@
 
 &uart0 {
 	status = "okay";
+};
+
+&gmac1 {
+	phy-mode = "rgmii";
+	phy-handle = <&phy1>;
+	max-speed = <1000>;
+	status = "okay";
+};
+
+&mdio {
+	phy1: ethernet-phy@1 {
+		reg = <1>;
+	};
 };

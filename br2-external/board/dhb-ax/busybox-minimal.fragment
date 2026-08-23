@@ -1,0 +1,4 @@
+# The initramfs remains mounted as rootfs for the lifetime of this image.
+# Showing it in df is useful here; BusyBox's default hides it for systems that
+# replace the initial rootfs with a disk or network filesystem.
+# CONFIG_FEATURE_SKIP_ROOTFS is not set
