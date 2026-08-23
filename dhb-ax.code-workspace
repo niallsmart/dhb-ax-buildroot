@@ -1,0 +1,31 @@
+{
+	"folders": [
+		{
+			"name": "dhb-ax-guide",
+			"path": "."
+		},
+		{
+			"name": "dhb-ax-buildroot",
+			"path": "../dhb-ax-buildroot"
+		}
+	],
+	"settings": {
+		"gitlens.currentLine.enabled": false,
+		"git.blame.editorDecoration.enabled": false,
+		"search.useIgnoreFiles": false,
+		"search.exclude": {
+			"buildroot/**/*": true,
+			"kernel/**/*": true,
+			"artifacts/**/*": true,
+			"Hi3531_V100R001C01SPC0D1/**/*": true,
+			"**/dist": true,
+			"**/build": true
+		},
+		"files.exclude": {
+			"**/node_modules": true,
+			"**/.git": true,
+			"**/.venv": true,
+			"**/__pycache__": true
+		}
+  }
+}
