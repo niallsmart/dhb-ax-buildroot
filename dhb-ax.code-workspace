@@ -1,12 +1,12 @@
 {
 	"folders": [
 		{
-			"name": "dhb-ax-guide",
+			"name": "buildroot",
 			"path": "."
 		},
 		{
-			"name": "dhb-ax-buildroot",
-			"path": "../dhb-ax-buildroot"
+			"name": "guide",
+			"path": "../dhb-ax-guide"
 		}
 	],
 	"settings": {
