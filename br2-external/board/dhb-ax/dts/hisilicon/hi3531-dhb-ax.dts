@@ -16,24 +16,52 @@
 	model = "TVT DHB_AX V1.2 (Hi3531 DVR)";
 	compatible = "tvt,dhb-ax", "hisilicon,hi3531";
 
-	/*
-	 * The watchdog counts at about 3 MHz, measured on hardware as
-	 * 92,260,365 ticks over 30.60 s; that is 24 MHz / 8, the same slow
-	 * source U-Boot leaves the UART on.  Describing it as the 155 MHz
-	 * peripheral clock made the driver compute a load value that
-	 * overflowed 32 bits, clamp to 0xFFFFFFFF, and take roughly 47
-	 * minutes to reset instead of the 60 s it was asked for.
-	 */
-	wdt_clk: clock-3mhz {
-		compatible = "fixed-clock";
-		#clock-cells = <0>;
-		clock-frequency = <3000000>;
-		clock-output-names = "hi3531-wdt";
-	};
-
 	aliases {
 		ethernet0 = &gmac1;
 	};
+
+	chosen {
+		/* U-Boot supplies root= and mem=; Linux uses mem= to replace ATAG_MEM. */
+		stdout-path = "serial0:115200n8";
+	};
+
+	/*
+	 * Two independent 512 MiB banks.  With U-Boot's data cache evicted,
+	 * each bank retained distinct patterns 256 MiB apart and the words at
+	 * 0x9f000000 and 0xdf000000 retained different patterns near the top
+	 * of their respective banks.  A separate write confirmed that
+	 * 0xa8000000 aliases 0x88000000, but that address is in the unmapped
+	 * hole between the controllers; it does not imply that DDR1 at
+	 * 0xc0000000 aliases DDR0.
+	 *
+	 * The vendor's "DRAM: 256 MiB" is a hardcoded constant in their U-Boot
+	 * board file, not a measurement.
+	 */
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x80000000 0x20000000>,
+		      <0xc0000000 0x20000000>;
+	};
+
+	/*
+	 * No reserved-memory node, deliberately.
+	 *
+	 * The vendor passes mem=224M, so everything above 0x8e000000 is
+	 * theirs -- 288 MiB of the 512 MiB bank.  This port claims
+	 * 0x90000000-0x9fffffff inside that region and has passed sustained
+	 * DMA tests there.
+	 *
+	 * U-Boot's video buffers sit at 0xc0000000 and 0xc1000000 in DDR1.
+	 * They are not aliases of the kernel load area.  The display path
+	 * only reads those buffers and this port does not use it, so it
+	 * cannot corrupt RAM and does not justify withholding the bank from
+	 * Linux.
+	 *
+	 * DDR0 is verified by filling nearly all of it with a known pattern
+	 * and checksumming it.  If a change makes an abandoned media engine
+	 * write either bank, extend that test across DDR1 before accepting
+	 * the change.
+	 */
 
 	/*
 	 * Bit-banged I2C, matching how the vendor reaches the DS1307.  Their
@@ -62,6 +90,9 @@
 		 * its separate PCF8563 mode uses 0x51.  Mainline rtc-ds1307 reads
 		 * this device successfully and supplies rtc0/hctosys.  The exact
 		 * package manufacturer remains unidentified.
+		 *
+		 * The SoC's own PL031 is not usable -- see hi3531.dtsi -- so this
+		 * is the board's only real timekeeper.
 		 */
 		rtc@68 {
 			compatible = "dallas,ds1307";
@@ -70,327 +101,68 @@
 	};
 };
 
-&soc {
-	/*
-	 * USB 2.0 PHY.  Both windows are shared with other peripherals, so the
-	 * driver maps without claiming: 0x20030000 is the CRG the Ethernet and
-	 * SATA glue also use, and 0x20050000 the system controller behind
-	 * reboot and SMP.
-	 */
-	usbphy: usb-phy@20030000 {
-		compatible = "hisilicon,hi3531-usb-phy";
-		reg = <0x20030000 0x00000100>,
-		      <0x20050000 0x00000100>;
-		reg-names = "crg", "sysctrl";
-		#phy-cells = <0>;
-	};
+&timer0 {
+	status = "okay";
+};
 
-	/*
-	 * Stock EHCI and OHCI.  The vendor runs the same mainline drivers
-	 * under a thin wrapper, so the only board-specific part is the PHY
-	 * above; the USB core initialises it from the phys property and
-	 * refcounts it across both controllers, which is what the vendor's
-	 * open-count in hiusb-godnet.c did by hand.
-	 *
-	 * Interrupts are from the vendor runtime probe, not inferred:
-	 * ehci_hcd is SPI 31 and ohci_hcd SPI 32.
-	 */
-	usb@100b0000 {
-		compatible = "generic-ehci";
-		reg = <0x100b0000 0x10000>;
-		interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
-		phys = <&usbphy>;
-		phy-names = "usb";
-	};
+&uart0 {
+	status = "okay";
+};
 
-	usb@100a0000 {
-		compatible = "generic-ohci";
-		reg = <0x100a0000 0x10000>;
-		interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
-		phys = <&usbphy>;
-		phy-names = "usb";
-	};
+/*
+ * Watchdog, used as a deadman during risky bring-up: it only starts when
+ * userspace opens /dev/watchdog, and U-Boot stops it at boot ("dog_close").
+ */
+&wdt {
+	status = "okay";
+};
 
+&usbphy {
+	status = "okay";
+};
 
-	/*
-	 * Nineteen GPIO banks.  The PID and CID registers on every bank return
-	 * the native PL061 identity 0x00041061 and PrimeCell signature, so no
-	 * arm,primecell-periphid override is needed.  No interrupt is described:
-	 * the vendor registers none, and the driver simply logs "IRQ support
-	 * disabled" while continuing to allow reads and writes.
-	 */
-	gpio0: gpio@20150000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20150000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
+&ehci {
+	status = "okay";
+};
 
-	gpio1: gpio@20160000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20160000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
+&ohci {
+	status = "okay";
+};
 
-	gpio2: gpio@20170000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20170000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
+&sata {
+	status = "okay";
+};
 
-	gpio3: gpio@20180000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20180000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
+&gmac1 {
+	phy-mode = "rgmii";
+	phy-handle = <&phy1>;
+	max-speed = <1000>;
+	status = "okay";
+};
 
-	gpio4: gpio@20190000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20190000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio5: gpio@201a0000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x201a0000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio6: gpio@201b0000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x201b0000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio7: gpio@201c0000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x201c0000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio8: gpio@201d0000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x201d0000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio9: gpio@201e0000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x201e0000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio10: gpio@201f0000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x201f0000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio11: gpio@20200000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20200000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio12: gpio@20210000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20210000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio13: gpio@20220000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20220000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio14: gpio@20230000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20230000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio15: gpio@20240000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20240000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio16: gpio@20250000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20250000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio17: gpio@20260000 {
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20260000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	gpio18: gpio@20270000 {
-		/*
-		 * The SoC implements offsets 0..5.  Upstream PL061 hard-codes eight
-		 * lines and its binding has no width property, so offsets 6 and 7
-		 * remain visible through gpiolib but must not be referenced.
-		 */
-		compatible = "arm,pl061", "arm,primecell";
-		reg = <0x20270000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		clocks = <&peripheral_clk>;
-		clock-names = "apb_pclk";
-	};
-
-	/*
-	 * No PL031 node.  The block at 0x20060000 has a valid PL031 identity,
-	 * but Hi3531 adds a write lock at offset 0x20.  It must receive
-	 * 0x1acce551 before RTC_CR or RTC_LR accepts a write; mainline rtc-pl031
-	 * has no such quirk, so a plain node binds but leaves the counter
-	 * stopped.  A volatile unlock/start test confirmed one-second ticks.
-	 * CRG + 0xe4 bit 2 is the reset control and was already deasserted.
-	 *
-	 * The vendor ships a driver with the required sequence but does not
-	 * load it on this board.  Keep the working battery-backed external RTC
-	 * as rtc0 rather than adding an incomplete on-chip node.
-	 */
-	/*
-	 * SP805 watchdog, WDG_BASE from the vendor platform.h.  Used as a
-	 * deadman during risky bring-up: it only starts when userspace opens
-	 * /dev/watchdog, and U-Boot stops it at boot ("dog_close").  The
-	 * interrupt number is unknown and the driver does not need it.
-	 */
-	watchdog@20040000 {
-		compatible = "arm,sp805", "arm,primecell";
-		reg = <0x20040000 0x1000>;
-		clocks = <&wdt_clk>, <&peripheral_clk>;
-		clock-names = "wdog_clk", "apb_pclk";
-	};
-
-	/*
-	 * SATA bring-up.  SATA_BASE comes from the vendor
-	 * mach-godnet/include/mach/platform.h; the controller is AHCI with
-	 * two ports at the usual 0x100 + n * 0x80 stride.
-	 *
-	 * The interrupt was derived from the vendor kernel's IRQ 68 and its
-	 * GODNET_IRQ_START of 32, giving SPI 36.  The mainline driver has since
-	 * enumerated the AHCI 1.2 controller, its five-port JMicron multiplier
-	 * and the attached disk, and completed read I/O through this path.
-	 *
-	 * The second reg window is the shared peripheral CRG; the glue driver
-	 * needs it for the SATA clock and reset bits at 0xb4.  ports-implemented
-	 * is not overridden any more: once the clocks are on, the controller
-	 * reports 0x3 by itself.
-	 */
-	sata: sata@10080000 {
-		compatible = "hisilicon,hi3531-ahci";
-		reg = <0x10080000 0x00010000>,
-		      <0x20030000 0x00000100>;
-		reg-names = "ahci", "syscfg";
-		interrupts = <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>;
-	};
-
-	/*
-	 * reg[0] spans the whole shared block: GMAC0 at +0x0, GMAC1 at
-	 * +0x4000, the three DMA channels at +0x1000/+0x1100/+0x1200, and
-	 * the TNK interrupt aggregator at +0x9000.  reg[1] is the CRG
-	 * window holding the GMAC interface reset and mode registers.  The
-	 * Synopsys ID is 3.60, for which upstream has no exact compatible;
-	 * verified capabilities are selected explicitly by the Hi3531 glue.
-	 */
-	gmac1: ethernet@101c0000 {
-		compatible = "hisilicon,hi3531-dwmac", "snps,dwmac";
-		reg = <0x101c0000 0x00020000>,
-		      <0x20030000 0x00000100>;
-		reg-names = "stmmaceth", "syscfg";
-		interrupts = <GIC_SPI 87 IRQ_TYPE_LEVEL_HIGH>;
-		interrupt-names = "macirq";
-		clocks = <&peripheral_clk>;
-		clock-names = "stmmaceth";
-		phy-mode = "rgmii";
-		phy-handle = <&phy1>;
-		max-speed = <1000>;
-		/*
-		 * Depths are informational here: dwmac1000 ignores the FIFO
-		 * size when setting the DMA operation mode.
-		 */
-		tx-fifo-depth = <8192>;
-		rx-fifo-depth = <8192>;
-		snps,pbl = <16>;
-		snps,no-pbl-x8;
-
-		/*
-		 * No snps,force_sf_dma_mode.  The vendor driver enables TX
-		 * store-and-forward only when TX checksum insertion is on,
-		 * and otherwise runs TX in threshold mode with RX
-		 * store-and-forward.  Forcing TX store-and-forward with COE
-		 * disabled wedges the TX DMA once a burst exceeds a few
-		 * frames: the engine sticks in "reading data from host
-		 * memory" and never completes, with no underflow, no bus
-		 * error and no transmit timeout reported.
-		 */
-
-		mdio {
-			compatible = "snps,dwmac-mdio";
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			phy1: ethernet-phy@1 {
-				reg = <1>;
-			};
-		};
+&mdio {
+	phy1: ethernet-phy@1 {
+		reg = <1>;
 	};
 };
+
+/* All nineteen banks are brought out on this board. */
+&gpio0 { status = "okay"; };
+&gpio1 { status = "okay"; };
+&gpio2 { status = "okay"; };
+&gpio3 { status = "okay"; };
+&gpio4 { status = "okay"; };
+&gpio5 { status = "okay"; };
+&gpio6 { status = "okay"; };
+&gpio7 { status = "okay"; };
+&gpio8 { status = "okay"; };
+&gpio9 { status = "okay"; };
+&gpio10 { status = "okay"; };
+&gpio11 { status = "okay"; };
+&gpio12 { status = "okay"; };
+&gpio13 { status = "okay"; };
+&gpio14 { status = "okay"; };
+&gpio15 { status = "okay"; };
+&gpio16 { status = "okay"; };
+&gpio17 { status = "okay"; };
+&gpio18 { status = "okay"; };

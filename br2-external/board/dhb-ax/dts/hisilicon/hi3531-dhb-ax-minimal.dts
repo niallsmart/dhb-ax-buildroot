@@ -2,6 +2,9 @@
 /*
  * Minimal RAM-only bring-up: CPU, GIC, SP804 timer, PL011 UART0 only.
  *
+ * Every other on-chip block stays disabled as hi3531.dtsi leaves it, so this
+ * DTB reaches a shell without touching GPIO, USB, SATA or Ethernet.
+ *
  * Developed against an LTS LTD2704XE-P; the same board also ships under
  * other retail brands.
  */
@@ -12,4 +15,24 @@
 / {
 	model = "TVT DHB_AX V1.2 (Hi3531 DVR, minimal)";
 	compatible = "tvt,dhb-ax", "hisilicon,hi3531";
+
+	chosen {
+		/* U-Boot supplies root= and mem=; Linux uses mem= to replace ATAG_MEM. */
+		stdout-path = "serial0:115200n8";
+	};
+
+	/* Both 512 MiB banks; see hi3531-dhb-ax.dts for how this was measured. */
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x80000000 0x20000000>,
+		      <0xc0000000 0x20000000>;
+	};
+};
+
+&timer0 {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
 };
