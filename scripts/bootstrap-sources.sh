@@ -6,8 +6,10 @@
 # Everything here is reproducible from two pinned inputs, so none of it needs
 # backing up:
 #
-#   kernel/linux-6.18.42.tar.xz      official upstream tarball; what Buildroot
-#                                    unpacks and patches
+#   kernel/linux-6.18.42.tar.xz      official upstream tarball; kept only as
+#                                    the source of the pristine tree below.
+#                                    Buildroot fetches its own copy from
+#                                    kernel.org into the download volume
 #   buildroot/buildroot-2026.02.3/   extracted from a checksum-pinned tarball
 #
 # and one derived tree:

@@ -27,16 +27,15 @@ BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_6_18=y
 # kernel patches live in board/dhb-ax/patches/linux/.
 BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/patches"
 
-# Kernel.  The tarball is the one bootstrap-sources.sh already pins, reused
-# rather than downloaded a second time.  /work is the repository root as
-# mounted by scripts/buildroot.sh.
+# Buildroot fetches the tarball from kernel.org and checks it against the sha256 in
+# board/dhb-ax/patches/linux/linux.hash (BR2_GLOBAL_PATCH_DIR is a hash source)
 #
 # linux.config is a *full* .config, not a savedefconfig.  Buildroot copies it
 # into place and runs olddefconfig, which gives any absent symbol its Kconfig
 # default.  A minimal defconfig here would silently turn on a great deal.
 BR2_LINUX_KERNEL=y
-BR2_LINUX_KERNEL_CUSTOM_TARBALL=y
-BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="file:///work/kernel/linux-6.18.42.tar.xz"
+BR2_LINUX_KERNEL_CUSTOM_VERSION=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.18.42"
 BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
 BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/linux.config"
 
