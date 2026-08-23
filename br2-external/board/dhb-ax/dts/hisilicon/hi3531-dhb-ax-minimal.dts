@@ -17,7 +17,7 @@
 	compatible = "tvt,dhb-ax", "hisilicon,hi3531";
 
 	chosen {
-		/* U-Boot supplies root= and mem=; Linux uses mem= to replace ATAG_MEM. */
+		/* U-Boot supplies mem=; Linux uses it to replace ATAG_MEM. */
 		stdout-path = "serial0:115200n8";
 	};
 

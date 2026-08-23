@@ -60,6 +60,17 @@ if [ ! -f "$defconfig_file" ]; then
 fi
 mkdir -p "$output" /dl "$artifacts"
 
+# The main post-image script once paired its kernel with the minimal DTB.
+# Remove that non-bootable side product from persistent outputs until every
+# main output volume in use has been rebuilt or cleaned after this migration.
+if [ "$build_config" = main ]; then
+	rm -f \
+		"$output/images/uImage-hi3531-dhb-ax-minimal" \
+		"$output/images/zImage-hi3531-dhb-ax-minimal-appended-dtb" \
+		"$artifacts/uImage-hi3531-dhb-ax-minimal" \
+		"$artifacts/zImage-hi3531-dhb-ax-minimal-appended-dtb"
+fi
+
 # shellcheck source=scripts/lib.sh
 . "$(dirname -- "$0")/lib.sh"
 
@@ -91,9 +102,14 @@ case "${DHB_AX_ROOT_PASSWD:-}" in
 	;;
 esac
 
-# The hash is handed over as a $(shell) call, because make interprets
-# the $ characters in a crypt hash as variable references and mangles
-# it. Using $(shell ...) avoids this problem.
+# The make-side $(shell) below reads the original hash from its environment.
+# Sourcing local.env creates a shell variable but does not export it, so make
+# would otherwise receive an empty value and silently generate root::.
+export DHB_AX_ROOT_PASSWD
+
+# The hash is handed over as a $(shell) call, because make interprets the $
+# characters in a crypt hash as variable references and mangles it. Silent
+# recipe output keeps the expanded hash out of the build log.
 root_passwd_var='DHB_AX_ROOT_PASSWD=$(shell echo "$${DHB_AX_ROOT_PASSWD}")'
 
 # Buildroot is mounted read-only, so every invocation is an out-of-tree build.
@@ -101,8 +117,18 @@ root_passwd_var='DHB_AX_ROOT_PASSWD=$(shell echo "$${DHB_AX_ROOT_PASSWD}")'
 # recorded in the output tree afterwards, but passing it every time is
 # harmless and keeps the two calls identical.
 br() {
-	make -C "$buildroot" O="$output" BR2_EXTERNAL="$external" \
+	make --silent -C "$buildroot" O="$output" BR2_EXTERNAL="$external" \
 		BR2_DL_DIR=/dl "$root_passwd_var" "$@"
+}
+
+check_root_password() {
+	grep -qx 'BR2_TARGET_ENABLE_ROOT_LOGIN=y' "$output/.config" || return 0
+	actual=$(sed -n 's/^root:\([^:]*\):.*/\1/p' "$output/target/etc/shadow")
+	if [ "$actual" != "$DHB_AX_ROOT_PASSWD" ]; then
+		echo "built root password does not match DHB_AX_ROOT_PASSWD" >&2
+		return 1
+	fi
+	echo "root password verified: configured crypt hash installed"
 }
 
 # Buildroot does not remove an old filesystem image when its format is later
@@ -197,6 +223,7 @@ stage_sdk() {
 
 check_headers_not_newer
 prune_image_sdk
+built_all=0
 
 if [ "$#" -gt 0 ]; then
 	br "$@"
@@ -216,8 +243,11 @@ else
 		stage_sdk
 	else
 		br -j"$(nproc)" all
+		built_all=1
 	fi
 fi
+
+[ "$built_all" = 0 ] || check_root_password
 
 prune_disabled_images
 

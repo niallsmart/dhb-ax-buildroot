@@ -21,8 +21,12 @@ set -eu
 
 images=${1:-$BINARIES_DIR}
 mkimage=${HOST_DIR:-/output/host}/bin/mkimage
+version=$(sed -n \
+	's/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\(.*\)"$/\1/p' \
+	"$BR2_CONFIG")
 
 test -f "$images/zImage"
+test -n "$version"
 
 if [ ! -x "$mkimage" ]; then
 	echo "post-image: no mkimage at $mkimage" >&2
@@ -31,21 +35,20 @@ if [ ! -x "$mkimage" ]; then
 	exit 1
 fi
 
-for stem in hi3531-dhb-ax hi3531-dhb-ax-minimal; do
-	dtb=$images/$stem.dtb
-	test -f "$dtb"
-	appended=$images/zImage-$stem-appended-dtb
-	uimage=$images/uImage-$stem
+stem=hi3531-dhb-ax
+dtb=$images/$stem.dtb
+test -f "$dtb"
+appended=$images/zImage-$stem-appended-dtb
+uimage=$images/uImage-$stem
 
-	cat "$images/zImage" "$dtb" > "$appended"
+cat "$images/zImage" "$dtb" > "$appended"
 
-	# Load and entry address both 0x80008000: this U-Boot passes ATAGs and
-	# has no FDT commands, so the kernel must land where it expects.
-	"$mkimage" -A arm -O linux -T kernel -C none \
-		-a 0x80008000 -e 0x80008000 \
-		-n "Linux-6.18.42 $stem" \
-		-d "$appended" \
-		"$uimage" > /dev/null
+# Load and entry address both 0x80008000: this U-Boot passes ATAGs and
+# has no FDT commands, so the kernel must land where it expects.
+"$mkimage" -A arm -O linux -T kernel -C none \
+	-a 0x80008000 -e 0x80008000 \
+	-n "Linux-$version $stem" \
+	-d "$appended" \
+	"$uimage" > /dev/null
 
-	echo "post-image: $(basename "$uimage")"
-done
+echo "post-image: $(basename "$uimage")"

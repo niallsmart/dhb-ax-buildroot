@@ -515,3 +515,47 @@ that partition at once.
     `CONFIG_BLK_DEV_INITRD` and the hi3531 platform symbols still on.
   - The minimal `zImage` is materially smaller than the main build's, by an
     amount recorded alongside the size budget.
+
+## Execution results (2026-08-23)
+
+The maintained minimal target builds cleanly and boots from both supported
+load paths. Its artifacts are:
+
+- `rootfs.cpio`: 1,781,248 bytes.
+- `zImage`: 2,537,656 bytes.
+- `uImage-hi3531-dhb-ax-minimal`: 2,544,243 bytes, SHA-256
+  `4de5467596964cb07e7b376d4128c30ab0fe0824fac21eca93f8746b92d7e295`.
+- Legacy image title: `Linux-6.18.42 dhb-ax-minimal`. The planned full stem
+  does not fit U-Boot's 32-byte legacy image-name field, so the artifact keeps
+  the full stem while the embedded title uses the shorter board name.
+
+The production `zImage` from the regression build is 3,559,792 bytes, making
+the minimal kernel 1,022,136 bytes smaller. The clean minimal build reused the
+shared compiler cache: 24,506 of 39,862 cacheable calls were hits (61.48%),
+with 0.2 GB stored in the shared 10 GB cache.
+
+The final USB and TFTP boots both reached `minimal login:` with this command
+line and no root-device arguments:
+
+```
+console=ttyAMA0,115200 earlycon=pl011,0x20080000 ignore_loglevel mem=512M@0x80000000 mem=512M@0xc0000000
+```
+
+Runtime evidence was `Total pages: 262144`, `MemTotal: 1036056 kB`, and
+`rootfs / rootfs rw`; the forbidden-driver kallsyms check returned no matches.
+Because this is a built-in initramfs rather than an externally loaded initrd,
+the relevant release line is `Freeing unused kernel image (initmem) memory:
+1104K`; there is no separate `Freeing initrd memory` line. The final clean
+image starts syslog, klog, sysctl and crond only, with no network startup.
+
+USB installation left the production `/uImage` in place and installed the
+diagnostic image and checksum as `/uImage-minimal` and
+`/uImage-minimal.sha256`. TFTP transferred the same 2,544,243-byte image after
+a hard reset cleared the vendor U-Boot PHY state. A warm reboot can instead
+end in `PHY not link!`; the boot tool reports the required hard-reset recovery.
+
+After both diagnostic boot paths, the production regression boot reported
+Linux 6.18.42, hostname `dhb-ax`, and `/dev/root / ext4 rw,relatime`. The main
+artifact directory contains only the production uImage stem, and the
+configuration-specific clean/distclean volume selection was verified without
+removing the shared downloads or compiler cache during a per-target clean.

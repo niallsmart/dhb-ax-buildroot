@@ -24,7 +24,8 @@ Subcommands:
 
 Common:
   --check                 Run read-only preflight checks; do not access the UART
-  --root MODE             Root filesystem: hdd or nfs (default follows subcommand)
+  --root MODE             Root filesystem: hdd, nfs, or built-in initramfs
+                          (default follows subcommand)
   --host HOST             Pi SSH address (default: $DHB_AX_PI_IPADDR)
   --session NAME          persistent tmux console to use (default: dvr)
   --transcript PATH       Append serial output to PATH
@@ -81,6 +82,7 @@ set check_only 0
 set subcommand ""
 set local_image ""
 set image ""
+set image_explicit 0
 set usb_device 0:1
 set root_mode ""
 
@@ -117,6 +119,7 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
                 } else {
                     set local_image $arg
                 }
+                set image_explicit 1
             } else {
                 puts stderr "error: only one image may be specified"
                 usage 2
@@ -135,6 +138,19 @@ if {$netmask eq ""} { set netmask $env(DHB_AX_DVR_NETMASK) }
 if {$serverip eq ""} { set serverip $env(DHB_AX_PI_IPADDR) }
 if {$ethaddr eq ""} { set ethaddr $env(DHB_AX_DVR_ETHADDR) }
 
+if {$root_mode eq ""} {
+    set root_mode [expr {$usb_mode ? "hdd" : "nfs"}]
+}
+if {$root_mode ni {hdd nfs initramfs}} {
+    puts stderr "error: --root must be hdd, nfs, or initramfs"
+    exit 2
+}
+if {$usb_mode && $root_mode eq "initramfs" && !$image_explicit} {
+    puts stderr "error: usb --root initramfs requires an explicit USB image"
+    puts stderr "example: dvr-boot.sh usb uImage-minimal --root initramfs"
+    exit 2
+}
+
 if {$usb_mode} {
     if {$image eq ""} { set image uImage }
 } else {
@@ -147,13 +163,6 @@ if {$usb_mode} {
         exit 2
     }
     set image [file tail $local_image]
-}
-if {$root_mode eq ""} {
-    set root_mode [expr {$usb_mode ? "hdd" : "nfs"}]
-}
-if {$root_mode ni {hdd nfs}} {
-    puts stderr "error: --root must be hdd or nfs"
-    exit 2
 }
 if {![regexp {^[A-Za-z0-9_.@-]+$} $host]} {
     puts stderr "error: unsafe SSH host: $host"
@@ -538,30 +547,19 @@ proc configure_bootargs {root_bootargs} {
     # No keep_bootcon: earlycon and ttyAMA0 are the same PL011 at 0x20080000,
     # so keeping the boot console registered printed every message twice.
     #
-    # libata.force targets the three port-multiplier sub-ports with no SATA
-    # connector fitted at all (SATA1, SATA2, SATA5 -- see
-    # dhb-ax-guide/doc/07-sata-storage.md). Two params per port, since each
-    # addresses a different delay:
-    #   norst (ATA_LFLAG_NO_HRST | NO_SRST) skips the reset itself. disable
-    #   -- tried first -- does not: it is a device quirk, checked only after
-    #   a device has already been identified, so it never applies to a port
-    #   with nothing attached to identify.
-    #   nodbdelay (sets ATA_LFLAG_NO_DEBOUNCE_DELAY -- the "no" is part of
-    #   libata's own force keyword, not a double negative) is still needed
-    #   even with norst: sata_link_resume() retries the SControl write
-    #   independently of whether a reset follows, sleeping 200ms between
-    #   each of ATA_LINK_RESUME_TRIES (5) attempts -- the actual ~1s/port
-    #   this is after. nodbdelay drops the sleep, so the retries that can
-    #   never succeed on an empty port fail fast instead.
-    # SATA3 (ata2.02) is the populated drive; SATA4 (ata2.03) is left alone
-    # since it has a fitted connector and could take a second drive.
-    set common_bootargs {console=ttyAMA0,115200 earlycon=pl011,0x20080000 ignore_loglevel mem=512M@0x80000000 mem=512M@0xc0000000 libata.force=2.00:norst,2.00:nodbdelay,2.01:norst,2.01:nodbdelay,2.04:norst,2.04:nodbdelay}
-    set expected "$common_bootargs $root_bootargs"
+    set common_bootargs {console=ttyAMA0,115200 earlycon=pl011,0x20080000 ignore_loglevel mem=512M@0x80000000 mem=512M@0xc0000000}
+    if {$root_bootargs eq ""} {
+        set expected $common_bootargs
+    } else {
+        set expected "$common_bootargs $root_bootargs"
+    }
 
     # Keep both input lines well below old U-Boot's possible 256-byte console
     # buffer. The second command expands the value installed by the first.
     uboot_command "setenv bootargs $common_bootargs"
-    uboot_command "setenv bootargs \${bootargs} $root_bootargs"
+    if {$root_bootargs ne ""} {
+        uboot_command "setenv bootargs \${bootargs} $root_bootargs"
+    }
 
     # Read the complete value back. -J joins tmux display wraps so a long but
     # intact environment value can still be compared exactly.
@@ -597,12 +595,19 @@ if {$transcript ne ""} {
     uboot_command $transcript_marker
 }
 
+# libata.force targets the empty SATA port-multiplier sub-ports and avoids a
+# one-second probe delay on each. It belongs only to full-hardware boots: the
+# initramfs kernel deliberately has no libata implementation.
+set sata_bootargs {libata.force=2.00:norst,2.00:nodbdelay,2.01:norst,2.01:nodbdelay,2.04:norst,2.04:nodbdelay}
 if {$root_mode eq "hdd"} {
-    set root_bootargs {root=PARTUUID=ca264b64-5738-4e60-a0ab-b3c3a4c789c1 rootfstype=ext4 rootwait rw}
+    set root_bootargs "$sata_bootargs root=PARTUUID=ca264b64-5738-4e60-a0ab-b3c3a4c789c1 rootfstype=ext4 rootwait rw"
     puts "Configuring temporary HDD-root bootargs..."
-} else {
-    set root_bootargs "root=/dev/nfs nfsroot=$serverip:/srv/dhb-ax/rootfs,vers=3,tcp,nolock ip=${ipaddr}:::${netmask}:dhb-ax:eth0:off rw"
+} elseif {$root_mode eq "nfs"} {
+    set root_bootargs "$sata_bootargs root=/dev/nfs nfsroot=$serverip:/srv/dhb-ax/rootfs,vers=3,tcp,nolock ip=${ipaddr}:::${netmask}:dhb-ax:eth0:off rw"
     puts "Configuring temporary NFS-root bootargs..."
+} else {
+    set root_bootargs ""
+    puts "Configuring temporary initramfs bootargs..."
 }
 configure_bootargs $root_bootargs
 
@@ -646,10 +651,10 @@ if {$usb_mode} {
         abort_boot "TFTP reported a transfer failure" 8
     }
     if {$result eq "phy_down"} {
-        # Seen transiently right after reboot -- the PHY hadn't finished link
-        # negotiation yet when U-Boot tried to use it. Retrying has cleared it
-        # every time so far.
-        abort_boot "Ethernet PHY link is down; retry, it has been transient after reboot" 8
+        # A warm reboot can leave this vendor U-Boot unable to bring the PHY
+        # back up. A board reset clears that state; the environment remains
+        # volatile because this tool never calls saveenv.
+        abort_boot "Ethernet PHY link is down; hard-reset the DVR and retry from the U-Boot prompt" 8
     }
     if {$result ne "success"} {
         abort_boot "TFTP did not complete within 120 seconds" 8

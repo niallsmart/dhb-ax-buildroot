@@ -34,7 +34,9 @@ Ethernet, SATA and ext4 root, EHCI/OHCI USB, all nineteen GPIO controllers, the
 bit-banged I²C bus and battery-backed RTC, NFS, and OpenSSH. The proprietary
 media pipeline is out of scope. The production userspace uses musl 1.2.6 from
 the shared Buildroot SDK; the musl image is verified over NFS and from the
-installed USB-kernel/HDD-root system.
+installed USB-kernel/HDD-root system. A separate UART-only diagnostic kernel
+with a built-in initramfs is verified from USB and TFTP without mounting the
+HDD.
 
 [Remaining hardware work](doc/remaining-work.md) lists what is not yet driven,
 ranked by value and effort.
@@ -46,14 +48,18 @@ scripts/bootstrap-sources.sh
 install -m 600 local.env.example local.env   # then fill in the required values
 scripts/buildroot.sh --config toolchain
 scripts/buildroot.sh --config main
+scripts/buildroot.sh --config minimal
 ```
 
 The first bootstrap on a checkout prepares the pinned sources, then exits with
 the toolchain command above until the shared musl SDK has been staged. The SDK
 is built only when the toolchain configuration changes; image builds unpack it
 from the shared download volume instead of rebuilding gcc, binutils and musl.
-`main` is the default configuration, so the final command may also be written
-as `scripts/buildroot.sh`.
+`main` is the default configuration, so its command may also be written as
+`scripts/buildroot.sh`. The minimal configuration is independent of the
+production root filesystem: it builds a reduced kernel and BusyBox initramfs
+that reach `minimal login:` on the UART with no SATA, USB, Ethernet, GPIO or
+I²C drivers.
 
 Each configuration has its own output volume. Use `--config NAME --clean` to
 drop one output tree while retaining downloads, the staged SDK and the shared
@@ -64,6 +70,8 @@ refuses to start without a root password hash in it, so the serial console
 cannot be left open by accident; `local.env.example` documents the keys.
 
 Maintained board support lives in `br2-external/`. `kernel/` and `buildroot/`
-are regenerated source trees. Build outputs are written to
-`artifacts/buildroot/`; the normal boot image is
-`uImage-hi3531-dhb-ax`.
+are regenerated source trees. Production outputs are written to
+`artifacts/buildroot/`; the normal boot image is `uImage-hi3531-dhb-ax`.
+Diagnostic outputs are written to `artifacts/buildroot-minimal/`; its boot
+image is `uImage-hi3531-dhb-ax-minimal` and its generated root filesystem is
+`rootfs.cpio`.

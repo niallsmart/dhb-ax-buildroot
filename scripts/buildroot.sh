@@ -56,7 +56,7 @@ usage: $0 [--config NAME] [target ...]
 Configurations:
   main       production image (default)
   toolchain  build and stage the shared cross-toolchain SDK
-  minimal    diagnostic image (requires dhb_ax_minimal_defconfig)
+  minimal    self-contained UART diagnostic image
 
 With no target, reapply and verify the selected defconfig, then build it.
 --clean drops only the selected output volume. --distclean drops every output
@@ -102,9 +102,6 @@ fi
 
 if [ ! -f "$workspace/br2-external/configs/$defconfig" ]; then
 	echo "no $build_config defconfig at br2-external/configs/$defconfig" >&2
-	if [ "$build_config" = minimal ]; then
-		echo "implement plans/minimal-kernel.md before building it" >&2
-	fi
 	exit 1
 fi
 

@@ -1,0 +1,55 @@
+# UART-only diagnostic image for the DHB_AX board (HiSilicon Hi3531).
+#
+# Build with:
+#   scripts/buildroot.sh --config minimal
+
+# Target. Keep this block identical to dhb_ax_defconfig: both image
+# configurations consume the same external toolchain.
+BR2_arm=y
+BR2_cortex_a9=y
+BR2_ARM_ENABLE_VFP=y
+BR2_ARM_EABIHF=y
+BR2_ARM_FPU_VFPV3D16=y
+
+# Shared Buildroot-produced musl toolchain.
+BR2_TOOLCHAIN_EXTERNAL=y
+BR2_TOOLCHAIN_EXTERNAL_CUSTOM=y
+BR2_TOOLCHAIN_EXTERNAL_DOWNLOAD=y
+BR2_TOOLCHAIN_EXTERNAL_URL="file:///dl/arm-buildroot-linux-musleabihf_sdk-buildroot.tar.gz"
+BR2_TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX="arm-buildroot-linux-musleabihf"
+BR2_TOOLCHAIN_EXTERNAL_GCC_14=y
+BR2_TOOLCHAIN_EXTERNAL_HEADERS_6_18=y
+BR2_TOOLCHAIN_EXTERNAL_CUSTOM_MUSL=y
+BR2_TOOLCHAIN_EXTERNAL_HAS_SSP=y
+BR2_TOOLCHAIN_EXTERNAL_HAS_SSP_STRONG=y
+
+# BR2_CCACHE_DIR defaults to $HOME/.buildroot-ccache, which the build wrapper
+# mounts from the shared dhb-ax-br-ccache volume for every configuration.
+BR2_CCACHE=y
+BR2_CCACHE_INITIAL_SETUP="--max-size=10G"
+
+BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/patches"
+
+# Keep this kernel-image block aligned with dhb_ax_defconfig. The separate
+# full kernel configuration removes every driver the minimal DTB cannot use.
+BR2_LINUX_KERNEL=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.18.42"
+BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
+BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/linux-minimal.config"
+BR2_LINUX_KERNEL_ZIMAGE=y
+BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/post-image-minimal.sh"
+BR2_PACKAGE_HOST_UBOOT_TOOLS=y
+BR2_LINUX_KERNEL_DTS_SUPPORT=y
+BR2_LINUX_KERNEL_CUSTOM_DTS_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/dts"
+
+# Buildroot creates /init for the cpio root and rebuilds the kernel with the
+# generated archive embedded in its zImage.
+BR2_TARGET_ROOTFS_INITRAMFS=y
+# BR2_TARGET_ROOTFS_TAR is not set
+BR2_INIT_BUSYBOX=y
+BR2_TARGET_GENERIC_GETTY=y
+BR2_TARGET_GENERIC_HOSTNAME="minimal"
+BR2_TARGET_ENABLE_ROOT_LOGIN=y
+BR2_TARGET_GENERIC_ROOT_PASSWD="$(DHB_AX_ROOT_PASSWD)"
+# BR2_PACKAGE_IFUPDOWN_SCRIPTS is not set

@@ -2,13 +2,14 @@
 # Install a Buildroot filesystem on the prepared HDD and a uImage on USB.
 #
 # Full installation reformats the existing HDD partition but deliberately
-# leaves both partition tables intact. Use --kernel-only for normal kernel
-# iteration without touching the HDD root filesystem.
+# leaves both partition tables intact. The kernel-only modes update files on
+# the USB boot filesystem without touching the HDD root filesystem.
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 default_rootfs=$repo/artifacts/buildroot/rootfs.tar
 default_uimage=$repo/artifacts/buildroot/uImage-hi3531-dhb-ax
+default_minimal_uimage=$repo/artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal
 . "$repo/scripts/lib.sh"
 require_env_file "$repo/local.env" DHB_AX_DVR_IPADDR
 target=root@${DHB_AX_DVR_IPADDR}
@@ -20,10 +21,12 @@ usage()
 	cat <<EOF
 usage: $0 [ROOTFS_TAR [UIMAGE]]
        $0 --kernel-only [UIMAGE]
+       $0 --minimal [UIMAGE]
 
 Full installation requires the DVR to be running from its NFS root and
 destructively recreates the ext4 filesystem on the prepared HDD partition.
 The kernel-only form updates the USB uImage without touching the HDD.
+The minimal form installs a diagnostic image alongside it as uImage-minimal.
 EOF
 }
 
@@ -36,6 +39,13 @@ case ${1:-} in
 		rootfs=-
 		uimage=${1:-$default_uimage}
 		;;
+	--minimal)
+		mode=minimal
+		shift
+		[ "$#" -le 1 ] || { usage >&2; exit 2; }
+		rootfs=-
+		uimage=${1:-$default_minimal_uimage}
+		;;
 	-h|--help)
 		usage
 		exit 0
@@ -47,7 +57,7 @@ case ${1:-} in
 		;;
 esac
 
-[ "$mode" = kernel ] ||
+[ "$mode" != full ] ||
 	[ -f "$rootfs" ] || { echo "no rootfs archive at $rootfs" >&2; exit 2; }
 [ -f "$uimage" ] || { echo "no kernel image at $uimage" >&2; exit 2; }
 
@@ -92,7 +102,8 @@ cleanup()
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
 
-[ "$mode" = full ] || [ "$mode" = kernel ] || fail "invalid installation mode"
+[ "$mode" = full ] || [ "$mode" = kernel ] || [ "$mode" = minimal ] ||
+	fail "invalid installation mode"
 [ -f "$uimage" ] || fail "staged uImage is missing"
 if [ "$mode" = full ]; then
 	awk '$2 == "/" && ($3 == "nfs" || $3 == "nfs4") { found = 1 }
@@ -157,27 +168,32 @@ fi
 mkdir -p "$boot_mount"
 modprobe vfat
 mount -t vfat "$boot_part" "$boot_mount"
-rm -f "$boot_mount/uImage.new" "$boot_mount/uImage.sha256.new"
+if [ "$mode" = minimal ]; then
+	kernel_name=uImage-minimal
+else
+	kernel_name=uImage
+fi
+rm -f "$boot_mount/$kernel_name.new" "$boot_mount/$kernel_name.sha256.new"
 
-echo "Installing kernel as $boot_part:/uImage..."
-cp "$uimage" "$boot_mount/uImage.new"
+echo "Installing kernel as $boot_part:/$kernel_name..."
+cp "$uimage" "$boot_mount/$kernel_name.new"
 source_sum=$(sha256sum "$uimage" | awk '{ print $1 }')
-installed_sum=$(sha256sum "$boot_mount/uImage.new" | awk '{ print $1 }')
+installed_sum=$(sha256sum "$boot_mount/$kernel_name.new" | awk '{ print $1 }')
 [ "$installed_sum" = "$source_sum" ] || fail "installed uImage checksum mismatch"
-printf '%s  uImage\n' "$installed_sum" > "$boot_mount/uImage.sha256.new"
+printf '%s  %s\n' "$installed_sum" "$kernel_name" > "$boot_mount/$kernel_name.sha256.new"
 sync
-mv -f "$boot_mount/uImage.new" "$boot_mount/uImage"
-mv -f "$boot_mount/uImage.sha256.new" "$boot_mount/uImage.sha256"
+mv -f "$boot_mount/$kernel_name.new" "$boot_mount/$kernel_name"
+mv -f "$boot_mount/$kernel_name.sha256.new" "$boot_mount/$kernel_name.sha256"
 sync
 
-[ -s "$boot_mount/uImage" ] || fail "installed uImage is empty"
-[ "$(sha256sum "$boot_mount/uImage" | awk '{ print $1 }')" = "$source_sum" ] ||
+[ -s "$boot_mount/$kernel_name" ] || fail "installed uImage is empty"
+[ "$(sha256sum "$boot_mount/$kernel_name" | awk '{ print $1 }')" = "$source_sum" ] ||
 	fail "final uImage checksum mismatch"
 
 if [ "$mode" = full ]; then
 	echo "Installed rootfs on $root_part (PARTUUID=$root_partuuid)"
 fi
-echo "Installed kernel on $boot_part as /uImage"
+echo "Installed kernel on $boot_part as /$kernel_name"
 REMOTE
 
 if [ "$mode" = full ]; then

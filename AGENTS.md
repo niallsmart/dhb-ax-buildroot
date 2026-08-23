@@ -23,6 +23,7 @@ This file is for repository workflow, device access and safety constraints.
   from pinned inputs; make lasting kernel changes in the `br2-external/` patch
   queue rather than editing these trees as source.
 - `artifacts/buildroot/` contains ignored production-image outputs;
+  `artifacts/buildroot-minimal/` contains ignored UART diagnostic outputs;
   `artifacts/toolchain/` contains the ignored shared SDK export, and
   `artifacts/legacy/` contains ignored historical outputs.
 
@@ -42,18 +43,19 @@ Prepare a fresh checkout and build the shared toolchain before an image:
 scripts/bootstrap-sources.sh
 scripts/buildroot.sh --config toolchain
 scripts/buildroot.sh --config main
+scripts/buildroot.sh --config minimal
 ```
 
 The first bootstrap prepares sources and exits non-zero when the SDK is not
 staged; the reported toolchain command is the next step. `main` is the default
-configuration. `--config minimal` is reserved for the diagnostic image in
-`plans/minimal-kernel.md`; it reports the missing defconfig until that plan is
-implemented. Each configuration has a separate output volume, while downloads
-and the compiler cache are shared. `--config NAME --clean` drops only the
-selected output volume; `--distclean` drops all build, download and cache
-volumes.
+configuration. `minimal` builds the self-contained UART diagnostic image.
+Each configuration has a separate output volume, while downloads and the
+compiler cache are shared. `--config NAME --clean` drops only the selected
+output volume; `--distclean` drops all build, download and cache volumes.
 
-The production image is `artifacts/buildroot/uImage-hi3531-dhb-ax`.
+The production image is `artifacts/buildroot/uImage-hi3531-dhb-ax`. The
+diagnostic image is
+`artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal`.
 
 # Commit Conventions
 
@@ -165,6 +167,20 @@ Raspberry Pi with:
 tools/dvr-boot.sh tftp artifacts/buildroot/uImage-hi3531-dhb-ax
 ```
 
+If the vendor U-Boot reports `PHY not link!` after a warm reboot, hard-reset
+the DVR, interrupt autoboot, and rerun the command from the U-Boot prompt.
+
+The minimal image carries its root filesystem and must use the initramfs root
+mode. It can be loaded over TFTP or, after installation, from USB:
+
+```sh
+tools/dvr-boot.sh tftp artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal --root initramfs
+tools/dvr-boot.sh usb uImage-minimal --root initramfs
+```
+
+It has no network or storage drivers. Log in on the UART and leave a shell
+prompt before asking the boot tool to reboot it into another image.
+
 Run `tools/dvr-boot.sh --help` for image checks, root selection and other
 options.
 
@@ -185,6 +201,13 @@ kernel-only iteration from either the HDD or NFS system, use:
 
 ```sh
 tools/dvr-install-system.sh --kernel-only
+```
+
+Install the diagnostic image beside `/uImage`, without touching the HDD or
+replacing the production kernel, with:
+
+```sh
+tools/dvr-install-system.sh --minimal
 ```
 
 Read each tool before changing its device-identification checks.
