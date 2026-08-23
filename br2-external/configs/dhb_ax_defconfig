@@ -87,7 +87,8 @@ BR2_INIT_BUSYBOX=y
 BR2_TARGET_GENERIC_GETTY=y
 BR2_TARGET_GENERIC_HOSTNAME="dhb-ax"
 
-# Root password for the getty on the serial console. SSH is public-key only.
+# Root password for the getty on the serial console. Dropbear is public-key
+# only.
 #
 # The password hash comes from the gitignored local.env, and
 # scripts/buildroot-in-container.sh refuses to build without it.
@@ -99,12 +100,13 @@ BR2_TARGET_GENERIC_ROOT_PASSWD="$(DHB_AX_ROOT_PASSWD)"
 # When root is NFS over eth0, Buildroot's nfs_check prevents ifup from
 # reconfiguring eth0 and disrupting the root mount.
 BR2_SYSTEM_DHCP="eth0"
-BR2_PACKAGE_OPENSSH=y
-BR2_PACKAGE_OPENSSH_CLIENT=y
-BR2_PACKAGE_OPENSSH_SERVER=y
-BR2_PACKAGE_OPENSSH_KEY_UTILS=y
-BR2_PACKAGE_OPENSSH_SANDBOX=y
-# BR2_PACKAGE_DROPBEAR is not set
+BR2_PACKAGE_DROPBEAR=y
+BR2_PACKAGE_DROPBEAR_CLIENT=y
+BR2_PACKAGE_DROPBEAR_DISABLE_REVERSEDNS=y
+BR2_PACKAGE_DROPBEAR_SMALL=y
+BR2_PACKAGE_DROPBEAR_LOCALOPTIONS_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/dropbear-localoptions.h"
+BR2_PACKAGE_GESFTPSERVER=y
+# BR2_PACKAGE_OPENSSH is not set
 # BR2_PACKAGE_LIGHTTPD is not set
 
 # Musl's 32-bit ABI uses a 64-bit time_t without the glibc-only

@@ -2,7 +2,7 @@
 
 A second Buildroot target, `dhb_ax_minimal_defconfig`, producing a
 self-contained uImage that reaches a root shell over the serial console or
-OpenSSH with no dependency on the HDD, a Raspberry Pi NFS export, or any
+Dropbear with no dependency on the HDD, a Raspberry Pi NFS export, or any
 external root filesystem. It is a diagnostic image: something to boot when
 the normal kernel or root filesystem will not, to check the boot chain and the
 kernel itself before reaching for the existing NFS-root recovery flow in
@@ -177,9 +177,9 @@ notion of "small": if a driver cannot bind, its userspace tool has nothing to
 do. The size budget above is the second constraint on the same list. Ethernet
 is the deliberate exception to the original UART-only scope.
 
-- OpenSSH uses the same server selection, default server config, host keys and
-  root authorized key as the production image. The shared `post-build-ssh.sh`
-  installs the machine-local key material for both targets. The outbound SSH
+- Dropbear uses the same host keys and root authorized key as the production
+  image. The shared `post-build-ssh.sh` installs the machine-local key
+  material for both targets. The outbound SSH
   client is omitted from the diagnostic image because it is not needed for the
   rescue interface and would push the payload over vendor U-Boot's limit.
 - Buildroot's `BR2_SYSTEM_DHCP="eth0"` supplies the normal network init script
@@ -583,10 +583,10 @@ removing the shared downloads or compiler cache during a per-target clean.
 
 The diagnostic image now enables only the board's Ethernet data path in
 addition to its original CPU/timer/UART scope. Buildroot starts BusyBox
-`udhcpc` for `eth0`, followed by OpenSSH `sshd`; the shared pre-up hook applies
-the factory MAC before DHCP, and the SSH server config, host keys and root
-authorized key are byte-identical to the production inputs. The outbound SSH
-client is deliberately absent. BusyBox's `CONFIG_FEATURE_SKIP_ROOTFS` is off,
+`udhcpc` for `eth0`, followed by Dropbear; the shared pre-up hook applies
+the factory MAC before DHCP, and both images share the same Dropbear host keys
+and root authorized key. The outbound SSH client is deliberately absent.
+BusyBox's `CONFIG_FEATURE_SKIP_ROOTFS` is off,
 so the permanent initramfs mount is visible to `df`.
 
 The final clean-build artifacts are:

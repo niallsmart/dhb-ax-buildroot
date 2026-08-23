@@ -9,7 +9,7 @@ a second image and so a second output tree.
 
 Buildroot's internal toolchain is a per-output-tree artifact: it is built into
 `$(O)/host`, so two output trees means two toolchains. For a target this small
-gcc, binutils and the C library dominate a from-scratch build -- BusyBox, OpenSSH and
+gcc, binutils and the C library dominate a from-scratch build -- BusyBox, Dropbear and
 the storage tools are quick by comparison -- so the duplication is most of the
 cost of having a second configuration at all, and it recurs on every kernel
 version bump, Buildroot upgrade and `--clean`.

@@ -49,7 +49,7 @@ scripts/buildroot.sh --config minimal
 The first bootstrap prepares sources and exits non-zero when the SDK is not
 staged; the reported toolchain command is the next step. `main` is the default
 configuration. `minimal` builds the self-contained diagnostic image with
-serial access, DHCP and OpenSSH.
+serial access, DHCP and Dropbear.
 Each configuration has a separate output volume, while downloads and the
 compiler cache are shared. `--config NAME --clean` drops only the selected
 output volume; `--distclean` drops all build, download and cache volumes.
@@ -103,7 +103,7 @@ changes. Put reusable hardware conclusions in the official porting guide.
 
 ### Serial console
 
-Use the UART for U-Boot, boot logs, recovery, or when Linux networking or sshd
+Use the UART for U-Boot, boot logs, recovery, or when Linux networking or Dropbear
 is unavailable.
 
 Under the Buildroot system the console getty asks for a password: log in as
@@ -139,7 +139,7 @@ unencrypted, so use it only on the local trusted network.
 
 ### Buildroot Linux
 
-When the normal Buildroot system is running, use OpenSSH directly through the
+When the normal Buildroot system is running, use the SSH client directly through the
 `dvr` hostname. Root login is public-key only:
 
 ```sh
@@ -181,7 +181,7 @@ tools/dvr-boot.sh usb uImage-minimal --root initramfs
 
 It has an Ethernet driver and obtains the same DHCP reservation as the main
 image by applying the board's factory MAC address before `udhcpc` starts.
-OpenSSH uses the same machine-local host and authorized keys as the main image,
+Dropbear uses the same machine-local host and authorized keys as the main image,
 so `ssh -o BatchMode=yes root@dvr` works after DHCP completes. SATA, USB, GPIO
 and I²C drivers remain excluded; the UART is the fallback when networking is
 unavailable.

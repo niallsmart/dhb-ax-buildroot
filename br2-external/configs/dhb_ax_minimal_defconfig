@@ -56,15 +56,16 @@ BR2_TARGET_ENABLE_ROOT_LOGIN=y
 BR2_TARGET_GENERIC_ROOT_PASSWD="$(DHB_AX_ROOT_PASSWD)"
 
 # Obtain the production DHCP reservation with the board's factory MAC, then
-# expose the same public-key-only root SSH service as the main image.
+# expose the same public-key-only Dropbear service as the main image.
 BR2_SYSTEM_DHCP="eth0"
-BR2_PACKAGE_OPENSSH=y
+BR2_PACKAGE_DROPBEAR=y
 # The server is the rescue interface; omit the outbound client to stay below
 # the vendor U-Boot payload limit at physical address 0x80800000.
-# BR2_PACKAGE_OPENSSH_CLIENT is not set
-BR2_PACKAGE_OPENSSH_SERVER=y
-BR2_PACKAGE_OPENSSH_KEY_UTILS=y
-BR2_PACKAGE_OPENSSH_SANDBOX=y
-# BR2_PACKAGE_DROPBEAR is not set
+# BR2_PACKAGE_DROPBEAR_CLIENT is not set
+BR2_PACKAGE_DROPBEAR_DISABLE_REVERSEDNS=y
+BR2_PACKAGE_DROPBEAR_SMALL=y
+BR2_PACKAGE_DROPBEAR_LOCALOPTIONS_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/dropbear-localoptions.h"
+BR2_PACKAGE_GESFTPSERVER=y
+# BR2_PACKAGE_OPENSSH is not set
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/post-build-ssh.sh"
 BR2_ROOTFS_POST_BUILD_SCRIPT_ARGS="$(BR2_EXTERNAL_DHB_AX_PATH)/../artifacts/local/ssh"

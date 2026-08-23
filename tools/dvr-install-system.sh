@@ -160,7 +160,7 @@ if [ "$mode" = full ]; then
 	tar -xpf "$rootfs" -C "$root_mount"
 
 	[ -x "$root_mount/sbin/init" ] || fail "installed root has no /sbin/init"
-	[ -x "$root_mount/usr/sbin/sshd" ] || fail "installed root has no sshd"
+	[ -x "$root_mount/usr/sbin/dropbear" ] || fail "installed root has no dropbear"
 	sync
 	umount "$root_mount"
 fi

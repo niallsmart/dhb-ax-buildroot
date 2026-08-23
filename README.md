@@ -31,13 +31,13 @@ division and where a given change belongs.
 
 Validated on the board: both Cortex-A9 cores, both 512 MiB DRAM banks, gigabit
 Ethernet, SATA and ext4 root, EHCI/OHCI USB, all nineteen GPIO controllers, the
-bit-banged I²C bus and battery-backed RTC, NFS, and OpenSSH. The proprietary
-media pipeline is out of scope. The production userspace uses musl 1.2.6 from
-the shared Buildroot SDK; the musl image is verified over NFS and from the
-installed USB-kernel/HDD-root system. A separate diagnostic kernel with a
-built-in initramfs is verified from USB and TFTP without mounting the HDD; it
-uses Ethernet for DHCP and OpenSSH while leaving storage and the other board
-peripherals disabled.
+bit-banged I²C bus and battery-backed RTC, and NFS. The proprietary media
+pipeline is out of scope. The production
+userspace uses musl 1.2.6 from the shared Buildroot SDK; the musl image is
+verified over NFS and from the installed USB-kernel/HDD-root system. A separate
+diagnostic kernel with a built-in initramfs is verified from USB and TFTP
+without mounting the HDD; it uses Ethernet for DHCP while leaving storage and
+the other board peripherals disabled.
 
 [Remaining hardware work](doc/remaining-work.md) lists what is not yet driven,
 ranked by value and effort.
@@ -60,7 +60,8 @@ from the shared download volume instead of rebuilding gcc, binutils and musl.
 `scripts/buildroot.sh`. The minimal configuration is independent of the
 production root filesystem: it builds a reduced kernel and BusyBox initramfs
 that reach `minimal login:` on the UART, obtain the board's normal DHCP lease,
-and serve the same public-key-only OpenSSH configuration as the main image.
+and serve the same public-key-only Dropbear and SFTP configuration as the main
+image.
 SATA, USB, GPIO and I²C drivers remain excluded. The image omits the outbound
 SSH client; SSH access to the board is the diagnostic requirement.
 
@@ -71,6 +72,9 @@ compiler cache.
 `local.env` holds machine-local configuration and is gitignored. The build
 refuses to start without a root password hash in it, so the serial console
 cannot be left open by accident; `local.env.example` documents the keys.
+
+`artifacts/local/ssh/` is also machine-local. It holds `authorized_keys` and
+the per-board Dropbear host keys.
 
 Maintained board support lives in `br2-external/`. `kernel/` and `buildroot/`
 are regenerated source trees. Production outputs are written to
