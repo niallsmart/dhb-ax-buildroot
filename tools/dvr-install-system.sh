@@ -17,7 +17,7 @@ remote_uimage=/tmp/dhb-ax-install-uImage
 
 usage()
 {
-	cat >&2 <<EOF
+	cat <<EOF
 usage: $0 [ROOTFS_TAR [UIMAGE]]
        $0 --kernel-only [UIMAGE]
 
@@ -32,7 +32,7 @@ case ${1:-} in
 	--kernel-only)
 		mode=kernel
 		shift
-		[ "$#" -le 1 ] || { usage; exit 2; }
+		[ "$#" -le 1 ] || { usage >&2; exit 2; }
 		rootfs=-
 		uimage=${1:-$default_uimage}
 		;;
@@ -41,7 +41,7 @@ case ${1:-} in
 		exit 0
 		;;
 	*)
-		[ "$#" -le 2 ] || { usage; exit 2; }
+		[ "$#" -le 2 ] || { usage >&2; exit 2; }
 		rootfs=${1:-$default_rootfs}
 		uimage=${2:-$default_uimage}
 		;;

@@ -1,7 +1,5 @@
 # Host environment for Buildroot.
 #
-# No cross-compiler here.  Buildroot builds its own -- Debian's is rejected by
-# design, see the toolchain section of br2-external/configs/dhb_ax_defconfig.
 FROM debian:12
 
 RUN apt-get update \

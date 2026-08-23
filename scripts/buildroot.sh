@@ -1,12 +1,6 @@
 #!/bin/sh
-# macOS wrapper around the containerised Buildroot build.
-#
-#   buildroot.sh [target ...]      default: dhb_ax_defconfig, then all
-#   buildroot.sh menuconfig        interactive; needs a tty
-#   buildroot.sh savedefconfig     write configs/dhb_ax_defconfig back out
-#   buildroot.sh --clean           drop the output volume, keep the downloads
-#   buildroot.sh --distclean       drop the download cache as well
-#   buildroot.sh --shell           open a shell on the Docker container
+# macOS wrapper around the containerised Buildroot build.  Run with --help for
+# the command list.
 #
 # Buildroot's output tree is ~100k small files.  On macOS a bind mount makes
 # that painfully slow, so the download cache and the output directory live in
@@ -21,13 +15,28 @@ image=dhb-ax-buildroot:bookworm
 dl_volume=dhb-ax-br-dl
 out_volume=dhb-ax-br-output
 
-. "$workspace/scripts/lib.sh"
+usage()
+{
+	cat <<EOF
+usage: $0 [target ...]     run the specified Buildroot target in a container
+       $0 --clean          drop output volume, keep downloads volume
+       $0 --distclean      drop both volumes
+       $0 --shell          open a shell on the container
 
-require_env_file "$workspace/local.env"
+EOF
+}
 
-# Named after Buildroot's own targets, which draw the line in the same place:
-# clean deletes what the build produced, distclean also drops the downloads.
+# All of these run before require_env_file: none of them read local.env, and
+# both asking for usage and dropping a volume have to work on a fresh checkout.
+#
+# --clean and --distclean are named after Buildroot's own targets, which draw
+# the line in the same place: clean deletes what the build produced, distclean
+# also drops the downloads.
 case "${1:-}" in
+-h | --help)
+	usage
+	exit 0
+	;;
 --clean)
 	echo "removing volume $out_volume; keeping $dl_volume"
 	docker volume rm -f "$out_volume"
@@ -39,6 +48,10 @@ case "${1:-}" in
 	exit 0
 	;;
 esac
+
+. "$workspace/scripts/lib.sh"
+
+require_env_file "$workspace/local.env"
 
 if [ ! -f "$buildroot_dir/Makefile" ]; then
 	echo "no Buildroot source at $buildroot_dir" >&2
