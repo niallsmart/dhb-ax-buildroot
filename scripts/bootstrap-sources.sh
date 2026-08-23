@@ -41,6 +41,10 @@ br_tarball_url=https://buildroot.org/downloads/buildroot-$br_version.tar.xz
 br_sha256=5a59e7501b0b4ec52c41f4bfa79412320e0b37eae5f719605a258e8d0c6fc7fb
 br_src=$buildroot_dir/buildroot-$br_version
 
+image=dhb-ax-buildroot:bookworm
+dl_volume=dhb-ax-br-dl
+sdk_tarball=arm-buildroot-linux-musleabihf_sdk-buildroot.tar.gz
+
 mkdir -p "$kernel_dir" "$buildroot_dir"
 
 if [ ! -f "$tarball" ]; then
@@ -88,5 +92,25 @@ echo "ready:"
 printf '  %-34s %s\n' "kernel tarball" "$tarball"
 printf '  %-34s %s\n' "kernel source (patch reference)" "$pristine"
 printf '  %-34s %s\n' "buildroot $br_version" "$br_src"
+
+# The image configurations download the shared SDK from the named download
+# volume. Inspect that volume through the build container because Docker
+# Desktop does not expose its filesystem directly to macOS.
+if docker volume inspect "$dl_volume" >/dev/null 2>&1 &&
+	docker image inspect "$image" >/dev/null 2>&1 &&
+	docker run --rm \
+		--entrypoint /usr/bin/test \
+		--mount "type=volume,source=$dl_volume,target=/dl,readonly" \
+		"$image" -f "/dl/$sdk_tarball"
+then
+	:
+else
+	echo >&2
+	echo "shared toolchain SDK is not staged in $dl_volume" >&2
+	echo "build and stage it with:" >&2
+	echo "  scripts/buildroot.sh --config toolchain" >&2
+	exit 1
+fi
+
 echo
-echo "build with: scripts/buildroot.sh"
+echo "build with: scripts/buildroot.sh --config main"

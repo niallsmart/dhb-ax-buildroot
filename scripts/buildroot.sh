@@ -13,15 +13,54 @@ buildroot_dir=$workspace/buildroot/buildroot-2026.02.3
 
 image=dhb-ax-buildroot:bookworm
 dl_volume=dhb-ax-br-dl
-out_volume=dhb-ax-br-output
+ccache_volume=dhb-ax-br-ccache
+
+build_config=main
+if [ "${1:-}" = "--config" ]; then
+	if [ "$#" -lt 2 ]; then
+		echo "--config needs one of: main, toolchain, minimal" >&2
+		exit 2
+	fi
+	build_config=$2
+	shift 2
+fi
+
+case $build_config in
+main)
+	defconfig=dhb_ax_defconfig
+	out_volume=dhb-ax-br-output
+	;;
+toolchain)
+	defconfig=dhb_ax_toolchain_defconfig
+	out_volume=dhb-ax-br-toolchain-output
+	;;
+minimal)
+	defconfig=dhb_ax_minimal_defconfig
+	out_volume=dhb-ax-br-minimal-output
+	;;
+*)
+	echo "unknown configuration: $build_config" >&2
+	echo "expected one of: main, toolchain, minimal" >&2
+	exit 2
+	;;
+esac
 
 usage()
 {
 	cat <<EOF
-usage: $0 [target ...]     run the specified Buildroot target in a container
-       $0 --clean          drop output volume, keep downloads volume
-       $0 --distclean      drop both volumes
-       $0 --shell          open a shell on the container
+usage: $0 [--config NAME] [target ...]
+       $0 [--config NAME] --clean
+       $0 --distclean
+       $0 [--config NAME] --shell
+
+Configurations:
+  main       production image (default)
+  toolchain  build and stage the shared cross-toolchain SDK
+  minimal    diagnostic image (requires dhb_ax_minimal_defconfig)
+
+With no target, reapply and verify the selected defconfig, then build it.
+--clean drops only the selected output volume. --distclean drops every output
+volume, the shared downloads volume, and the shared compiler cache.
 
 EOF
 }
@@ -43,8 +82,10 @@ case "${1:-}" in
 	exit 0
 	;;
 --distclean)
-	echo "removing volumes $out_volume and $dl_volume"
-	docker volume rm -f "$out_volume" "$dl_volume"
+	volumes="dhb-ax-br-output dhb-ax-br-toolchain-output dhb-ax-br-minimal-output $dl_volume $ccache_volume"
+	echo "removing volumes $volumes"
+	# shellcheck disable=SC2086 # Each word is one fixed volume name.
+	docker volume rm -f $volumes
 	exit 0
 	;;
 esac
@@ -56,6 +97,14 @@ require_env_file "$workspace/local.env"
 if [ ! -f "$buildroot_dir/Makefile" ]; then
 	echo "no Buildroot source at $buildroot_dir" >&2
 	echo "run scripts/bootstrap-sources.sh first" >&2
+	exit 1
+fi
+
+if [ ! -f "$workspace/br2-external/configs/$defconfig" ]; then
+	echo "no $build_config defconfig at br2-external/configs/$defconfig" >&2
+	if [ "$build_config" = minimal ]; then
+		echo "implement plans/minimal-kernel.md before building it" >&2
+	fi
 	exit 1
 fi
 
@@ -93,12 +142,15 @@ fi
 
 docker build -t "$image" "$workspace/scripts"
 
+# Buildroot's default BR2_CCACHE_DIR is $HOME/.buildroot-ccache.
 docker run --rm $tty_flags \
+	--env "BUILD_CONFIG=$build_config" \
 	--mount "type=bind,source=$workspace,target=/work,readonly" \
 	--mount "type=bind,source=$workspace/br2-external,target=/work/br2-external$br2_external_mode" \
 	--mount "type=bind,source=$workspace/artifacts,target=/work/artifacts" \
 	--mount "type=bind,source=$buildroot_dir,target=/buildroot,readonly" \
 	--mount "type=volume,source=$out_volume,target=/output" \
 	--mount "type=volume,source=$dl_volume,target=/dl" \
+	--mount "type=volume,source=$ccache_volume,target=/home/br/.buildroot-ccache" \
 	"$image" \
 	"$cmd" "$@"

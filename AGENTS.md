@@ -22,7 +22,8 @@ This file is for repository workflow, device access and safety constraints.
 - `kernel/` and `buildroot/` are derived source trees. They are regenerated
   from pinned inputs; make lasting kernel changes in the `br2-external/` patch
   queue rather than editing these trees as source.
-- `artifacts/buildroot/` contains ignored current outputs;
+- `artifacts/buildroot/` contains ignored production-image outputs;
+  `artifacts/toolchain/` contains the ignored shared SDK export, and
   `artifacts/legacy/` contains ignored historical outputs.
 
 
@@ -35,7 +36,24 @@ tracked `local.env.example`. Nothing secret goes in `br2-external/`: that
 tree is public, and `buildroot.sh savedefconfig` rewrites the defconfig from
 `.config`.
 
-The output image is `artifacts/buildroot/uImage-hi3531-dhb-ax`.
+Prepare a fresh checkout and build the shared toolchain before an image:
+
+```sh
+scripts/bootstrap-sources.sh
+scripts/buildroot.sh --config toolchain
+scripts/buildroot.sh --config main
+```
+
+The first bootstrap prepares sources and exits non-zero when the SDK is not
+staged; the reported toolchain command is the next step. `main` is the default
+configuration. `--config minimal` is reserved for the diagnostic image in
+`plans/minimal-kernel.md`; it reports the missing defconfig until that plan is
+implemented. Each configuration has a separate output volume, while downloads
+and the compiler cache are shared. `--config NAME --clean` drops only the
+selected output volume; `--distclean` drops all build, download and cache
+volumes.
+
+The production image is `artifacts/buildroot/uImage-hi3531-dhb-ax`.
 
 # Commit Conventions
 

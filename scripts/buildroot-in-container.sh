@@ -10,11 +10,12 @@ set -eu
 
 # Buildroot cannot be built as root: several host packages -- GNU tar first --
 # have a configure check that refuses outright.  The container starts as root
-# only so it can take ownership of the two named volumes, which come up owned
-# by root the first time they are created.  Everything after this runs as br.
+# only so it can take ownership of the output, download and ccache volumes,
+# which come up owned by root the first time they are created. Everything after
+# this runs as br.
 if [ "$(id -u)" = 0 ]; then
-	mkdir -p /output /dl
-	for d in /output /dl; do
+	mkdir -p /output /dl /home/br/.buildroot-ccache
+	for d in /output /dl /home/br/.buildroot-ccache; do
 		[ "$(stat -c %u "$d")" = 1000 ] || chown -R br:br "$d"
 	done
 	exec setpriv --reuid=br --regid=br --init-groups \
@@ -25,12 +26,38 @@ fi
 buildroot=${BUILDROOT:-/buildroot}
 output=${BR_OUTPUT:-/output}
 external=${BR2_EXTERNAL:-/work/br2-external}
+build_config=${BUILD_CONFIG:-main}
+
+case $build_config in
+main)
+	defconfig=dhb_ax_defconfig
+	artifacts=/work/artifacts/buildroot
+	;;
+toolchain)
+	defconfig=dhb_ax_toolchain_defconfig
+	artifacts=/work/artifacts/toolchain
+	;;
+minimal)
+	defconfig=dhb_ax_minimal_defconfig
+	artifacts=/work/artifacts/buildroot-minimal
+	;;
+*)
+	echo "unknown BUILD_CONFIG: $build_config" >&2
+	exit 2
+	;;
+esac
+
+defconfig_file=$external/configs/$defconfig
+sdk_tarball=arm-buildroot-linux-musleabihf_sdk-buildroot.tar.gz
 # Keep finished images outside the Buildroot output volume so they are easy to
 # stage and survive container recreation. The parent is gitignored.
-artifacts=/work/artifacts/buildroot
 
 test -f "$buildroot/Makefile"
 test -f "$external/external.desc"
+if [ ! -f "$defconfig_file" ]; then
+	echo "no $build_config defconfig at $defconfig_file" >&2
+	exit 1
+fi
 mkdir -p "$output" /dl "$artifacts"
 
 # shellcheck source=scripts/lib.sh
@@ -90,6 +117,14 @@ prune_disabled_images() {
 	fi
 }
 
+# SDK archives belong only to the toolchain configuration. This also removes
+# one left by an earlier `make sdk` in an image output tree.
+prune_image_sdk() {
+	[ "$build_config" = toolchain ] && return
+	rm -f "$output"/images/*_sdk-buildroot.tar.gz \
+		"$artifacts"/*_sdk-buildroot.tar.gz
+}
+
 # kconfig drops a defconfig line whose symbol does not exist, or whose
 # dependencies are unmet, without printing anything at all.  That is how an
 # entire toolchain selection went missing once: BR2_TOOLCHAIN_EXTERNAL_BOOTLIN
@@ -108,7 +143,7 @@ check_defconfig() {
 		esac
 		grep -qxF "$line" "$output/.config" || missing="$missing$line
 "
-	done < "$external/configs/dhb_ax_defconfig"
+	done < "$defconfig_file"
 
 	if [ -n "$missing" ]; then
 		echo >&2
@@ -121,15 +156,67 @@ check_defconfig() {
 	echo "defconfig verified: every setting present in .config"
 }
 
+# Linux supports building against headers older than the running kernel, but
+# not newer ones. Compare the declared series before spending time building.
+check_headers_not_newer() {
+	headers=$(sed -n \
+		's/^BR2_TOOLCHAIN_EXTERNAL_HEADERS_\([0-9][0-9_]*\)=y$/\1/p' \
+		"$defconfig_file" | tr _ .)
+	kernel=$(sed -n \
+		's/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\([0-9][0-9.]*\)"$/\1/p' \
+		"$defconfig_file")
+
+	# A toolchain-only configuration has no kernel to compare.
+	[ -n "$headers" ] && [ -n "$kernel" ] || return 0
+
+	if awk -v headers="$headers" -v kernel="$kernel" 'BEGIN {
+		split(headers, h, "."); split(kernel, k, ".");
+		exit !((h[1] + 0 > k[1] + 0) ||
+		       (h[1] + 0 == k[1] + 0 && h[2] + 0 > k[2] + 0));
+	}'; then
+		echo "toolchain headers $headers are newer than kernel $kernel" >&2
+		echo "use headers no newer than the oldest kernel this image runs" >&2
+		return 1
+	fi
+
+	echo "kernel headers verified: $headers is not newer than $kernel"
+}
+
+stage_sdk() {
+	source=$output/images/$sdk_tarball
+	if [ ! -f "$source" ]; then
+		echo "Buildroot did not produce $source" >&2
+		return 1
+	fi
+
+	temporary=/dl/.$sdk_tarball.$$
+	install -m 0644 "$source" "$temporary"
+	mv -f "$temporary" "/dl/$sdk_tarball"
+	echo "staged SDK -> /dl/$sdk_tarball"
+}
+
+check_headers_not_newer
+prune_image_sdk
+
 if [ "$#" -gt 0 ]; then
 	br "$@"
 	case " $* " in
-	*" dhb_ax_defconfig "*) check_defconfig ;;
+	*" $defconfig "*) check_defconfig ;;
+	esac
+	case " $* " in
+	*" sdk "*)
+		[ "$build_config" = toolchain ] && stage_sdk
+		;;
 	esac
 else
-	br dhb_ax_defconfig
+	br "$defconfig"
 	check_defconfig
-	br -j"$(nproc)" all
+	if [ "$build_config" = toolchain ]; then
+		br -j"$(nproc)" sdk
+		stage_sdk
+	else
+		br -j"$(nproc)" all
+	fi
 fi
 
 prune_disabled_images
@@ -138,11 +225,14 @@ prune_disabled_images
 # the images directory empty, which is not an error.
 if [ -d "$output/images" ] && [ -n "$(ls -A "$output/images" 2>/dev/null)" ]; then
 	echo
-	echo "artifacts -> artifacts/buildroot/"
+	echo "artifacts -> ${artifacts#/work/}/"
 	for f in "$output"/images/*; do
 		[ -f "$f" ] || continue
-		install -m 0644 "$f" "$artifacts/"
-		printf '  %s\n' "$(basename "$f")"
+		name=$(basename "$f")
+		temporary=$artifacts/.$name.$$
+		install -m 0644 "$f" "$temporary"
+		mv -f "$temporary" "$artifacts/$name"
+		printf '  %s\n' "$name"
 	done
 	sha256sum "$output"/images/*
 fi

@@ -32,7 +32,9 @@ division and where a given change belongs.
 Validated on the board: both Cortex-A9 cores, both 512 MiB DRAM banks, gigabit
 Ethernet, SATA and ext4 root, EHCI/OHCI USB, all nineteen GPIO controllers, the
 bit-banged I²C bus and battery-backed RTC, NFS, and OpenSSH. The proprietary
-media pipeline is out of scope.
+media pipeline is out of scope. The production userspace uses musl 1.2.6 from
+the shared Buildroot SDK; the musl image is verified over NFS and from the
+installed USB-kernel/HDD-root system.
 
 [Remaining hardware work](doc/remaining-work.md) lists what is not yet driven,
 ranked by value and effort.
@@ -42,8 +44,20 @@ ranked by value and effort.
 ```sh
 scripts/bootstrap-sources.sh
 install -m 600 local.env.example local.env   # then fill in the required values
-scripts/buildroot.sh
+scripts/buildroot.sh --config toolchain
+scripts/buildroot.sh --config main
 ```
+
+The first bootstrap on a checkout prepares the pinned sources, then exits with
+the toolchain command above until the shared musl SDK has been staged. The SDK
+is built only when the toolchain configuration changes; image builds unpack it
+from the shared download volume instead of rebuilding gcc, binutils and musl.
+`main` is the default configuration, so the final command may also be written
+as `scripts/buildroot.sh`.
+
+Each configuration has its own output volume. Use `--config NAME --clean` to
+drop one output tree while retaining downloads, the staged SDK and the shared
+compiler cache.
 
 `local.env` holds machine-local configuration and is gitignored. The build
 refuses to start without a root password hash in it, so the serial console
