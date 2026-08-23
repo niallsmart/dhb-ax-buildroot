@@ -48,12 +48,22 @@ case "${1:-}" in
 	;;
 esac
 
+if [ "${1:-}" = "--shell" ]; then
+	tty_flags=-i
+	[ -t 0 ] && tty_flags="-t $tty_flags"
+	cmd=/bin/bash
+	shift
+else
+	cmd=/work/scripts/buildroot-in-container.sh
+fi
+
 docker build -t "$image" "$workspace/scripts"
-# shellcheck disable=SC2086  # tty_flags is deliberately unquoted
-exec docker run --rm $tty_flags \
-	-v "$buildroot_dir:/buildroot:ro" \
-	-v "$workspace:/work" \
-	-v "$out_volume:/output" \
-	-v "$dl_volume:/dl" \
+
+
+docker run --rm $tty_flags \
+	--mount "type=bind,source=$buildroot_dir,target=/buildroot,readonly" \
+	--mount "type=bind,source=$workspace,target=/work" \
+	--mount "type=volume,source=$out_volume,target=/output" \
+	--mount "type=volume,source=$dl_volume,target=/dl" \
 	"$image" \
-	/work/scripts/buildroot-in-container.sh "$@"
+	"$cmd" "$@"
