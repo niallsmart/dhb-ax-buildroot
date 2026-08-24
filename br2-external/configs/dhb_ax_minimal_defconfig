@@ -67,5 +67,14 @@ BR2_PACKAGE_DROPBEAR_SMALL=y
 BR2_PACKAGE_DROPBEAR_LOCALOPTIONS_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/dropbear-localoptions.h"
 BR2_PACKAGE_GESFTPSERVER=y
 # BR2_PACKAGE_OPENSSH is not set
-BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/post-build-ssh.sh"
+
+# The initramfs bootstraps the approved HDD and USB devices before the normal
+# production root exists. Keep only the commands the provisioning scripts use;
+# the post-build audit rejects flash writers.
+BR2_PACKAGE_UTIL_LINUX=y
+BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+BR2_PACKAGE_E2FSPROGS=y
+BR2_PACKAGE_DOSFSTOOLS=y
+BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT=y
+BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/post-build-minimal.sh"
 BR2_ROOTFS_POST_BUILD_SCRIPT_ARGS="$(BR2_EXTERNAL_DHB_AX_PATH)/../artifacts/local/ssh"

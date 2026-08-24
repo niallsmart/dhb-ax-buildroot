@@ -35,9 +35,9 @@ bit-banged I²C bus and battery-backed RTC, and NFS. The proprietary media
 pipeline is out of scope. The production
 userspace uses musl 1.2.6 from the shared Buildroot SDK; the musl image is
 verified over NFS and from the installed USB-kernel/HDD-root system. A separate
-diagnostic kernel with a built-in initramfs is verified from USB and TFTP
-without mounting the HDD; it uses Ethernet for DHCP while leaving storage and
-the other board peripherals disabled.
+bootstrap kernel with a built-in initramfs is verified over TFTP without
+mounting the HDD; it uses Ethernet for DHCP and has only the SATA and USB
+storage paths needed to prepare the approved HDD and USB drive.
 
 [Remaining hardware work](doc/remaining-work.md) lists what is not yet driven,
 ranked by value and effort.
@@ -61,9 +61,10 @@ from the shared download volume instead of rebuilding gcc, binutils and musl.
 production root filesystem: it builds a reduced kernel and BusyBox initramfs
 that reach `minimal login:` on the UART, obtain the board's normal DHCP lease,
 and serve the same public-key-only Dropbear and SFTP configuration as the main
-image.
-SATA, USB, GPIO and I²C drivers remain excluded. The image omits the outbound
-SSH client; SSH access to the board is the diagnostic requirement.
+image. It includes the SATA and USB storage paths plus the partitioning and
+filesystem tools needed to bootstrap the normal USB-kernel/HDD-root system;
+GPIO and I²C remain excluded. The image omits the outbound SSH client; SSH
+access from the development host is the bootstrap interface.
 
 Each configuration has its own output volume. Use `--config NAME --clean` to
 drop one output tree while retaining downloads, the staged SDK and the shared
@@ -82,3 +83,22 @@ are regenerated source trees. Production outputs are written to
 Diagnostic outputs are written to `artifacts/buildroot-minimal/`; its boot
 image is `uImage-hi3531-dhb-ax-minimal` and its generated root filesystem is
 `rootfs.cpio`.
+
+## Storage bootstrap
+
+Boot the minimal image from TFTP, then prepare and install the production
+system without an NFS root:
+
+```sh
+tools/dvr-boot.sh tftp artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal --root initramfs
+tools/dvr-prepare-storage.sh --destroy-all-data
+tools/dvr-install-system.sh
+```
+
+The two provisioning commands run only when the DVR hostname is `minimal` and
+its `/` mount is `rootfs`. The installation artifacts are copied into RAM over
+SSH before the HDD or USB is changed. Preparation destroys the approved HDD
+and USB contents; if it erases the USB before installation finishes, recover
+by booting the minimal image over TFTP. Installation leaves the minimal image
+running; boot the production system separately with
+`tools/dvr-boot.sh usb`.

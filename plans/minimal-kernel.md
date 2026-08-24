@@ -3,11 +3,11 @@
 A second Buildroot target, `dhb_ax_minimal_defconfig`, producing a
 self-contained uImage that reaches a root shell over the serial console or
 Dropbear with no dependency on the HDD, a Raspberry Pi NFS export, or any
-external root filesystem. It is a diagnostic image: something to boot when
-the normal kernel or root filesystem will not, to check the boot chain and the
-kernel itself before reaching for the existing NFS-root recovery flow in
-`AGENTS.md`, which still owns actual storage provisioning. Ethernet is enabled
-for DHCP and SSH; storage, USB, GPIO and I²C remain outside its scope.
+external root filesystem. It is a storage-bootstrap image: something to boot
+when the normal kernel or root filesystem will not, to check the boot chain and
+prepare the approved USB and HDD before installing the production system.
+Ethernet is enabled for DHCP and SSH; SATA and USB are enabled only for that
+bootstrap path, while GPIO and I²C remain outside its scope.
 
 The image still has to be *loaded* from somewhere -- the USB FAT partition or
 TFTP from the Pi. What it does not need is a root filesystem: the kernel
@@ -185,10 +185,10 @@ is the deliberate exception to the original UART-only scope.
 - Buildroot's `BR2_SYSTEM_DHCP="eth0"` supplies the normal network init script
   and BusyBox `udhcpc`. The shared network overlay applies the unit's factory
   MAC address before DHCP, preserving its production reservation.
-- No `mtd`, `i2c-tools`, `ethtool`, `e2fsprogs`, `dosfstools`, or
-  `util-linux` block/storage tooling. Ethernet is reachable, but these
-  diagnostic and storage packages remain unnecessary for DHCP and SSH; SPI
-  NOR, I²C, SATA and USB remain disabled in the DTB.
+- The bootstrap carries only `sfdisk`, `mke2fs`, `mkfs.fat`, and `blkid` from
+  the storage packages used by the provisioning scripts. Its post-build audit
+  requires those commands and rejects factory-flash writers. SPI NOR, GPIO and
+  I²C remain disabled in the DTB.
 - Keep `BR2_INIT_BUSYBOX`, `BR2_TARGET_GENERIC_GETTY`, and the existing root
   password plumbing (`BR2_TARGET_ENABLE_ROOT_LOGIN`,
   `BR2_TARGET_GENERIC_ROOT_PASSWD="$(DHB_AX_ROOT_PASSWD)"`). Reusing
@@ -203,11 +203,12 @@ is the deliberate exception to the original UART-only scope.
 - The production overlay is split by responsibility. Both targets use
   `rootfs-overlay-network` for the pre-DHCP MAC hook; only the main target uses
   `rootfs-overlay` for HDD/USB mounts and storage module loading. The minimal
-  image otherwise keeps Buildroot's skeleton `/etc/fstab`.
+  image otherwise keeps Buildroot's skeleton `/etc/fstab` and mounts neither
+  storage device automatically.
 - `post-build.sh` remains specific to the main package set because it audits
-  production storage tools and removes flash writers. SSH key installation is
-  in the shared `post-build-ssh.sh`; the minimal defconfig runs only that
-  script and therefore requires the same `artifacts/local/ssh` input as main.
+  production storage tools and removes flash writers. The minimal target uses
+  `post-build-minimal.sh`, which installs the shared SSH material and asserts
+  its smaller storage-tool set and the absence of flash writers.
 - BusyBox's `CONFIG_FEATURE_SKIP_ROOTFS` is disabled with a minimal-only
   fragment. BusyBox normally hides `rootfs` because most systems replace the
   initial root with disk or NFS; this image keeps rootfs mounted for its whole
@@ -632,3 +633,15 @@ warm transition through the main image left U-Boot reporting its known
 Ethernet PHY-link-down condition, so another physical hard reset is required
 before the requested final TFTP boot. The networked image was deliberately not
 installed to USB; this validation leaves the production USB files unchanged.
+
+### Storage-bootstrap extension (2026-08-23)
+
+The minimal image now carries the built-in SATA/AHCI and USB-storage paths plus
+the partitioning and filesystem tools used to prepare the approved HDD and USB
+drive. A first hardware installation found that FAT needs its default CP437
+codepage at mount time, so NLS CP437 and ISO-8859-1 are built in alongside
+FAT/VFAT. The rebuilt initramfs mounted the prepared USB successfully and
+completed production installation. The installed USB kernel and HDD ext4 root
+then booted Linux 6.18.42 and accepted its established SSH key. The detailed
+artifact hashes and provisioning results are recorded in
+`plans/minimal-as-bootstrap.md`.

@@ -48,8 +48,8 @@ scripts/buildroot.sh --config minimal
 
 The first bootstrap prepares sources and exits non-zero when the SDK is not
 staged; the reported toolchain command is the next step. `main` is the default
-configuration. `minimal` builds the self-contained diagnostic image with
-serial access, DHCP and Dropbear.
+configuration. `minimal` builds the self-contained storage-bootstrap image
+with serial access, DHCP, Dropbear, and the approved SATA/USB storage paths.
 Each configuration has a separate output volume, while downloads and the
 compiler cache are shared. `--config NAME --clean` drops only the selected
 output volume; `--distclean` drops all build, download and cache volumes.
@@ -182,27 +182,32 @@ tools/dvr-boot.sh usb uImage-minimal --root initramfs
 It has an Ethernet driver and obtains the same DHCP reservation as the main
 image by applying the board's factory MAC address before `udhcpc` starts.
 Dropbear uses the same machine-local host and authorized keys as the main image,
-so `ssh -o BatchMode=yes root@dvr` works after DHCP completes. SATA, USB, GPIO
-and I²C drivers remain excluded; the UART is the fallback when networking is
-unavailable.
+so `ssh -o BatchMode=yes root@dvr` works after DHCP completes. SATA and USB
+are built in solely to prepare the approved storage devices; GPIO and I²C stay
+excluded. The UART is the fallback when networking is unavailable.
 
 Run `tools/dvr-boot.sh --help` for image checks, root selection and other
 options.
 
 ## Installing the USB and HDD system
 
-The normal Buildroot system uses the USB kernel and HDD root. Partition both
-devices once, then install a clean system while Linux is using its NFS root:
+The normal Buildroot system uses the USB kernel and HDD root. Boot the minimal
+initramfs, then partition both devices and install a clean system from the
+development host:
 
 ```sh
+tools/dvr-boot.sh tftp artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal --root initramfs
 tools/dvr-prepare-storage.sh --destroy-all-data
 tools/dvr-install-system.sh
 ```
 
-The first command destroys and recreates both approved storage devices. It is
-not part of routine deployment. The second reformats the existing HDD
-partition, installs the current `rootfs.tar`, and updates the USB uImage. For
-kernel-only iteration from either the HDD or NFS system, use:
+Both full-install commands require hostname `minimal` and `rootfs` mounted at
+`/`; they reject production HDD and NFS roots. The first command destroys and
+recreates both approved storage devices. It is not part of routine deployment.
+The second stages the production `rootfs.tar` and uImage in RAM, reformats the
+existing HDD partition, installs the root filesystem, and updates the USB
+uImage. It leaves the minimal image running. For kernel-only iteration from
+either the HDD or NFS system, use:
 
 ```sh
 tools/dvr-install-system.sh --kernel-only
