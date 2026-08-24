@@ -16,36 +16,16 @@ clean:
 
 # Attach to the persistent UART console, starting it if it isn't already running.
 dvr-console:
-    #!/bin/sh
-    set -eu
-    . scripts/lib.sh
-    require_env_file local.env DHB_AX_PI_IPADDR
-    if ! tmux has-session -t dvr 2>/dev/null; then
-        tmux start-server \; set-option -g history-limit 100000 \; \
-            new-session -d -s dvr "ssh -tt $DHB_AX_PI_IPADDR 'picocom -b 115200 --omap crcrlf /dev/serial0'"
-    fi
-    exec tmux attach-session -t dvr
+    tools/dvr-console.sh
 
-# Run one command at the DVR's Linux shell over the serial console, e.g. `just exec 'cat /proc/mtd'`.
-exec cmd:
-    tools/dvr-console-exec.sh "{{cmd}}"
+# Boot a named DVR profile; defaults to the installed USB/HDD system.
+boot profile="main-usb-hdd" *args:
+    tools/dvr-boot.sh {{args}} {{profile}}
 
-# Boot the installed USB kernel; extra args pass through to dvr-boot.sh, e.g. `just boot-usb --root nfs`.
-boot-usb *args:
-    tools/dvr-boot.sh usb {{args}}
+# Stage the artifacts for a named DVR profile; defaults to the USB/HDD system.
+stage profile="main-usb-hdd" *args:
+    tools/dvr-stage.sh {{args}} {{profile}}
 
-# Stage the current build to the Pi and boot it over TFTP; extra args pass through to dvr-boot.sh.
-boot-tftp *args:
-    tools/dvr-boot.sh tftp {{args}}
-
-# Destructively repartition the HDD and USB drive; requires the DVR to already be running from NFS root.
+# Destructively repartition the HDD and USB drive; requires the minimal initramfs.
 prepare-storage *args:
     tools/dvr-prepare-storage.sh {{args}}
-
-# Install the current build -- rootfs to HDD, kernel to USB; extra args pass through, e.g. `just install --kernel-only`.
-install *args:
-    tools/dvr-install-system.sh {{args}}
-
-# Publish the current build's rootfs to the Pi's NFS export, for NFS-root development, provisioning or recovery.
-publish-nfs:
-    scripts/publish-nfs-root.sh

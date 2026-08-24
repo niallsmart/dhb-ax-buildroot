@@ -29,16 +29,6 @@ division and where a given change belongs.
 
 ## Status
 
-Validated on the board: both Cortex-A9 cores, both 512 MiB DRAM banks, gigabit
-Ethernet, SATA and ext4 root, EHCI/OHCI USB, all nineteen GPIO controllers, the
-bit-banged I²C bus and battery-backed RTC, and NFS. The proprietary media
-pipeline is out of scope. The production
-userspace uses musl 1.2.6 from the shared Buildroot SDK; the musl image is
-verified over NFS and from the installed USB-kernel/HDD-root system. A separate
-diagnostic kernel with a built-in initramfs is verified from USB and TFTP
-without mounting the HDD; it uses Ethernet for DHCP while leaving storage and
-the other board peripherals disabled.
-
 [Remaining hardware work](doc/remaining-work.md) lists what is not yet driven,
 ranked by value and effort.
 
@@ -61,17 +51,20 @@ from the shared download volume instead of rebuilding gcc, binutils and musl.
 production root filesystem: it builds a reduced kernel and BusyBox initramfs
 that reach `minimal login:` on the UART, obtain the board's normal DHCP lease,
 and serve the same public-key-only Dropbear and SFTP configuration as the main
-image.
-SATA, USB, GPIO and I²C drivers remain excluded. The image omits the outbound
-SSH client; SSH access to the board is the diagnostic requirement.
+image. It includes the SATA and USB storage paths plus the partitioning and
+filesystem tools needed to bootstrap the normal USB-kernel/HDD-root system;
+GPIO and I²C remain excluded. The image omits the outbound SSH client; SSH
+access from the development host is the bootstrap interface.
 
 Each configuration has its own output volume. Use `--config NAME --clean` to
 drop one output tree while retaining downloads, the staged SDK and the shared
 compiler cache.
 
 `local.env` holds machine-local configuration and is gitignored. The build
-refuses to start without a root password hash in it, so the serial console
-cannot be left open by accident; `local.env.example` documents the keys.
+refuses to start without a plaintext root password in it, then Buildroot
+derives the crypt hash installed in the image. `dvr-boot` uses the same value
+to request clean reboots through the serial console; `local.env.example`
+documents the keys.
 
 `artifacts/local/ssh/` is also machine-local. It holds `authorized_keys` and
 the per-board Dropbear host keys.
@@ -82,3 +75,46 @@ are regenerated source trees. Production outputs are written to
 Diagnostic outputs are written to `artifacts/buildroot-minimal/`; its boot
 image is `uImage-hi3531-dhb-ax-minimal` and its generated root filesystem is
 `rootfs.cpio`.
+
+## Staging and booting
+
+Deployment and booting use named profiles under `tools/configs/`.
+`dvr-stage` prepares the profile's kernel and external root filesystem;
+`dvr-boot` only drives the serial console and boots artifacts that are already
+in place. Machine access values come from `local.env`; profiles contain only
+references to those values where their boot arguments require them.
+
+```sh
+tools/dvr-stage.sh main-tftp-nfs
+tools/dvr-boot.sh main-tftp-nfs
+```
+
+The supplied profiles are `main-usb-hdd` (USB kernel and HDD root),
+`main-tftp-nfs` (TFTP kernel and NFS root), `minimal-tftp` and `minimal-usb`
+(embedded initramfs), and `uboot` (leave the board at the U-Boot prompt).
+Use `dvr-boot --status` to identify the current console state and `--check` for
+a non-mutating preflight. `dvr-stage --kernel-only` skips an external root
+filesystem.
+
+## Storage bootstrap
+
+Boot the minimal image, then prepare and install the production system without
+an NFS root:
+
+```sh
+tools/dvr-stage.sh minimal-tftp
+tools/dvr-boot.sh minimal-tftp
+tools/dvr-prepare-storage.sh --destroy-all-data
+tools/dvr-stage.sh main-usb-hdd
+```
+
+The storage preparation and full production staging commands run only when the
+DVR hostname is `minimal` and its `/` mount is `rootfs`. Preparation destroys
+the approved HDD and USB contents; if it erases the USB before staging
+finishes, recover by booting `minimal-tftp`. Full production staging reformats
+the existing HDD root partition and updates the USB kernel. It leaves the
+minimal image running; boot the installed system separately:
+
+```sh
+tools/dvr-boot.sh main-usb-hdd
+```

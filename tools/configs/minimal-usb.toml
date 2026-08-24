@@ -1,0 +1,22 @@
+[kernel]
+source = "usb"
+artifact = "artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal"
+target = "uImage-minimal"
+load_address = "0x82000000"
+usb_device = "0:1"
+
+[rootfs]
+type = "initramfs"
+
+[boot]
+action = "kernel"
+args = [
+  "console=ttyAMA0,115200",
+  "earlycon=pl011,0x20080000",
+  "ignore_loglevel",
+  "mem=512M@0x80000000",
+  "mem=512M@0xc0000000",
+  "libata.force=2.00:norst,2.00:nodbdelay,2.01:norst,2.01:nodbdelay,2.03:norst,2.03:nodbdelay,2.04:norst,2.04:nodbdelay",
+]
+hostname = "minimal"
+timeout = 120

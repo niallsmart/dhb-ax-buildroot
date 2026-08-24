@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Minimal RAM-only diagnostics: CPU, GIC, SP804 timer, PL011 UART0 and the
- * wired Ethernet path.
+ * wired Ethernet and storage paths.
  *
- * Every other on-chip block stays disabled as hi3531.dtsi leaves it, so this
- * DTB reaches a shell without touching GPIO, USB, SATA, SPI or I2C.
+ * GPIO, SPI and I2C stay disabled as hi3531.dtsi leaves them. The initramfs
+ * can therefore prepare the fitted USB and SATA storage without mounting
+ * either as its own root filesystem.
  *
  * Developed against an LTS LTD2704XE-P; the same board also ships under
  * other retail brands.
@@ -39,6 +40,22 @@
 };
 
 &uart0 {
+	status = "okay";
+};
+
+&usbphy {
+	status = "okay";
+};
+
+&ehci {
+	status = "okay";
+};
+
+&ohci {
+	status = "okay";
+};
+
+&sata {
 	status = "okay";
 };
 

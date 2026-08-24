@@ -22,6 +22,8 @@
 			"**/build": true
 		},
 		"files.exclude": {
+			".claude": true,
+			".ruff_cache": true,
 			"**/node_modules": true,
 			"**/.git": true,
 			"**/.venv": true,

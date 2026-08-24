@@ -1,9 +1,9 @@
 #!/bin/sh
 # Destructively prepare the known DHB_AX HDD and USB flash drive for Linux.
 #
-# Run this from the development host while the DVR is using its NFS root. The
-# strict hardware checks are intentional: /dev/sdX names alone are not enough
-# justification for erasing a disk.
+# Run this from the development host while the DVR is using the minimal
+# initramfs. The strict hardware checks are intentional: /dev/sdX names alone
+# are not enough justification for erasing a disk.
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -61,8 +61,11 @@ hdd=$(find_device 1953525168 0 /10080000.sata/ WDCWD10EURX-63C)
 usb=$(find_device 15728640 1 /100b0000.usb/ FlashVoyager)
 [ "$hdd" != "$usb" ] || fail "HDD and USB resolved to the same device"
 
-grep -q ' / nfs ' /proc/mounts ||
-	fail "the DVR root is not NFS; refusing to alter local storage"
+[ "$(hostname)" = minimal ] ||
+	fail "the DVR is not the minimal bootstrap image; refusing to alter local storage"
+awk '$2 == "/" && $3 == "rootfs" { found = 1 }
+	END { exit !found }' /proc/mounts ||
+	fail "the DVR root is not the minimal initramfs; refusing to alter local storage"
 
 for dev in "$hdd" "$usb"; do
 	if grep -q "^$dev" /proc/mounts; then

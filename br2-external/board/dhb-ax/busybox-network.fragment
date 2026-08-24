@@ -1,0 +1,3 @@
+# The Ethernet carrier arrives after ifup starts DHCP during boot. Use a short
+# foreground timeout, then retry promptly in the background.
+CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-t1 -T1 -A1 -b -R -O search -O staticroutes"

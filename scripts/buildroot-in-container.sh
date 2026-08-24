@@ -81,36 +81,16 @@ fi
 # error -- Buildroot writes "root::" and produces an image anybody can log
 # into over the UART.  A silent downgrade to passwordless is the one outcome
 # worth spending a check on.
-require_env_file "${DHB_AX_ENV:-/work/local.env}"
+require_env_file "${DHB_AX_ENV:-/work/local.env}" DHB_AX_ROOT_PASSWD
 
-case "${DHB_AX_ROOT_PASSWD:-}" in
-'')
-	echo "$env_file: DHB_AX_ROOT_PASSWD is unset or empty" >&2
-	echo "generate a hash with: openssl passwd -6" >&2
-	exit 1
-	;;
-'$1$'* | '$5$'* | '$6$'*) ;;
-*)
-	# Buildroot treats anything without a crypt prefix as cleartext and
-	# runs it through host-mkpasswd, which would work but puts the
-	# password in the build log.  Refuse instead of quietly accepting a
-	# weaker arrangement than the one this file documents.
-	echo "$env_file: DHB_AX_ROOT_PASSWD is not a crypt hash" >&2
-	echo "expected it to start with \$1\$, \$5\$ or \$6\$" >&2
-	echo "generate one with: openssl passwd -6" >&2
-	exit 1
-	;;
-esac
+# The make-side $(shell) below reads the plaintext from its environment.
+# require_env_file exports it so make cannot silently generate root::.
 
-# The make-side $(shell) below reads the original hash from its environment.
-# Sourcing local.env creates a shell variable but does not export it, so make
-# would otherwise receive an empty value and silently generate root::.
-export DHB_AX_ROOT_PASSWD
-
-# The hash is handed over as a $(shell) call, because make interprets the $
-# characters in a crypt hash as variable references and mangles it. Silent
-# recipe output keeps the expanded hash out of the build log.
-root_passwd_var='DHB_AX_ROOT_PASSWD=$(shell echo "$${DHB_AX_ROOT_PASSWD}")'
+# Keep the plaintext out of the defconfig and generated .config by expanding
+# it only when make consumes BR2_TARGET_GENERIC_ROOT_PASSWD. Buildroot passes
+# the value to host-mkpasswd during target finalization. Silent recipe output
+# keeps that command out of the build log.
+root_passwd_var='DHB_AX_ROOT_PASSWD=$(shell printf "%s" "$${DHB_AX_ROOT_PASSWD}")'
 
 # Buildroot is mounted read-only, so every invocation is an out-of-tree build.
 # BR2_EXTERNAL only has to be passed when the configuration is created; it is
@@ -124,11 +104,14 @@ br() {
 check_root_password() {
 	grep -qx 'BR2_TARGET_ENABLE_ROOT_LOGIN=y' "$output/.config" || return 0
 	actual=$(sed -n 's/^root:\([^:]*\):.*/\1/p' "$output/target/etc/shadow")
-	if [ "$actual" != "$DHB_AX_ROOT_PASSWD" ]; then
-		echo "built root password does not match DHB_AX_ROOT_PASSWD" >&2
+	case $actual in
+	'$1$'* | '$5$'* | '$6$'*) ;;
+	*)
+		echo "built root password is not a crypt hash" >&2
 		return 1
-	fi
-	echo "root password verified: configured crypt hash installed"
+		;;
+	esac
+	echo "root password verified: Buildroot crypt hash installed"
 }
 
 # Buildroot does not remove an old filesystem image when its format is later

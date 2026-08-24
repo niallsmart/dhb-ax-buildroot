@@ -1,0 +1,28 @@
+[kernel]
+source = "usb"
+artifact = "artifacts/buildroot/uImage-hi3531-dhb-ax"
+target = "uImage"
+load_address = "0x82000000"
+usb_device = "0:1"
+
+[rootfs]
+type = "hdd"
+artifact = "artifacts/buildroot/rootfs.tar"
+device = "PARTUUID=ca264b64-5738-4e60-a0ab-b3c3a4c789c1"
+
+[boot]
+action = "kernel"
+args = [
+  "console=ttyAMA0,115200",
+  "earlycon=pl011,0x20080000",
+  "ignore_loglevel",
+  "mem=512M@0x80000000",
+  "mem=512M@0xc0000000",
+  "libata.force=2.00:norst,2.00:nodbdelay,2.01:norst,2.01:nodbdelay,2.03:norst,2.03:nodbdelay,2.04:norst,2.04:nodbdelay",
+  "root=${rootfs.device}",
+  "rootfstype=ext4",
+  "rootwait",
+  "rw",
+]
+hostname = "dhb-ax"
+timeout = 120
