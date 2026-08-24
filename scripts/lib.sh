@@ -9,15 +9,16 @@
 #                           Validate that PATH exists and source it, with the
 #                           standard message when it does not, then check
 #                           that each named VAR was set to something non-empty
-#                           by it. Leaves $env_file set to PATH for callers
-#                           that report further problems against it.
+#                           by it and export it. Leaves $env_file set to PATH
+#                           for callers that report further problems against
+#                           it.
 #   require_ipaddr VAR [VAR ...]
 #                           Validate that each named VAR holds only digits
 #                           and dots. Meant for values already confirmed
 #                           non-empty by require_env_file; guards against a
 #                           malformed local.env value breaking -- rather than
 #                           just mismatching -- something built from it, such
-#                           as the grep pattern in publish-nfs-root.sh.
+#                           as a remote process-match pattern.
 
 require_env_file() {
 	env_file=$1
@@ -35,6 +36,7 @@ require_env_file() {
 			echo "$var must be set in $env_file" >&2
 			exit 1
 		}
+		export "$var"
 	done
 }
 

@@ -30,8 +30,9 @@ This file is for repository workflow, device access and safety constraints.
 
 
 `local.env` is the gitignored machine-local configuration and needs to be
-configured by the user. It carries the root password
-hash, and the build exits rather than proceed without one. Add
+configured by the user. It carries the plaintext root password used for the
+Buildroot serial console, and the build exits rather than proceed without it.
+Buildroot derives the installed crypt hash. Add
 further per-machine values as `DHB_AX_*` keys, documenting each in the
 tracked `local.env.example`. Nothing secret goes in `br2-external/`: that
 tree is public, and `buildroot.sh savedefconfig` rewrites the defconfig from
@@ -89,6 +90,23 @@ Deliberately temporary text is the exception, and has to name the thing that
 retires it -- as the `linux-dirclean` paragraph above names the check that
 lets the next person delete it.
 
+## Writing Shell Scripts
+
+When a successful probe identifies an error condition, use the positive
+command followed by an `&&` failure block. Avoid expressing the same guard as
+an inverted command followed by `||`:
+
+```sh
+grep -q "^$device " /proc/mounts && {
+	echo "$device is already mounted" >&2
+	exit 1
+}
+```
+
+If the guard is the final command in a script or function, follow it with
+`true` so the expected no-match case does not become the caller-visible exit
+status.
+
 ## Working on the device
 
 The board can run the vendor 3.0.8 kernel or the mainline port. Run `uname -r`
@@ -107,20 +125,17 @@ Use the UART for U-Boot, boot logs, recovery, or when Linux networking or Dropbe
 is unavailable.
 
 Under the Buildroot system the console getty asks for a password: log in as
-`root` with the password whose hash is in `local.env`. The tools below assume
-a session that is already logged in, so only interactive `just dvr-console` attaches
-need it.
+`root` with `DHB_AX_ROOT_PASSWD` from `local.env`. `dvr-boot` uses this
+password when it must log in for a clean reboot; interactive `just dvr-console`
+attaches need it as well.
 
 The `dvr` tmux session owns the UART through one long-lived SSH and picocom
 connection. Start or attach to it with `just dvr-console`. Leave it running.
 
 - Use `just dvr-console` for an interactive console.
-- Use `tools/dvr-console-exec.sh` to run one command at a Linux shell.
-- Use `tools/dvr-boot.sh` to boot a kernel from USB or TFTP.
-
-```sh
-tools/dvr-console-exec.sh 'cat /proc/mtd'
-```
+- Use `tools/dvr-stage.sh` to publish configured kernels and root filesystems.
+- Use `tools/dvr-boot.sh` to boot a named profile or reach U-Boot.
+- Use `tools/dvr-boot.sh --status` to identify the current console state.
 
 tmux scrollback is the console history; use `tmux capture-pane` for forensics.
 
@@ -154,29 +169,46 @@ authorized key comes from the ignored local build input at
 
 ## Booting and deployment
 
-Automatic boot is deliberately deferred. For now, manually boot the installed
-USB kernel through the serial console:
+Staging and booting are separate. Both commands consume named TOML profiles
+under `tools/configs/`. Stage artifacts when their configured destinations
+need updating, then boot the same profile:
 
 ```sh
-tools/dvr-boot.sh usb
+tools/dvr-stage.sh main-tftp-nfs
+tools/dvr-boot.sh main-tftp-nfs
 ```
 
-For TFTP development or recovery, stage and boot a local image through the
-Raspberry Pi with:
+Automatic boot is deliberately deferred. Manually boot the installed USB
+kernel and HDD root with:
 
 ```sh
-tools/dvr-boot.sh tftp artifacts/buildroot/uImage-hi3531-dhb-ax
+tools/dvr-boot.sh main-usb-hdd
 ```
 
-If the vendor U-Boot reports `PHY not link!` after a warm reboot, hard-reset
-the DVR, interrupt autoboot, and rerun the command from the U-Boot prompt.
-
-The minimal image carries its root filesystem and must use the initramfs root
-mode. It can be loaded over TFTP or, after installation, from USB:
+Use the prompt-only profile whenever work requires a U-Boot prompt, then attach
+to the persistent console. Do not implement ad-hoc reboot or autoboot handling
+in agent commands:
 
 ```sh
-tools/dvr-boot.sh tftp artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal --root initramfs
-tools/dvr-boot.sh usb uImage-minimal --root initramfs
+tools/dvr-boot.sh uboot
+just dvr-console
+```
+
+If the vendor U-Boot reports `PHY not link!`, `dvr-boot` reinitializes the PHY,
+waits for link negotiation and retries the TFTP load. If that attempt still
+finds the PHY down, it waits ten more seconds and makes one final attempt.
+
+The vendor U-Boot console can drop the first character of a command. Prefix
+interactive U-Boot commands with a space, for example ` bootm 0x82000000`.
+
+The minimal image carries its root filesystem. It can be staged and loaded over
+TFTP or USB:
+
+```sh
+tools/dvr-stage.sh minimal-tftp
+tools/dvr-boot.sh minimal-tftp
+tools/dvr-stage.sh minimal-usb
+tools/dvr-boot.sh minimal-usb
 ```
 
 It has an Ethernet driver and obtains the same DHCP reservation as the main
@@ -186,8 +218,7 @@ so `ssh -o BatchMode=yes root@dvr` works after DHCP completes. SATA and USB
 are built in solely to prepare the approved storage devices; GPIO and I²C stay
 excluded. The UART is the fallback when networking is unavailable.
 
-Run `tools/dvr-boot.sh --help` for image checks, root selection and other
-options.
+Run either tool with `--help` for profile and preflight options.
 
 ## Installing the USB and HDD system
 
@@ -196,28 +227,29 @@ initramfs, then partition both devices and install a clean system from the
 development host:
 
 ```sh
-tools/dvr-boot.sh tftp artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal --root initramfs
+tools/dvr-stage.sh minimal-tftp
+tools/dvr-boot.sh minimal-tftp
 tools/dvr-prepare-storage.sh --destroy-all-data
-tools/dvr-install-system.sh
+tools/dvr-stage.sh main-usb-hdd
 ```
 
-Both full-install commands require hostname `minimal` and `rootfs` mounted at
-`/`; they reject production HDD and NFS roots. The first command destroys and
-recreates both approved storage devices. It is not part of routine deployment.
-The second stages the production `rootfs.tar` and uImage in RAM, reformats the
-existing HDD partition, installs the root filesystem, and updates the USB
+Storage preparation and full production staging require hostname `minimal` and
+`rootfs` mounted at `/`; they reject production HDD and NFS roots. Preparation
+destroys and recreates both approved storage devices and is not part of routine
+deployment. Full production staging copies the artifacts into RAM, reformats
+the existing HDD partition, installs the root filesystem, and updates the USB
 uImage. It leaves the minimal image running. For kernel-only iteration from
 either the HDD or NFS system, use:
 
 ```sh
-tools/dvr-install-system.sh --kernel-only
+tools/dvr-stage.sh --kernel-only main-usb-hdd
 ```
 
 Install the diagnostic image beside `/uImage`, without touching the HDD or
 replacing the production kernel, with:
 
 ```sh
-tools/dvr-install-system.sh --minimal
+tools/dvr-stage.sh minimal-usb
 ```
 
 Read each tool before changing its device-identification checks.
@@ -229,12 +261,12 @@ recovery:
 
 ```sh
 scripts/buildroot.sh
-scripts/publish-nfs-root.sh
+tools/dvr-stage.sh main-tftp-nfs
 ```
 
-Boot that root with `tools/dvr-boot.sh usb --root nfs`. For ordinary driver
-work, copy specific modules or files rather than republishing the complete
-root filesystem.
+Boot that root with `tools/dvr-boot.sh main-tftp-nfs`. For ordinary driver
+work, copy specific modules or files rather than republishing the complete root
+filesystem.
 
 ## Protecting the factory flash
 

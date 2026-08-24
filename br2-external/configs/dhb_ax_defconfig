@@ -90,7 +90,7 @@ BR2_TARGET_GENERIC_HOSTNAME="dhb-ax"
 # Root password for the getty on the serial console. Dropbear is public-key
 # only.
 #
-# The password hash comes from the gitignored local.env, and
+# The plaintext password comes from the gitignored local.env, and
 # scripts/buildroot-in-container.sh refuses to build without it.
 #
 BR2_TARGET_ENABLE_ROOT_LOGIN=y

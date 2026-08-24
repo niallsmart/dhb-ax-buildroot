@@ -103,7 +103,7 @@ if docker volume inspect "$dl_volume" >/dev/null 2>&1 &&
 		--mount "type=volume,source=$dl_volume,target=/dl,readonly" \
 		"$image" -f "/dl/$sdk_tarball"
 then
-	:
+	true
 else
 	echo >&2
 	echo "shared toolchain SDK is not staged in $dl_volume" >&2

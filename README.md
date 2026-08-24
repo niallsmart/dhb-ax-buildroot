@@ -29,16 +29,6 @@ division and where a given change belongs.
 
 ## Status
 
-Validated on the board: both Cortex-A9 cores, both 512 MiB DRAM banks, gigabit
-Ethernet, SATA and ext4 root, EHCI/OHCI USB, all nineteen GPIO controllers, the
-bit-banged I²C bus and battery-backed RTC, and NFS. The proprietary media
-pipeline is out of scope. The production
-userspace uses musl 1.2.6 from the shared Buildroot SDK; the musl image is
-verified over NFS and from the installed USB-kernel/HDD-root system. A separate
-bootstrap kernel with a built-in initramfs is verified over TFTP without
-mounting the HDD; it uses Ethernet for DHCP and has only the SATA and USB
-storage paths needed to prepare the approved HDD and USB drive.
-
 [Remaining hardware work](doc/remaining-work.md) lists what is not yet driven,
 ranked by value and effort.
 
@@ -71,8 +61,10 @@ drop one output tree while retaining downloads, the staged SDK and the shared
 compiler cache.
 
 `local.env` holds machine-local configuration and is gitignored. The build
-refuses to start without a root password hash in it, so the serial console
-cannot be left open by accident; `local.env.example` documents the keys.
+refuses to start without a plaintext root password in it, then Buildroot
+derives the crypt hash installed in the image. `dvr-boot` uses the same value
+to request clean reboots through the serial console; `local.env.example`
+documents the keys.
 
 `artifacts/local/ssh/` is also machine-local. It holds `authorized_keys` and
 the per-board Dropbear host keys.
@@ -84,21 +76,45 @@ Diagnostic outputs are written to `artifacts/buildroot-minimal/`; its boot
 image is `uImage-hi3531-dhb-ax-minimal` and its generated root filesystem is
 `rootfs.cpio`.
 
-## Storage bootstrap
+## Staging and booting
 
-Boot the minimal image from TFTP, then prepare and install the production
-system without an NFS root:
+Deployment and booting use named profiles under `tools/configs/`.
+`dvr-stage` prepares the profile's kernel and external root filesystem;
+`dvr-boot` only drives the serial console and boots artifacts that are already
+in place. Machine access values come from `local.env`; profiles contain only
+references to those values where their boot arguments require them.
 
 ```sh
-tools/dvr-boot.sh tftp artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal --root initramfs
-tools/dvr-prepare-storage.sh --destroy-all-data
-tools/dvr-install-system.sh
+tools/dvr-stage.sh main-tftp-nfs
+tools/dvr-boot.sh main-tftp-nfs
 ```
 
-The two provisioning commands run only when the DVR hostname is `minimal` and
-its `/` mount is `rootfs`. The installation artifacts are copied into RAM over
-SSH before the HDD or USB is changed. Preparation destroys the approved HDD
-and USB contents; if it erases the USB before installation finishes, recover
-by booting the minimal image over TFTP. Installation leaves the minimal image
-running; boot the production system separately with
-`tools/dvr-boot.sh usb`.
+The supplied profiles are `main-usb-hdd` (USB kernel and HDD root),
+`main-tftp-nfs` (TFTP kernel and NFS root), `minimal-tftp` and `minimal-usb`
+(embedded initramfs), and `uboot` (leave the board at the U-Boot prompt).
+Use `dvr-boot --status` to identify the current console state and `--check` for
+a non-mutating preflight. `dvr-stage --kernel-only` skips an external root
+filesystem.
+
+## Storage bootstrap
+
+Boot the minimal image, then prepare and install the production system without
+an NFS root:
+
+```sh
+tools/dvr-stage.sh minimal-tftp
+tools/dvr-boot.sh minimal-tftp
+tools/dvr-prepare-storage.sh --destroy-all-data
+tools/dvr-stage.sh main-usb-hdd
+```
+
+The storage preparation and full production staging commands run only when the
+DVR hostname is `minimal` and its `/` mount is `rootfs`. Preparation destroys
+the approved HDD and USB contents; if it erases the USB before staging
+finishes, recover by booting `minimal-tftp`. Full production staging reformats
+the existing HDD root partition and updates the USB kernel. It leaves the
+minimal image running; boot the installed system separately:
+
+```sh
+tools/dvr-boot.sh main-usb-hdd
+```
