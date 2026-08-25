@@ -93,7 +93,9 @@ Deliberately temporary text is the exception, and has to name the thing that
 retires it -- as the `linux-dirclean` paragraph above names the check that
 lets the next person delete it.
 
-## Writing Shell Scripts
+## Python and Shell Scripts
+
+### Guards
 
 When a successful probe identifies an error condition, use the positive
 command followed by an `&&` failure block. Avoid expressing the same guard as
@@ -108,6 +110,12 @@ grep -q "^$device " /proc/mounts && {
 
 If the guard is the final command in a script or function, follow it with `:`
 so the expected no-match case does not become the caller-visible exit status.
+
+### Checksums
+
+Only perform checksums on files transferred over unreliable transports. You
+can assume that files transferred via scp and rsync do not need checksum
+verification.
 
 ## Working on the device
 

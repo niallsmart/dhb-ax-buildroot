@@ -82,10 +82,7 @@ tar --sort=name --numeric-owner --acls --xattrs --xattrs-include='*' \
 chmod 0644 "$archive"
 mv -f "$archive" "$output/rootfs.tar"
 mv -f "$output/.packages.txt.$$" "$output/packages.txt"
-
-sha256sum "$output/rootfs.tar" |
-	sed 's#  .*/#  #' > "$output/.rootfs.tar.sha256.$$"
-mv -f "$output/.rootfs.tar.sha256.$$" "$output/rootfs.tar.sha256"
+rm -f "$output/rootfs.tar.sha256"
 
 {
 	echo 'suite=trixie'
@@ -97,5 +94,4 @@ mv -f "$output/.rootfs.tar.sha256.$$" "$output/rootfs.tar.sha256"
 } > "$output/.build-info.txt.$$"
 mv -f "$output/.build-info.txt.$$" "$output/build-info.txt"
 
-sha256sum "$output/rootfs.tar"
 echo "Debian rootfs artifacts -> ${output#/work/}/"

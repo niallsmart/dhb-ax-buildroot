@@ -8,8 +8,8 @@ development host with `mmdebstrap`, retain the minimal initramfs as the
 recovery/provisioning environment, and never modify factory flash or saved
 U-Boot state.
 
-Update this document with artifact sizes, hashes, and hardware-validation
-results as implementation proceeds.
+Update this document with artifact sizes and hardware-validation results as
+implementation proceeds.
 
 ## Implementation
 
@@ -61,8 +61,7 @@ results as implementation proceeds.
   kernel/header packages, `flash-kernel`, and U-Boot packages. Normal
   userspace APT upgrades remain supported.
 - Embed the exact production module archive and generate
-  `artifacts/debian/rootfs.tar`, `rootfs.tar.sha256`, `packages.txt`, and
-  `build-info.txt`.
+  `artifacts/debian/rootfs.tar`, `packages.txt`, and `build-info.txt`.
 - Create the canonical rootfs artifact as an uncompressed GNU tar with numeric
   ownership, ACLs, all xattrs/capabilities, hardlinks, and timestamps
   preserved.
@@ -88,10 +87,10 @@ results as implementation proceeds.
 | Swap | 201328640 | 209717247 | 4 GiB | `dhb-ax-swap` | `D8E11399-926E-4805-BC25-641EB3BE6C54` |
 | Shared data | 209717248 | end of disk | remainder | `dhb-ax-data` | `FCB65DE3-F88D-4F21-BAB7-C85F5587C9E2` |
 
-- Generalize `dvr-stage`: validate checksums and labels; permit complete HDD
-  installation only from minimal; stream metadata-safe rootfs extraction;
-  stage NFS roots through an incoming directory; and validate init, OS
-  identity, and module release.
+- Generalize `dvr-stage`: validate labels; permit complete HDD installation
+  only from minimal; stream metadata-safe rootfs extraction; stage NFS roots
+  through an incoming directory; and validate init, OS identity, and module
+  release.
 - Replace the Buildroot-only USB preflight with a device-tree board identity
   check so kernel-only staging works from either production userspace.
 - Teach console identification and clean reboot handling about Debian.
@@ -106,12 +105,11 @@ results as implementation proceeds.
 - Clean-build the shared toolchain, production Buildroot image, minimal image,
   and Debian rootfs.
 - Verify minimal payload margin, tar metadata, module release, package
-  manifest, checksums, and forbidden-package policy.
+  manifest, and forbidden-package policy.
 - Prove Debian first over NFS, then boot minimal, prepare storage, stage both
   roots and both USB kernels, and validate Buildroot, Debian, and the switch
   back to Buildroot.
-- Record final artifact hashes, image sizes, package manifest location, and
-  live results below.
+- Record final image sizes, package manifest location, and live results below.
 
 ## Assumptions
 
@@ -138,24 +136,21 @@ profile loads, and Justfile dry-runs for all four production profiles passed.
 
 ### Final artifacts
 
-| Artifact | Bytes | SHA-256 |
-|---|---:|---|
-| `artifacts/toolchain/arm-buildroot-linux-musleabihf_sdk-buildroot.tar.gz` | 101,484,916 | `51a5029b587d50bcfa669bac9ac35a714f2bc74e84efbb369f01e8f6d01d1024` |
-| `artifacts/buildroot/uImage-hi3531-dhb-ax` | 4,107,133 | `86cbe0ac5edac8111b85343d77b91f1127fcecaf606cbb9caa0aa85a55c4a5b2` |
-| `artifacts/buildroot/rootfs.tar` | 10,680,320 | `97f87c5e57dc3f99a9db69b688a8832a1a9b9f99af698bb2f4d6a98522e2495f` |
-| `artifacts/buildroot/kernel-modules.tar` | 624,640 | `9d75b38c62262384b8f5ee408f47bf91082b9f08b1b8f14d76317e62e1b6f3b9` |
-| `artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal` | 7,229,079 | `7811f33b53e67155df682e1e150d9cad3302a4b6644441f65f5768fe8249eb57` |
-| `artifacts/buildroot-minimal/rootfs.cpio` | 8,348,672 | `8e9c76f54bb373745d3136498de2352cea36dfb32717efa02c658eb6a98ca1c3` |
-| `artifacts/debian/rootfs.tar` | 221,388,800 | `fa46d5839d73f526d7f4f5b7e3e6b7acdcfbf6caf463e575e6746172b6710462` |
+| Artifact | Bytes |
+|---|---:|
+| `artifacts/toolchain/arm-buildroot-linux-musleabihf_sdk-buildroot.tar.gz` | 101,484,916 |
+| `artifacts/buildroot/uImage-hi3531-dhb-ax` | 4,107,133 |
+| `artifacts/buildroot/rootfs.tar` | 10,680,320 |
+| `artifacts/buildroot/kernel-modules.tar` | 624,640 |
+| `artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal` | 7,229,079 |
+| `artifacts/buildroot-minimal/rootfs.cpio` | 8,348,672 |
+| `artifacts/debian/rootfs.tar` | 221,388,800 |
 
 The Debian build used pinned builder base
 `debian:trixie-slim@sha256:3a39a0592364683e6bab97937b72cad5a8fa6dcbbee90edb3bb48c7f8e94f258`,
 `mmdebstrap 1.5.7`, and kernel release `6.18.42`. The 163-package manifest is
-`artifacts/debian/packages.txt` (SHA-256
-`ffce63c9568d8548c4d822191ad2c9eacf405f3ea83ed30c71a00345cb408e20`);
-the build provenance is in `artifacts/debian/build-info.txt` (SHA-256
-`a4492d9cefc65a158f2689d4f89cc3fb62ae861f9610015dc2e9aa20781c1de2`).
-The rootfs checksum sidecar verifies successfully.
+`artifacts/debian/packages.txt`; the build provenance is in
+`artifacts/debian/build-info.txt`.
 
 The PR-review follow-up rebuilt this Debian artifact after moving static
 configuration into the tracked overlay, selecting hostname `dvr`, and changing

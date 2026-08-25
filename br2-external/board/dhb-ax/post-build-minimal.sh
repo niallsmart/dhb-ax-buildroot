@@ -17,7 +17,7 @@ find_tool()
 }
 
 for tool in \
-	sfdisk mke2fs mkfs.fat mkswap blkid tar tee mkfifo sha256sum \
+	sfdisk mke2fs mkfs.fat mkswap blkid tar \
 	getfacl setfacl getfattr setfattr; do
 	if ! find_tool "$tool"; then
 		echo "post-build-minimal: expected tool missing: $tool" >&2

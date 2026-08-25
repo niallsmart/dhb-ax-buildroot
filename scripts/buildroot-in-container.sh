@@ -277,5 +277,4 @@ if [ -d "$output/images" ] && [ -n "$(ls -A "$output/images" 2>/dev/null)" ]; th
 		mv -f "$temporary" "$artifacts/$name"
 		printf '  %s\n' "$name"
 	done
-	sha256sum "$output"/images/*
 fi

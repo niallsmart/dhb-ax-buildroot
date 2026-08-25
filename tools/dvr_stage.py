@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import os
 import shlex
 import subprocess
@@ -65,20 +64,6 @@ def ssh(
 def readable(path: Path, description: str) -> None:
     if not path.is_file() or not os.access(path, os.R_OK):
         fail(f"{description} is not readable: {path}", 2)
-
-
-def checksum(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    actual = digest.hexdigest()
-    sidecar = Path(f"{path}.sha256")
-    if sidecar.is_file():
-        fields = sidecar.read_text(encoding="utf-8").split()
-        if not fields or fields[0].lower() != actual:
-            fail(f"checksum sidecar does not match artifact: {sidecar}", 2)
-    return actual
 
 
 def run_stream(
@@ -250,7 +235,6 @@ def stage_tftp_kernel(profile: Profile, pi_ipaddr: str) -> None:
     target = profile.kernel.target
     temporary = f"/tmp/dvr-stage-{os.getpid()}-{target}"
     incoming = f"/srv/tftp/.dvr-stage-{os.getpid()}-{target}.incoming"
-    expected = checksum(profile.kernel.artifact)
     print(f"Staging {profile.kernel.artifact} on {host}:/srv/tftp/{target}...")
     if run(
         (
@@ -265,9 +249,7 @@ def stage_tftp_kernel(profile: Profile, pi_ipaddr: str) -> None:
     ).returncode:
         fail(f"could not copy the kernel to {host}")
     command = (
-        f"test \"$(sha256sum {temporary} | awk '{{print $1}}')\" = {expected} && "
         f"sudo install -m0644 {temporary} {incoming} && "
-        f"test \"$(sha256sum {incoming} | awk '{{print $1}}')\" = {expected} && "
         f"sudo mv -f {incoming} /srv/tftp/{target}"
     )
     if ssh(host, command).returncode:
@@ -281,7 +263,6 @@ set -eu
 
 uimage=$1
 kernel_name=$2
-expected=$3
 boot_mount=/mnt/dhb-ax-boot
 
 cleanup()
@@ -294,21 +275,12 @@ trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
 
 boot_part=$(blkid -t 'LABEL=DHBAXBOOT' -o device)
-[ "$(sha256sum "$uimage" | awk '{ print $1 }')" = "$expected" ] || {
-	echo 'dvr-stage: staged kernel checksum mismatch' >&2
-	exit 1
-}
-
 mkdir -p "$boot_mount"
 modprobe vfat 2>/dev/null || true
 mount -t vfat "$boot_part" "$boot_mount"
 rm -f "$boot_mount/$kernel_name.new"
 cp "$uimage" "$boot_mount/$kernel_name.new"
 sync
-[ "$(sha256sum "$boot_mount/$kernel_name.new" | awk '{ print $1 }')" = "$expected" ] || {
-	echo 'dvr-stage: USB kernel checksum mismatch' >&2
-	exit 1
-}
 mv -f "$boot_mount/$kernel_name.new" "$boot_mount/$kernel_name"
 rm -f "$boot_mount/$kernel_name.sha256"
 sync
@@ -320,7 +292,6 @@ def stage_usb_kernel(profile: Profile, dvr_ipaddr: str) -> None:
     assert profile.kernel
     host = f"root@{dvr_ipaddr}"
     temporary = f"/tmp/dvr-stage-{os.getpid()}-{profile.kernel.target}"
-    expected = checksum(profile.kernel.artifact)
     print(f"Staging {profile.kernel.artifact} on {host} USB...")
     if run(
         (
@@ -341,7 +312,6 @@ def stage_usb_kernel(profile: Profile, dvr_ipaddr: str) -> None:
         "--",
         temporary,
         profile.kernel.target,
-        expected,
         input_text=USB_INSTALL,
     ).returncode:
         ssh(host, "rm", "-f", temporary)
@@ -355,17 +325,13 @@ partuuid=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
 label=$2
 expected_os_id=$3
 kernel_release=$4
-expected=$5
-host_epoch=$6
+host_epoch=$5
 root_mount=/mnt/dhb-ax-root
-hash_fifo=/tmp/dvr-stage-hash.$$
-hash_result=/tmp/dvr-stage-hash-result.$$
 
 cleanup()
 {
 	sync
 	grep -q " $root_mount " /proc/mounts && umount "$root_mount" || true
-	rm -f "$hash_fifo" "$hash_result"
 }
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
@@ -377,18 +343,8 @@ echo "Formatting $root_part as $label..."
 mke2fs -F -t ext4 -L "$label" -m 0 "$root_part"
 mkdir -p "$root_mount"
 mount -t ext4 "$root_part" "$root_mount"
-mkfifo "$hash_fifo"
-sha256sum < "$hash_fifo" > "$hash_result" &
-hasher=$!
-tee "$hash_fifo" |
-	tar --numeric-owner --acls --xattrs --xattrs-include='*' \
-		-xpf - -C "$root_mount"
-wait "$hasher"
-actual=$(awk '{ print $1 }' "$hash_result")
-[ "$actual" = "$expected" ] || {
-	echo "dvr-stage: rootfs stream checksum mismatch" >&2
-	exit 1
-}
+tar --numeric-owner --acls --xattrs --xattrs-include='*' \
+	-xpf - -C "$root_mount"
 [ -x "$root_mount/sbin/init" ] || {
 	echo 'dvr-stage: installed rootfs has no executable /sbin/init' >&2
 	exit 1
@@ -418,7 +374,6 @@ def stage_hdd_root(profile: Profile, dvr_ipaddr: str) -> None:
         and profile.rootfs.kernel_release
     )
     host = f"root@{dvr_ipaddr}"
-    expected = checksum(profile.rootfs.artifact)
     print(f"Staging {profile.rootfs.artifact} on {host} HDD...")
     command = remote_script(
         HDD_INSTALL,
@@ -426,7 +381,6 @@ def stage_hdd_root(profile: Profile, dvr_ipaddr: str) -> None:
         profile.rootfs.label,
         profile.rootfs.expected_os_id,
         profile.rootfs.kernel_release,
-        expected,
         str(int(time.time())),
     )
     if run_stream(
@@ -440,9 +394,8 @@ set -eu
 
 export_path=$1
 archive=$2
-expected=$3
-expected_os_id=$4
-kernel_release=$5
+expected_os_id=$3
+kernel_release=$4
 
 parent=${export_path%/*}
 incoming=$export_path.incoming.$$
@@ -455,10 +408,6 @@ cleanup()
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
 
-[ "$(sha256sum "$archive" | awk '{ print $1 }')" = "$expected" ] || {
-	echo 'dvr-stage: NFS rootfs checksum mismatch' >&2
-	exit 1
-}
 mkdir -p "$parent"
 rm -rf -- "$incoming" "$previous"
 mkdir -m 0755 "$incoming"
@@ -498,7 +447,6 @@ def stage_nfs_root(profile: Profile, pi_ipaddr: str) -> None:
     )
     host = pi_ipaddr
     remote_archive = f"/tmp/dvr-stage-rootfs-{os.getpid()}.tar"
-    expected = checksum(profile.rootfs.artifact)
     print(
         f"Publishing {profile.rootfs.artifact} to "
         f"{host}:{profile.rootfs.export}..."
@@ -523,7 +471,6 @@ def stage_nfs_root(profile: Profile, pi_ipaddr: str) -> None:
         "--",
         profile.rootfs.export,
         remote_archive,
-        expected,
         profile.rootfs.expected_os_id,
         profile.rootfs.kernel_release,
         input_text=NFS_INSTALL,

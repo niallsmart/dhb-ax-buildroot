@@ -80,7 +80,7 @@ are regenerated source trees. Production outputs are written to
 `artifacts/buildroot/`; the normal boot image is `uImage-hi3531-dhb-ax` and
 `kernel-modules.tar` is the shared production module set. Debian outputs are
 written to `artifacts/debian/`, including its metadata-preserving rootfs tar,
-checksum, package manifest, and build information.
+package manifest, and build information.
 Diagnostic outputs are written to `artifacts/buildroot-minimal/`; its boot
 image is `uImage-hi3531-dhb-ax-minimal` and its generated root filesystem is
 `rootfs.cpio`.
