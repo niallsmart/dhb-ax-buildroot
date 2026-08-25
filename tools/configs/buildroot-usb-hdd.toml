@@ -6,12 +6,11 @@ load_address = "0x82000000"
 usb_device = "0:1"
 
 [rootfs]
-type = "hdd"
+source = "hdd"
 artifact = "artifacts/buildroot/rootfs.tar"
 device = "PARTUUID=ca264b64-5738-4e60-a0ab-b3c3a4c789c1"
 label = "dhb-ax-buildroot"
-os_id = "buildroot"
-kernel_release = "6.18.42"
+expected_os_id = "buildroot"
 
 [boot]
 action = "kernel"

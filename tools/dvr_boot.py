@@ -295,7 +295,7 @@ def identify_console(console):
         ("shell", SHELL_PROMPT),
         ("vendor_login", r"(?m)^\r*\(none\) login: *\r*$"),
         ("main_login", r"(?m)^\r*dhb-ax login: *\r*$"),
-        ("debian_login", r"(?m)^\r*dhb-ax-debian login: *\r*$"),
+        ("debian_login", r"(?m)^\r*(?:dvr|dhb-ax-debian) login: *\r*$"),
         ("minimal_login", r"(?m)^\r*minimal login: *\r*$"),
         ("password", r"(?m)^\r*Password: *\r*$"),
     )
@@ -380,7 +380,7 @@ def reach_uboot(settings: LocalSettings, console):
 
 def configure_bootargs(profile, console):
     expected = profile.boot.bootargs
-    print(f"Configuring temporary {profile.rootfs.type}-root bootargs...")
+    print(f"Configuring temporary {profile.rootfs.source}-root bootargs...")
     first, *remaining = profile.boot.args
     run_uboot_command(console, f"setenv bootargs {first}")
     for argument in remaining:

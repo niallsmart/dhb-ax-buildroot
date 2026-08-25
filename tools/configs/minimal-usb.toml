@@ -6,7 +6,7 @@ load_address = "0x82000000"
 usb_device = "0:1"
 
 [rootfs]
-type = "initramfs"
+source = "initramfs"
 
 [boot]
 action = "kernel"

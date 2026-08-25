@@ -6,14 +6,12 @@ RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         ca-certificates \
         debian-archive-keyring \
-        dropbear-bin \
         gpg \
         kmod \
         mmdebstrap \
-        openssh-client \
         systemd \
     && rm -rf /var/lib/apt/lists/*
 
-COPY debian-rootfs-in-container.sh /usr/local/sbin/dhb-ax-debian-rootfs
+COPY mmdebstrap-in-container.sh /usr/local/sbin/dhb-ax-mmdebstrap
 
-ENTRYPOINT ["/bin/sh", "/usr/local/sbin/dhb-ax-debian-rootfs"]
+ENTRYPOINT ["/bin/sh", "/usr/local/sbin/dhb-ax-mmdebstrap"]

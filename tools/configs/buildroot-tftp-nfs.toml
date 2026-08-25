@@ -5,11 +5,10 @@ target = "uImage-hi3531-dhb-ax"
 load_address = "0x82000000"
 
 [rootfs]
-type = "nfs"
+source = "nfs"
 artifact = "artifacts/buildroot/rootfs.tar"
 export = "/srv/dhb-ax/rootfs"
-os_id = "buildroot"
-kernel_release = "6.18.42"
+expected_os_id = "buildroot"
 
 [boot]
 action = "kernel"

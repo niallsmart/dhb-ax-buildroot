@@ -33,7 +33,7 @@ results as implementation proceeds.
 
 ### Debian root filesystem
 
-- Add `scripts/debian-rootfs.sh` and a `just debian` entry, independent of the
+- Add `scripts/mmdebstrap.sh` and a `just debian` entry, independent of the
   Buildroot `--config` interface.
 - Run a pinned Debian Trixie armhf builder container as `linux/arm/v7`; use
   native armhf execution through Docker's existing emulation rather than a
@@ -46,13 +46,12 @@ results as implementation proceeds.
   `e2fsprogs`, `dosfstools`, `util-linux`, `smartmontools`, `iproute2`,
   `ethtool`, `procps`, `psmisc`, `lsof`, `curl`, `rsync`, `less`, and
   `vim-tiny`.
-- Configure hostname `dhb-ax-debian`, UTC, `C.UTF-8`, and no sudo user.
+- Configure hostname `dvr`, `America/New_York`, `C.UTF-8`, and no sudo user.
 - Use `DHB_AX_ROOT_PASSWD` from `local.env` for root console authentication.
   Permit root SSH only with public keys.
 - Reuse the board's OpenSSH host keys and `authorized_keys` from
-  `artifacts/local/ssh`. Require both OpenSSH and Dropbear forms and verify
-  that the ED25519, ECDSA, and RSA public fingerprints match; fail without
-  changing keys if they diverge.
+  `artifacts/local/ssh`. Buildroot independently consumes the Dropbear forms
+  generated for the same board.
 - Configure `systemd-networkd`: a `.link` applies the factory MAC and stable
   `eth0` name; a `.network` enables DHCP while preserving kernel-supplied
   NFS-root networking.
@@ -147,7 +146,7 @@ profile loads, and Justfile dry-runs for all four production profiles passed.
 | `artifacts/buildroot/kernel-modules.tar` | 624,640 | `9d75b38c62262384b8f5ee408f47bf91082b9f08b1b8f14d76317e62e1b6f3b9` |
 | `artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal` | 7,229,079 | `7811f33b53e67155df682e1e150d9cad3302a4b6644441f65f5768fe8249eb57` |
 | `artifacts/buildroot-minimal/rootfs.cpio` | 8,348,672 | `8e9c76f54bb373745d3136498de2352cea36dfb32717efa02c658eb6a98ca1c3` |
-| `artifacts/debian/rootfs.tar` | 221,388,800 | `14ea33398da9495c893fe63990787ead1449bf068ad8865b45ef6094a4373b7a` |
+| `artifacts/debian/rootfs.tar` | 221,388,800 | `fa46d5839d73f526d7f4f5b7e3e6b7acdcfbf6caf463e575e6746172b6710462` |
 
 The Debian build used pinned builder base
 `debian:trixie-slim@sha256:3a39a0592364683e6bab97937b72cad5a8fa6dcbbee90edb3bb48c7f8e94f258`,
@@ -155,8 +154,14 @@ The Debian build used pinned builder base
 `artifacts/debian/packages.txt` (SHA-256
 `ffce63c9568d8548c4d822191ad2c9eacf405f3ea83ed30c71a00345cb408e20`);
 the build provenance is in `artifacts/debian/build-info.txt` (SHA-256
-`2bf3861dcc30c2b57531f69eddb9b9461b893c61a9730f2b6b639bcc28f4ca1c`).
+`a4492d9cefc65a158f2689d4f89cc3fb62ae861f9610015dc2e9aa20781c1de2`).
 The rootfs checksum sidecar verifies successfully.
+
+The PR-review follow-up rebuilt this Debian artifact after moving static
+configuration into the tracked overlay, selecting hostname `dvr`, and changing
+the timezone to `America/New_York`. It passed host-side archive validation but
+was not restaged onto the DVR during review; the live rollout results below
+describe the earlier artifact from the same implementation run.
 
 ### Artifact validation
 
@@ -174,8 +179,7 @@ The rootfs checksum sidecar verifies successfully.
   `security.capability` xattr, hardlink inode identity, and the exact
   `2020-01-02 03:04:05 UTC` timestamp on ext4.
 - ED25519, ECDSA, and RSA fingerprints in the running Debian OpenSSH server
-  exactly matched `artifacts/local/ssh` and the Dropbear/OpenSSH build-time
-  cross-checks.
+  exactly matched the OpenSSH keys in `artifacts/local/ssh`.
 
 ### Storage and live rollout
 

@@ -44,7 +44,7 @@ install -m 600 local.env.example local.env   # then fill in the required values
 scripts/buildroot.sh --config toolchain
 scripts/buildroot.sh --config main
 scripts/buildroot.sh --config minimal
-scripts/debian-rootfs.sh
+scripts/mmdebstrap.sh
 ```
 
 The first bootstrap on a checkout prepares the pinned sources, then exits with
@@ -72,8 +72,8 @@ to request clean reboots through the serial console; `local.env.example`
 documents the keys.
 
 `artifacts/local/ssh/` is also machine-local. It holds `authorized_keys` and
-the per-board host keys in matching Dropbear and OpenSSH formats. The Debian
-build verifies their public fingerprints before installing the OpenSSH forms.
+the per-board host keys in Dropbear and OpenSSH formats. The Debian build
+installs the OpenSSH forms while Buildroot installs the Dropbear forms.
 
 Maintained board support lives in `br2-external/`. `kernel/` and `buildroot/`
 are regenerated source trees. Production outputs are written to

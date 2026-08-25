@@ -6,12 +6,11 @@ load_address = "0x82000000"
 usb_device = "0:1"
 
 [rootfs]
-type = "hdd"
+source = "hdd"
 artifact = "artifacts/debian/rootfs.tar"
 device = "PARTUUID=8EBB5255-A43A-4B4E-953D-E81D2E0A2A6F"
 label = "dhb-ax-debian"
-os_id = "debian"
-kernel_release = "6.18.42"
+expected_os_id = "debian"
 
 [boot]
 action = "kernel"
@@ -27,5 +26,5 @@ args = [
   "rootwait",
   "rw",
 ]
-hostname = "dhb-ax-debian"
+hostname = "dvr"
 timeout = 180

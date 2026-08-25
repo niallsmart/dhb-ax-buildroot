@@ -51,12 +51,12 @@ class Kernel:
 
 @dataclass(frozen=True)
 class Rootfs:
-    type: str
+    source: str
     artifact: Path | None = None
     device: str | None = None
     export: str | None = None
     label: str | None = None
-    os_id: str | None = None
+    expected_os_id: str | None = None
     kernel_release: str | None = None
 
     @property
@@ -236,41 +236,56 @@ def _kernel(data: Mapping[str, Any], repo_root: Path) -> Kernel:
     )
 
 
+def _production_kernel_release(repo_root: Path) -> str:
+    defconfig = repo_root / "br2-external" / "configs" / "dhb_ax_defconfig"
+    try:
+        lines = defconfig.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise ProfileError(f"cannot read production defconfig: {defconfig}") from error
+    prefix = 'BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="'
+    values = [
+        line.removeprefix(prefix).removesuffix('"')
+        for line in lines
+        if line.startswith(prefix) and line.endswith('"')
+    ]
+    if len(values) != 1 or not KERNEL_RELEASE.fullmatch(values[0]):
+        raise ProfileError("production defconfig must select one safe kernel release")
+    return values[0]
+
+
 def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
     table = _table(data, "rootfs")
     _keys(
         table,
         "rootfs",
         {
-            "type",
+            "source",
             "artifact",
             "device",
             "export",
             "label",
-            "os_id",
-            "kernel_release",
+            "expected_os_id",
         },
     )
-    root_type = _string(table, "rootfs", "type")
-    if root_type not in ("hdd", "nfs", "initramfs"):
-        raise ProfileError("rootfs.type must be 'hdd', 'nfs', or 'initramfs'")
+    source = _string(table, "rootfs", "source")
+    if source not in ("hdd", "nfs", "initramfs"):
+        raise ProfileError("rootfs.source must be 'hdd', 'nfs', or 'initramfs'")
 
     artifact = table.get("artifact")
     device = table.get("device")
     export = table.get("export")
     label = table.get("label")
-    os_id = table.get("os_id")
-    kernel_release = table.get("kernel_release")
-    if root_type in ("hdd", "nfs"):
-        if not isinstance(os_id, str) or not OS_ID.fullmatch(os_id):
-            raise ProfileError("external roots require a safe rootfs.os_id")
-        if not isinstance(kernel_release, str) or not KERNEL_RELEASE.fullmatch(
-            kernel_release
+    expected_os_id = table.get("expected_os_id")
+    kernel_release = None
+    if source in ("hdd", "nfs"):
+        if not isinstance(expected_os_id, str) or not OS_ID.fullmatch(
+            expected_os_id
         ):
             raise ProfileError(
-                "external roots require a safe rootfs.kernel_release"
+                "external roots require a safe rootfs.expected_os_id"
             )
-    if root_type == "hdd":
+        kernel_release = _production_kernel_release(repo_root)
+    if source == "hdd":
         if not isinstance(artifact, str) or not artifact:
             raise ProfileError("HDD roots require rootfs.artifact")
         if not isinstance(device, str) or not PARTUUID.fullmatch(device):
@@ -281,7 +296,7 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
             raise ProfileError(
                 "HDD roots require rootfs.label as a safe filesystem label"
             )
-    elif root_type == "nfs":
+    elif source == "nfs":
         if not isinstance(artifact, str) or not artifact:
             raise ProfileError("NFS roots require rootfs.artifact")
         if (
@@ -300,17 +315,17 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
             raise ProfileError("rootfs.label is only valid for HDD roots")
     elif any(
         value is not None
-        for value in (artifact, device, export, label, os_id, kernel_release)
+        for value in (artifact, device, export, label, expected_os_id)
     ):
         raise ProfileError("initramfs roots have no external fields")
 
     return Rootfs(
-        type=root_type,
+        source=source,
         artifact=_artifact(repo_root, artifact) if artifact else None,
         device=device,
         export=export,
         label=label,
-        os_id=os_id,
+        expected_os_id=expected_os_id,
         kernel_release=kernel_release,
     )
 

@@ -18,7 +18,6 @@ fi
 local_ssh=$workspace/artifacts/local/ssh
 for file in \
 	authorized_keys \
-	dropbear_ecdsa_host_key dropbear_ed25519_host_key dropbear_rsa_host_key \
 	ssh_host_ecdsa_key ssh_host_ecdsa_key.pub \
 	ssh_host_ed25519_key ssh_host_ed25519_key.pub \
 	ssh_host_rsa_key ssh_host_rsa_key.pub; do

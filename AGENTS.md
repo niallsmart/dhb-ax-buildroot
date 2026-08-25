@@ -46,7 +46,7 @@ scripts/bootstrap-sources.sh
 scripts/buildroot.sh --config toolchain
 scripts/buildroot.sh --config main
 scripts/buildroot.sh --config minimal
-scripts/debian-rootfs.sh
+scripts/mmdebstrap.sh
 ```
 
 The first bootstrap prepares sources and exits non-zero when the SDK is not

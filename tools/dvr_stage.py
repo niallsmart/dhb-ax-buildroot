@@ -232,15 +232,15 @@ def preflight(
         readable(profile.rootfs.artifact, "root filesystem artifact")
 
     needs_pi = profile.kernel.source == "tftp" or (
-        not kernel_only and profile.rootfs.type == "nfs"
+        not kernel_only and profile.rootfs.source == "nfs"
     )
     if needs_pi:
         check_pi(settings.pi_ipaddr, profile, start_tftp=not check)
     if profile.kernel.source == "usb":
         check_usb(settings.dvr_ipaddr)
-    if not kernel_only and profile.rootfs.type == "hdd":
+    if not kernel_only and profile.rootfs.source == "hdd":
         check_hdd_root(profile, settings.dvr_ipaddr)
-    if not kernel_only and profile.rootfs.type == "nfs":
+    if not kernel_only and profile.rootfs.source == "nfs":
         check_nfs_root(profile, settings)
 
 
@@ -353,7 +353,7 @@ set -eu
 
 partuuid=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
 label=$2
-os_id=$3
+expected_os_id=$3
 kernel_release=$4
 expected=$5
 host_epoch=$6
@@ -394,8 +394,8 @@ actual=$(awk '{ print $1 }' "$hash_result")
 	exit 1
 }
 installed_id=$(sed -n 's/^ID=//p' "$root_mount/etc/os-release" | tr -d '"')
-[ "$installed_id" = "$os_id" ] || {
-	echo "dvr-stage: installed OS is '$installed_id', expected '$os_id'" >&2
+[ "$installed_id" = "$expected_os_id" ] || {
+	echo "dvr-stage: installed OS is '$installed_id', expected '$expected_os_id'" >&2
 	exit 1
 }
 [ -d "$root_mount/lib/modules/$kernel_release" ] || {
@@ -404,7 +404,7 @@ installed_id=$(sed -n 's/^ID=//p' "$root_mount/etc/os-release" | tr -d '"')
 }
 sync
 umount "$root_mount"
-echo "Installed $os_id rootfs on $root_part (PARTUUID=$partuuid, LABEL=$label)"
+echo "Installed $expected_os_id rootfs on $root_part (PARTUUID=$partuuid, LABEL=$label)"
 """
 
 
@@ -414,7 +414,7 @@ def stage_hdd_root(profile: Profile, dvr_ipaddr: str) -> None:
         and profile.rootfs.artifact
         and profile.rootfs.partuuid
         and profile.rootfs.label
-        and profile.rootfs.os_id
+        and profile.rootfs.expected_os_id
         and profile.rootfs.kernel_release
     )
     host = f"root@{dvr_ipaddr}"
@@ -424,7 +424,7 @@ def stage_hdd_root(profile: Profile, dvr_ipaddr: str) -> None:
         HDD_INSTALL,
         profile.rootfs.partuuid,
         profile.rootfs.label,
-        profile.rootfs.os_id,
+        profile.rootfs.expected_os_id,
         profile.rootfs.kernel_release,
         expected,
         str(int(time.time())),
@@ -441,7 +441,7 @@ set -eu
 export_path=$1
 archive=$2
 expected=$3
-os_id=$4
+expected_os_id=$4
 kernel_release=$5
 
 parent=${export_path%/*}
@@ -469,8 +469,8 @@ tar --numeric-owner --acls --xattrs --xattrs-include='*' \
 	exit 1
 }
 installed_id=$(sed -n 's/^ID=//p' "$incoming/etc/os-release" | tr -d '"')
-[ "$installed_id" = "$os_id" ] || {
-	echo "dvr-stage: NFS root OS is '$installed_id', expected '$os_id'" >&2
+[ "$installed_id" = "$expected_os_id" ] || {
+	echo "dvr-stage: NFS root OS is '$installed_id', expected '$expected_os_id'" >&2
 	exit 1
 }
 [ -d "$incoming/lib/modules/$kernel_release" ] || {
@@ -493,7 +493,7 @@ def stage_nfs_root(profile: Profile, pi_ipaddr: str) -> None:
         profile.rootfs
         and profile.rootfs.artifact
         and profile.rootfs.export
-        and profile.rootfs.os_id
+        and profile.rootfs.expected_os_id
         and profile.rootfs.kernel_release
     )
     host = pi_ipaddr
@@ -524,7 +524,7 @@ def stage_nfs_root(profile: Profile, pi_ipaddr: str) -> None:
         profile.rootfs.export,
         remote_archive,
         expected,
-        profile.rootfs.os_id,
+        profile.rootfs.expected_os_id,
         profile.rootfs.kernel_release,
         input_text=NFS_INSTALL,
     ).returncode:
@@ -533,9 +533,9 @@ def stage_nfs_root(profile: Profile, pi_ipaddr: str) -> None:
 
 
 def stage_rootfs(profile: Profile, settings: LocalSettings) -> None:
-    if profile.rootfs.type == "hdd":
+    if profile.rootfs.source == "hdd":
         stage_hdd_root(profile, settings.dvr_ipaddr)
-    elif profile.rootfs.type == "nfs":
+    elif profile.rootfs.source == "nfs":
         stage_nfs_root(profile, settings.pi_ipaddr)
 
 

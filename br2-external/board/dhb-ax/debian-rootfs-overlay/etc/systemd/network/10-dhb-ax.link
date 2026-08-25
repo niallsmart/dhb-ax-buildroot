@@ -1,0 +1,8 @@
+[Match]
+OriginalName=eth*
+
+[Link]
+NamePolicy=
+Name=eth0
+MACAddressPolicy=none
+MACAddress=@DHB_AX_DVR_ETHADDR@
