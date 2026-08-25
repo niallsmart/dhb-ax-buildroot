@@ -16,11 +16,23 @@ find_tool()
 	return 1
 }
 
-for tool in sfdisk mke2fs mkfs.fat blkid; do
+for tool in \
+	sfdisk mke2fs mkfs.fat mkswap blkid tar tee mkfifo sha256sum \
+	getfacl setfacl getfattr setfattr; do
 	if ! find_tool "$tool"; then
 		echo "post-build-minimal: expected tool missing: $tool" >&2
 		exit 1
 	fi
+done
+
+for tar_path in "$target/bin/tar" "$target/usr/bin/tar"; do
+	[ -e "$tar_path" ] || continue
+	case $(readlink "$tar_path" 2>/dev/null || :) in
+	*busybox*)
+		echo 'post-build-minimal: GNU tar was replaced by the BusyBox applet' >&2
+		exit 1
+		;;
+	esac
 done
 
 # Neither the package set nor the minimal DTB needs access to factory flash.
@@ -31,4 +43,4 @@ for tool in flash_erase flash_eraseall flashcp nandwrite ubiformat; do
 	fi
 done
 
-echo "post-build-minimal: storage tools present, flash writers absent"
+echo "post-build-minimal: metadata-safe storage tools present, flash writers absent"

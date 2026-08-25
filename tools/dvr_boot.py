@@ -142,7 +142,9 @@ def preflight(profile, settings: LocalSettings):
 CSI = r"(?:\x1b\[[0-?]*[ -/]*[@-~])*"
 LINE_START = rf"(?m)^\r*{CSI}"
 UBOOT_PROMPT = rf"{LINE_START}hisilicon # *{CSI}\r*$"
-SHELL_PROMPT = rf"{LINE_START}((~|/) )?# *{CSI}\r*$"
+SHELL_PROMPT = (
+    rf"{LINE_START}(?:(?:~|/) |root@[^:\r\n]+:[^#\r\n]*)?# *{CSI}\r*$"
+)
 
 
 class Console:
@@ -293,6 +295,7 @@ def identify_console(console):
         ("shell", SHELL_PROMPT),
         ("vendor_login", r"(?m)^\r*\(none\) login: *\r*$"),
         ("main_login", r"(?m)^\r*dhb-ax login: *\r*$"),
+        ("debian_login", r"(?m)^\r*dhb-ax-debian login: *\r*$"),
         ("minimal_login", r"(?m)^\r*minimal login: *\r*$"),
         ("password", r"(?m)^\r*Password: *\r*$"),
     )
@@ -303,6 +306,7 @@ def identify_console(console):
             "shell",
             "vendor_login",
             "main_login",
+            "debian_login",
             "minimal_login",
         ):
             return state
@@ -316,6 +320,7 @@ def report_status(console):
         "shell": "Linux shell prompt",
         "vendor_login": "vendor Linux login prompt",
         "main_login": "main Buildroot login prompt",
+        "debian_login": "Debian login prompt",
         "minimal_login": "minimal Buildroot login prompt",
     }
     print(f"Current DVR state: {descriptions[identify_console(console)]}.")
@@ -355,8 +360,10 @@ def reach_uboot(settings: LocalSettings, console):
     if state == "vendor_login":
         print("Logging in to vendor Linux through the serial console...")
         login(console, VENDOR_PASSWORD)
-    elif state in ("main_login", "minimal_login"):
-        print("Logging in to Buildroot through the serial console...")
+    elif state in ("main_login", "debian_login", "minimal_login"):
+        print(
+            "Logging in to the maintained Linux system through the serial console..."
+        )
         login(console, settings.root_password)
 
     print("Rebooting and interrupting autoboot...")

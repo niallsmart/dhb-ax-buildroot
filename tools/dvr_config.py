@@ -18,6 +18,9 @@ ETHERNET_ADDRESS = re.compile(r"(?i)([0-9a-f]{2}:){5}[0-9a-f]{2}")
 LOAD_ADDRESS = re.compile(r"0x[0-9A-Fa-f]+")
 USB_DEVICE = re.compile(r"[0-9]+:[0-9]+")
 TARGET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+FILESYSTEM_LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,15}")
+OS_ID = re.compile(r"[a-z0-9][a-z0-9._-]*")
+KERNEL_RELEASE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
 PARTUUID = re.compile(
     r"PARTUUID=([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-"
     r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})"
@@ -52,6 +55,9 @@ class Rootfs:
     artifact: Path | None = None
     device: str | None = None
     export: str | None = None
+    label: str | None = None
+    os_id: str | None = None
+    kernel_release: str | None = None
 
     @property
     def partuuid(self) -> str | None:
@@ -232,7 +238,19 @@ def _kernel(data: Mapping[str, Any], repo_root: Path) -> Kernel:
 
 def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
     table = _table(data, "rootfs")
-    _keys(table, "rootfs", {"type", "artifact", "device", "export"})
+    _keys(
+        table,
+        "rootfs",
+        {
+            "type",
+            "artifact",
+            "device",
+            "export",
+            "label",
+            "os_id",
+            "kernel_release",
+        },
+    )
     root_type = _string(table, "rootfs", "type")
     if root_type not in ("hdd", "nfs", "initramfs"):
         raise ProfileError("rootfs.type must be 'hdd', 'nfs', or 'initramfs'")
@@ -240,6 +258,18 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
     artifact = table.get("artifact")
     device = table.get("device")
     export = table.get("export")
+    label = table.get("label")
+    os_id = table.get("os_id")
+    kernel_release = table.get("kernel_release")
+    if root_type in ("hdd", "nfs"):
+        if not isinstance(os_id, str) or not OS_ID.fullmatch(os_id):
+            raise ProfileError("external roots require a safe rootfs.os_id")
+        if not isinstance(kernel_release, str) or not KERNEL_RELEASE.fullmatch(
+            kernel_release
+        ):
+            raise ProfileError(
+                "external roots require a safe rootfs.kernel_release"
+            )
     if root_type == "hdd":
         if not isinstance(artifact, str) or not artifact:
             raise ProfileError("HDD roots require rootfs.artifact")
@@ -247,6 +277,10 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
             raise ProfileError("HDD roots require rootfs.device as PARTUUID=<UUID>")
         if export is not None:
             raise ProfileError("rootfs.export is only valid for NFS roots")
+        if not isinstance(label, str) or not FILESYSTEM_LABEL.fullmatch(label):
+            raise ProfileError(
+                "HDD roots require rootfs.label as a safe filesystem label"
+            )
     elif root_type == "nfs":
         if not isinstance(artifact, str) or not artifact:
             raise ProfileError("NFS roots require rootfs.artifact")
@@ -262,7 +296,12 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
             raise ProfileError("rootfs.export must be a canonical path beneath /srv")
         if device is not None:
             raise ProfileError("rootfs.device is only valid for HDD roots")
-    elif any(value is not None for value in (artifact, device, export)):
+        if label is not None:
+            raise ProfileError("rootfs.label is only valid for HDD roots")
+    elif any(
+        value is not None
+        for value in (artifact, device, export, label, os_id, kernel_release)
+    ):
         raise ProfileError("initramfs roots have no external fields")
 
     return Rootfs(
@@ -270,6 +309,9 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
         artifact=_artifact(repo_root, artifact) if artifact else None,
         device=device,
         export=export,
+        label=label,
+        os_id=os_id,
+        kernel_release=kernel_release,
     )
 
 

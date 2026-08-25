@@ -114,6 +114,33 @@ check_root_password() {
 	echo "root password verified: Buildroot crypt hash installed"
 }
 
+export_kernel_modules() {
+	[ "$build_config" = main ] || return 0
+
+	modules=$output/target/lib/modules
+	set -- "$modules"/*
+	if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
+		echo "production rootfs must contain exactly one kernel module release" >&2
+		return 1
+	fi
+	release=${1##*/}
+	expected=$(sed -n \
+		's/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\([0-9][0-9.]*\)"$/\1/p' \
+		"$defconfig_file")
+	if [ "$release" != "$expected" ]; then
+		echo "module release $release does not match configured kernel $expected" >&2
+		return 1
+	fi
+
+	archive=$output/images/kernel-modules.tar
+	# Buildroot's target tree belongs to its unprivileged build user. The
+	# filesystem image corrects that ownership under fakeroot; do the same for
+	# this separately exported system archive.
+	tar --sort=name --numeric-owner --owner=0 --group=0 -C "$output/target" \
+		-cf "$archive" lib/modules
+	echo "kernel modules: $release -> $(basename "$archive")"
+}
+
 # Buildroot does not remove an old filesystem image when its format is later
 # disabled. Do not copy such stale outputs into artifacts/ where they can look
 # like products of the current configuration.
@@ -230,7 +257,10 @@ else
 	fi
 fi
 
-[ "$built_all" = 0 ] || check_root_password
+[ "$built_all" = 0 ] || {
+	check_root_password
+	export_kernel_modules
+}
 
 prune_disabled_images
 
