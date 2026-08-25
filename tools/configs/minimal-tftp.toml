@@ -18,4 +18,4 @@ args = [
   "libata.force=2.00:norst,2.00:nodbdelay,2.01:norst,2.01:nodbdelay,2.03:norst,2.03:nodbdelay,2.04:norst,2.04:nodbdelay",
 ]
 hostname = "minimal"
-timeout = 120
+login_timeout = 120

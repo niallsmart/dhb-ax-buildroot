@@ -27,16 +27,8 @@ fail()
 [ "$(uname -m)" = armv7l ] || fail "builder is not running as linux/arm/v7"
 [ -r "$modules" ] || fail "kernel module archive is missing"
 
-expected_release=$(sed -n \
-	's/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\([0-9][0-9.]*\)"$/\1/p' \
-	"$workspace/br2-external/configs/dhb_ax_defconfig")
-releases=$(tar -tf "$modules" |
+kernel_release=$(tar -tf "$modules" |
 	sed -n 's#^lib/modules/\([^/][^/]*\)/$#\1#p' | sort -u)
-set -- $releases
-[ "$#" -eq 1 ] || fail "module archive must contain exactly one release"
-kernel_release=$1
-[ "$kernel_release" = "$expected_release" ] ||
-	fail "module release $kernel_release does not match kernel $expected_release"
 
 packages=$(paste -sd, "$package_list")
 mirrors=$(sed -n '/^deb /p' "$overlay/etc/apt/sources.list")

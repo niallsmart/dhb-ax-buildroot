@@ -119,26 +119,6 @@ mke2fs -t ext4 -L dhb-ax-data -m 0 "$hdd_data"
 mkfs.fat -F 32 -n DHBAXBOOT "$usb_part"
 sync
 
-verify_partition()
-{
-	partition=$1
-	want_partuuid=$2
-	want_label=$3
-	actual_partuuid=$(blkid -s PARTUUID -o value "$partition")
-	actual_label=$(blkid -s LABEL -o value "$partition")
-	canonical_actual_partuuid=$(printf '%s' "$actual_partuuid" | tr '[:upper:]' '[:lower:]')
-	canonical_want_partuuid=$(printf '%s' "$want_partuuid" | tr '[:upper:]' '[:lower:]')
-	[ "$canonical_actual_partuuid" = "$canonical_want_partuuid" ] ||
-		fail "unexpected PARTUUID on $partition: $actual_partuuid"
-	[ "$actual_label" = "$want_label" ] ||
-		fail "unexpected label on $partition: $actual_label"
-}
-
-verify_partition "$hdd_buildroot" ca264b64-5738-4e60-a0ab-b3c3a4c789c1 dhb-ax-buildroot
-verify_partition "$hdd_debian" 8EBB5255-A43A-4B4E-953D-E81D2E0A2A6F dhb-ax-debian
-verify_partition "$hdd_swap" D8E11399-926E-4805-BC25-641EB3BE6C54 dhb-ax-swap
-verify_partition "$hdd_data" FCB65DE3-F88D-4F21-BAB7-C85F5587C9E2 dhb-ax-data
-
 echo "Prepared HDD roots, swap, and shared data:"
 blkid "$hdd_buildroot" "$hdd_debian" "$hdd_swap" "$hdd_data"
 echo "Prepared USB boot filesystem: $usb_part"

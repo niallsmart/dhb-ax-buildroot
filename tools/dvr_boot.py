@@ -294,9 +294,10 @@ def identify_console(console):
         ("uboot", UBOOT_PROMPT),
         ("shell", SHELL_PROMPT),
         ("vendor_login", r"(?m)^\r*\(none\) login: *\r*$"),
-        ("main_login", r"(?m)^\r*dhb-ax login: *\r*$"),
-        ("debian_login", r"(?m)^\r*(?:dvr|dhb-ax-debian) login: *\r*$"),
-        ("minimal_login", r"(?m)^\r*minimal login: *\r*$"),
+        (
+            "maintained_login",
+            r"(?m)^\r*[A-Za-z0-9][A-Za-z0-9._-]* login: *\r*$",
+        ),
         ("password", r"(?m)^\r*Password: *\r*$"),
     )
     for _ in range(12):
@@ -305,9 +306,7 @@ def identify_console(console):
             "uboot",
             "shell",
             "vendor_login",
-            "main_login",
-            "debian_login",
-            "minimal_login",
+            "maintained_login",
         ):
             return state
         console.send("\r")
@@ -319,9 +318,7 @@ def report_status(console):
         "uboot": "U-Boot prompt",
         "shell": "Linux shell prompt",
         "vendor_login": "vendor Linux login prompt",
-        "main_login": "main Buildroot login prompt",
-        "debian_login": "Debian login prompt",
-        "minimal_login": "minimal Buildroot login prompt",
+        "maintained_login": "maintained Linux login prompt",
     }
     print(f"Current DVR state: {descriptions[identify_console(console)]}.")
 
@@ -360,7 +357,7 @@ def reach_uboot(settings: LocalSettings, console):
     if state == "vendor_login":
         print("Logging in to vendor Linux through the serial console...")
         login(console, VENDOR_PASSWORD)
-    elif state in ("main_login", "debian_login", "minimal_login"):
+    elif state == "maintained_login":
         print(
             "Logging in to the maintained Linux system through the serial console..."
         )
@@ -513,7 +510,7 @@ def boot(profile, settings: LocalSettings, console):
             ("overlap", r"kernel image will overwrite uboot"),
             ("reset", r"(?m)^\r*U-Boot 2010\.06"),
         ),
-        profile.boot.timeout,
+        profile.boot.login_timeout,
     )
     errors = {
         "panic": "kernel panic",

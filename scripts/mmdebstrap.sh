@@ -32,7 +32,7 @@ builder_base=debian:trixie-slim@sha256:3a39a0592364683e6bab97937b72cad5a8fa6dcbb
 
 docker build \
 	--platform linux/arm/v7 \
-	--file "$workspace/scripts/Dockerfile.debian-rootfs" \
+	--file "$workspace/scripts/Dockerfile.mmdebstrap" \
 	--tag "$builder" \
 	"$workspace/scripts"
 

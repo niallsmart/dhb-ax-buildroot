@@ -27,4 +27,4 @@ args = [
   "rw",
 ]
 hostname = "dhb-ax"
-timeout = 120
+login_timeout = 120

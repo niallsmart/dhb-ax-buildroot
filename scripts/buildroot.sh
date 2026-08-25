@@ -137,7 +137,10 @@ else
 	cmd=/work/scripts/buildroot-in-container.sh
 fi
 
-docker build -t "$image" "$workspace/scripts"
+docker build \
+	--file "$workspace/scripts/Dockerfile.buildroot" \
+	--tag "$image" \
+	"$workspace/scripts"
 
 # Buildroot's default BR2_CCACHE_DIR is $HOME/.buildroot-ccache.
 docker run --rm $tty_flags \

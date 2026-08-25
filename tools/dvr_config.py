@@ -72,7 +72,7 @@ class Boot:
     action: str
     args: tuple[str, ...] = ()
     hostname: str | None = None
-    timeout: int = 120
+    login_timeout: int = 120
 
     @property
     def bootargs(self) -> str:
@@ -332,7 +332,7 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
 
 def _boot(data: Mapping[str, Any]) -> Boot:
     table = _table(data, "boot")
-    _keys(table, "boot", {"action", "args", "hostname", "timeout"})
+    _keys(table, "boot", {"action", "args", "hostname", "login_timeout"})
     action = _string(table, "boot", "action")
     if action not in ("kernel", "prompt"):
         raise ProfileError("boot.action must be 'kernel' or 'prompt'")
@@ -349,11 +349,18 @@ def _boot(data: Mapping[str, Any]) -> Boot:
     ):
         raise ProfileError("kernel profiles require a non-empty boot.args array")
     hostname = _string(table, "boot", "hostname")
-    timeout = table.get("timeout", 120)
-    if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout < 1:
-        raise ProfileError("boot.timeout must be a positive integer")
+    login_timeout = table.get("login_timeout", 120)
+    if (
+        not isinstance(login_timeout, int)
+        or isinstance(login_timeout, bool)
+        or login_timeout < 1
+    ):
+        raise ProfileError("boot.login_timeout must be a positive integer")
     return Boot(
-        action=action, args=tuple(args), hostname=hostname, timeout=timeout
+        action=action,
+        args=tuple(args),
+        hostname=hostname,
+        login_timeout=login_timeout,
     )
 
 

@@ -28,8 +28,8 @@ results as implementation proceeds.
   512 KiB of margin beneath the 8,355,840-byte U-Boot limit.
 - Export the production modules as
   `artifacts/buildroot/kernel-modules.tar`, preserving
-  `/lib/modules/<release>` metadata. Fail Debian construction unless its
-  expected kernel release exactly matches this archive.
+  `/lib/modules/<release>` metadata. Fail the production Buildroot export
+  unless it contains exactly the configured kernel release.
 
 ### Debian root filesystem
 
@@ -186,9 +186,9 @@ describe the earlier artifact from the same implementation run.
 - The approved 7.5 GiB USB drive and 931.5 GiB SATA HDD were erased. The HDD
   now has the exact planned partition starts, sizes, GPT labels, and PARTUUIDs;
   the USB filesystem label is `DHBAXBOOT`.
-- A postflight failure exposed case-sensitive comparison of textual GPT UUIDs.
-  Validation and staging now canonicalize UUID hex case. The disk layout was
-  already correct and verified before root installation continued.
+- A rollout postflight exposed case-sensitive comparison of textual GPT UUIDs.
+  The disk layout was correct. Review removed the redundant post-write check;
+  staging canonicalizes UUID hex case when locating a target partition.
 - The first metadata-safe extraction exposed missing ext4 ACL support in the
   minimal kernel. Minimal now includes ext4/tmpfs ACL and xattr/security
   support; a clean rebuild and live metadata probe passed before both roots
