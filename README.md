@@ -32,9 +32,6 @@ division and where a given change belongs.
 USB-kernel/HDD-root boot is hardware-verified for both Buildroot and Debian,
 including repeatable switching between them with volatile boot profiles. The
 Debian TFTP/NFS profile is implemented but has not yet had a live boot proof.
-The Debian production kernel provides the ARM kuser helpers, TUN device,
-policy routing, and nftables NAT support used by Tailscale; its packaged
-armhf daemon reaches the login state on the DVR.
 
 [Remaining hardware work](doc/remaining-work.md) lists what is not yet driven,
 ranked by value and effort.
