@@ -20,6 +20,7 @@ from pexpect.fdpexpect import fdspawn
 from dvr_config import LocalSettings, ProfileError, load_local_settings, load_profile
 
 TMUX_SESSION = "dvr"
+LOGIN_TIMEOUT = 180
 VENDOR_PASSWORD = "1001chin"
 
 
@@ -142,7 +143,9 @@ def preflight(profile, settings: LocalSettings):
 CSI = r"(?:\x1b\[[0-?]*[ -/]*[@-~])*"
 LINE_START = rf"(?m)^\r*{CSI}"
 UBOOT_PROMPT = rf"{LINE_START}hisilicon # *{CSI}\r*$"
-SHELL_PROMPT = rf"{LINE_START}((~|/) )?# *{CSI}\r*$"
+SHELL_PROMPT = (
+    rf"{LINE_START}(?:(?:~|/) |root@[^:\r\n]+:[^#\r\n]*)?# *{CSI}\r*$"
+)
 
 
 class Console:
@@ -292,8 +295,10 @@ def identify_console(console):
         ("uboot", UBOOT_PROMPT),
         ("shell", SHELL_PROMPT),
         ("vendor_login", r"(?m)^\r*\(none\) login: *\r*$"),
-        ("main_login", r"(?m)^\r*dhb-ax login: *\r*$"),
-        ("minimal_login", r"(?m)^\r*minimal login: *\r*$"),
+        (
+            "maintained_login",
+            r"(?m)^\r*[A-Za-z0-9][A-Za-z0-9._-]* login: *\r*$",
+        ),
         ("password", r"(?m)^\r*Password: *\r*$"),
     )
     for _ in range(12):
@@ -302,8 +307,7 @@ def identify_console(console):
             "uboot",
             "shell",
             "vendor_login",
-            "main_login",
-            "minimal_login",
+            "maintained_login",
         ):
             return state
         console.send("\r")
@@ -315,8 +319,7 @@ def report_status(console):
         "uboot": "U-Boot prompt",
         "shell": "Linux shell prompt",
         "vendor_login": "vendor Linux login prompt",
-        "main_login": "main Buildroot login prompt",
-        "minimal_login": "minimal Buildroot login prompt",
+        "maintained_login": "maintained Linux login prompt",
     }
     print(f"Current DVR state: {descriptions[identify_console(console)]}.")
 
@@ -355,8 +358,10 @@ def reach_uboot(settings: LocalSettings, console):
     if state == "vendor_login":
         print("Logging in to vendor Linux through the serial console...")
         login(console, VENDOR_PASSWORD)
-    elif state in ("main_login", "minimal_login"):
-        print("Logging in to Buildroot through the serial console...")
+    elif state == "maintained_login":
+        print(
+            "Logging in to the maintained Linux system through the serial console..."
+        )
         login(console, settings.root_password)
 
     print("Rebooting and interrupting autoboot...")
@@ -373,7 +378,7 @@ def reach_uboot(settings: LocalSettings, console):
 
 def configure_bootargs(profile, console):
     expected = profile.boot.bootargs
-    print(f"Configuring temporary {profile.rootfs.type}-root bootargs...")
+    print(f"Configuring temporary {profile.rootfs.source}-root bootargs...")
     first, *remaining = profile.boot.args
     run_uboot_command(console, f"setenv bootargs {first}")
     for argument in remaining:
@@ -506,7 +511,7 @@ def boot(profile, settings: LocalSettings, console):
             ("overlap", r"kernel image will overwrite uboot"),
             ("reset", r"(?m)^\r*U-Boot 2010\.06"),
         ),
-        profile.boot.timeout,
+        LOGIN_TIMEOUT,
     )
     errors = {
         "panic": "kernel panic",

@@ -29,9 +29,11 @@ cat "$images/zImage" "$dtb" > "$appended"
 # 0x80800000 ("kernel image will overwrite uboot"). The payload starts at
 # 0x80008000, leaving 0x7f8000 bytes for the appended zImage and DTB.
 max_payload=8355840
+min_margin=524288
+max_planned_payload=$((max_payload - min_margin))
 payload_size=$(wc -c < "$appended")
-if [ "$payload_size" -ge "$max_payload" ]; then
-	echo "post-image-minimal: payload is $payload_size bytes; vendor U-Boot requires less than $max_payload" >&2
+if [ "$payload_size" -gt "$max_planned_payload" ]; then
+	echo "post-image-minimal: payload is $payload_size bytes; at least $min_margin bytes must remain below the $max_payload-byte vendor U-Boot ceiling" >&2
 	exit 1
 fi
 
@@ -41,4 +43,5 @@ fi
 	-d "$appended" \
 	"$uimage" > /dev/null
 
-echo "post-image-minimal: $(basename "$uimage")"
+margin=$((max_payload - payload_size))
+echo "post-image-minimal: $(basename "$uimage") ($margin-byte payload margin)"

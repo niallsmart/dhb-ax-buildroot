@@ -10,6 +10,10 @@ bootstrap:
 build *args:
     scripts/buildroot.sh {{args}}
 
+# Build the Debian Trixie armhf root filesystem with the production modules.
+debian:
+    scripts/mmdebstrap.sh
+
 # Drop the Buildroot output and download volumes.
 clean:
     scripts/buildroot.sh --clean
@@ -19,11 +23,11 @@ dvr-console:
     tools/dvr-console.sh
 
 # Boot a named DVR profile; defaults to the installed USB/HDD system.
-boot profile="main-usb-hdd" *args:
+boot profile="buildroot-usb-hdd" *args:
     tools/dvr-boot.sh {{args}} {{profile}}
 
 # Stage the artifacts for a named DVR profile; defaults to the USB/HDD system.
-stage profile="main-usb-hdd" *args:
+stage profile="buildroot-usb-hdd" *args:
     tools/dvr-stage.sh {{args}} {{profile}}
 
 # Destructively repartition the HDD and USB drive; requires the minimal initramfs.

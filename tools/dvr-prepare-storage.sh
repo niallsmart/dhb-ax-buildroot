@@ -84,7 +84,10 @@ sfdisk --lock=yes --wipe=always --wipe-partitions=always "$hdd" <<'HDD_TABLE'
 label: gpt
 unit: sectors
 
-start=2048, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="dhb-ax-root", uuid=ca264b64-5738-4e60-a0ab-b3c3a4c789c1
+start=2048, size=67108864, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="dhb-ax-buildroot", uuid=ca264b64-5738-4e60-a0ab-b3c3a4c789c1
+start=67110912, size=134217728, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="dhb-ax-debian", uuid=8EBB5255-A43A-4B4E-953D-E81D2E0A2A6F
+start=201328640, size=8388608, type=0657FD6D-A4AB-43C4-84E5-0933C84B4F4F, name="dhb-ax-swap", uuid=D8E11399-926E-4805-BC25-641EB3BE6C54
+start=209717248, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="dhb-ax-data", uuid=FCB65DE3-F88D-4F21-BAB7-C85F5587C9E2
 HDD_TABLE
 
 sfdisk --lock=yes --wipe=always --wipe-partitions=always "$usb" <<'USB_TABLE'
@@ -95,9 +98,12 @@ start=2048, type=c, bootable
 USB_TABLE
 
 mdev -s
-hdd_part=${hdd}1
+hdd_buildroot=${hdd}1
+hdd_debian=${hdd}2
+hdd_swap=${hdd}3
+hdd_data=${hdd}4
 usb_part=${usb}1
-for part in "$hdd_part" "$usb_part"; do
+for part in "$hdd_buildroot" "$hdd_debian" "$hdd_swap" "$hdd_data" "$usb_part"; do
 	i=0
 	while [ ! -b "$part" ] && [ "$i" -lt 20 ]; do
 		sleep 1
@@ -106,16 +112,15 @@ for part in "$hdd_part" "$usb_part"; do
 	[ -b "$part" ] || fail "partition device did not appear: $part"
 done
 
-mke2fs -t ext4 -L dhb-ax-root -m 0 "$hdd_part"
+mke2fs -t ext4 -L dhb-ax-buildroot -m 0 "$hdd_buildroot"
+mke2fs -t ext4 -L dhb-ax-debian -m 0 "$hdd_debian"
+mkswap -L dhb-ax-swap "$hdd_swap"
+mke2fs -t ext4 -L dhb-ax-data -m 0 "$hdd_data"
 mkfs.fat -F 32 -n DHBAXBOOT "$usb_part"
 sync
 
-hdd_partuuid=$(blkid -s PARTUUID -o value "$hdd_part")
-[ "$hdd_partuuid" = ca264b64-5738-4e60-a0ab-b3c3a4c789c1 ] ||
-	fail "unexpected HDD PARTUUID: $hdd_partuuid"
-
-echo "Prepared HDD root: $hdd_part"
-echo "  PARTUUID=$hdd_partuuid"
+echo "Prepared HDD roots, swap, and shared data:"
+blkid "$hdd_buildroot" "$hdd_debian" "$hdd_swap" "$hdd_data"
 echo "Prepared USB boot filesystem: $usb_part"
-blkid "$hdd_part" "$usb_part"
+blkid "$usb_part"
 REMOTE

@@ -8,10 +8,10 @@ brands.
 
 It shipped with Linux 3.0.8 and a stack of binary-only vendor modules. This
 project replaces that with Linux 6.18.42 LTS. The kernel is loaded from USB
-flash by hand at the U-Boot serial console; Linux then mounts its Buildroot
-root filesystem from the internal SATA HDD, and TFTP/NFS remain available for
-development and recovery. The port drives as much of the hardware as can be
-supported without vendor blobs.
+flash by hand at the U-Boot serial console; Linux then mounts either a
+Buildroot or Debian Trixie root filesystem from separate internal SATA HDD
+partitions. TFTP/NFS remain available for development and recovery. The port
+drives as much of the hardware as can be supported without vendor blobs.
 
 The Hi3531 has no upstream support: `hi3531` appears nowhere in the mainline
 tree. What mainline does supply is drivers for the licensed IP the SoC is built
@@ -29,6 +29,10 @@ division and where a given change belongs.
 
 ## Status
 
+USB-kernel/HDD-root boot is hardware-verified for both Buildroot and Debian,
+including repeatable switching between them with volatile boot profiles. The
+Debian TFTP/NFS profile is implemented but has not yet had a live boot proof.
+
 [Remaining hardware work](doc/remaining-work.md) lists what is not yet driven,
 ranked by value and effort.
 
@@ -40,6 +44,7 @@ install -m 600 local.env.example local.env   # then fill in the required values
 scripts/buildroot.sh --config toolchain
 scripts/buildroot.sh --config main
 scripts/buildroot.sh --config minimal
+scripts/mmdebstrap.sh
 ```
 
 The first bootstrap on a checkout prepares the pinned sources, then exits with
@@ -67,11 +72,15 @@ to request clean reboots through the serial console; `local.env.example`
 documents the keys.
 
 `artifacts/local/ssh/` is also machine-local. It holds `authorized_keys` and
-the per-board Dropbear host keys.
+the per-board host keys in Dropbear and OpenSSH formats. The Debian build
+installs the OpenSSH forms while Buildroot installs the Dropbear forms.
 
 Maintained board support lives in `br2-external/`. `kernel/` and `buildroot/`
 are regenerated source trees. Production outputs are written to
-`artifacts/buildroot/`; the normal boot image is `uImage-hi3531-dhb-ax`.
+`artifacts/buildroot/`; the normal boot image is `uImage-hi3531-dhb-ax` and
+`kernel-modules.tar` is the shared production module set. Debian outputs are
+written to `artifacts/debian/`, including its metadata-preserving rootfs tar,
+package manifest, and build information.
 Diagnostic outputs are written to `artifacts/buildroot-minimal/`; its boot
 image is `uImage-hi3531-dhb-ax-minimal` and its generated root filesystem is
 `rootfs.cpio`.
@@ -85,36 +94,42 @@ in place. Machine access values come from `local.env`; profiles contain only
 references to those values where their boot arguments require them.
 
 ```sh
-tools/dvr-stage.sh main-tftp-nfs
-tools/dvr-boot.sh main-tftp-nfs
+tools/dvr-stage.sh buildroot-tftp-nfs
+tools/dvr-boot.sh buildroot-tftp-nfs
 ```
 
-The supplied profiles are `main-usb-hdd` (USB kernel and HDD root),
-`main-tftp-nfs` (TFTP kernel and NFS root), `minimal-tftp` and `minimal-usb`
-(embedded initramfs), and `uboot` (leave the board at the U-Boot prompt).
+The production profiles are `buildroot-usb-hdd`, `buildroot-tftp-nfs`,
+`debian-usb-hdd`, and `debian-tftp-nfs`. The recovery profiles are
+`minimal-tftp` and `minimal-usb`; `uboot` leaves the board at the prompt.
 Use `dvr-boot --status` to identify the current console state and `--check` for
 a non-mutating preflight. `dvr-stage --kernel-only` skips an external root
 filesystem.
 
 ## Storage bootstrap
 
-Boot the minimal image, then prepare and install the production system without
-an NFS root:
+Boot the minimal image, then prepare and install both production userspaces:
 
 ```sh
 tools/dvr-stage.sh minimal-tftp
 tools/dvr-boot.sh minimal-tftp
 tools/dvr-prepare-storage.sh --destroy-all-data
-tools/dvr-stage.sh main-usb-hdd
+tools/dvr-stage.sh buildroot-usb-hdd
+tools/dvr-stage.sh debian-usb-hdd
 ```
 
-The storage preparation and full production staging commands run only when the
-DVR hostname is `minimal` and its `/` mount is `rootfs`. Preparation destroys
-the approved HDD and USB contents; if it erases the USB before staging
-finishes, recover by booting `minimal-tftp`. Full production staging reformats
-the existing HDD root partition and updates the USB kernel. It leaves the
-minimal image running; boot the installed system separately:
+Storage preparation creates fixed Buildroot and Debian roots, swap, and shared
+data partitions. Full HDD staging runs only when the DVR hostname is `minimal`
+and its `/` mount is `rootfs`; it streams the archive to the selected
+partition while preserving filesystem metadata. Preparation destroys the
+approved HDD and USB contents. If it erases USB before staging finishes,
+recover with `minimal-tftp`.
 
 ```sh
-tools/dvr-boot.sh main-usb-hdd
+tools/dvr-boot.sh buildroot-usb-hdd
+tools/dvr-boot.sh debian-usb-hdd
 ```
+
+Debian mounts `dhb-ax-data` at `/srv/data` and activates `dhb-ax-swap`.
+Buildroot deliberately leaves both inactive. Debian userspace packages may be
+updated normally with APT, but negative pins prevent Debian kernels, headers,
+`flash-kernel`, and U-Boot packages from crossing the project-kernel boundary.

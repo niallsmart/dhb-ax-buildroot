@@ -5,7 +5,7 @@ target = "uImage-hi3531-dhb-ax-minimal"
 load_address = "0x82000000"
 
 [rootfs]
-type = "initramfs"
+source = "initramfs"
 
 [boot]
 action = "kernel"
@@ -18,4 +18,3 @@ args = [
   "libata.force=2.00:norst,2.00:nodbdelay,2.01:norst,2.01:nodbdelay,2.03:norst,2.03:nodbdelay,2.04:norst,2.04:nodbdelay",
 ]
 hostname = "minimal"
-timeout = 120

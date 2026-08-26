@@ -1,13 +1,16 @@
 [kernel]
-source = "tftp"
+source = "usb"
 artifact = "artifacts/buildroot/uImage-hi3531-dhb-ax"
-target = "uImage-hi3531-dhb-ax"
+target = "uImage"
 load_address = "0x82000000"
+usb_device = "0:1"
 
 [rootfs]
-type = "nfs"
+source = "hdd"
 artifact = "artifacts/buildroot/rootfs.tar"
-export = "/srv/dhb-ax/rootfs"
+device = "PARTUUID=ca264b64-5738-4e60-a0ab-b3c3a4c789c1"
+label = "dhb-ax-buildroot"
+expected_os_id = "buildroot"
 
 [boot]
 action = "kernel"
@@ -18,10 +21,9 @@ args = [
   "mem=512M@0x80000000",
   "mem=512M@0xc0000000",
   "libata.force=2.00:norst,2.00:nodbdelay,2.01:norst,2.01:nodbdelay,2.03:norst,2.03:nodbdelay,2.04:norst,2.04:nodbdelay",
-  "root=/dev/nfs",
-  "nfsroot=${local.pi_ipaddr}:${rootfs.export},vers=3,tcp,nolock",
-  "ip=${local.dvr_ipaddr}:::${local.dvr_netmask}:dhb-ax:eth0:off",
+  "root=${rootfs.device}",
+  "rootfstype=ext4",
+  "rootwait",
   "rw",
 ]
 hostname = "dhb-ax"
-timeout = 120

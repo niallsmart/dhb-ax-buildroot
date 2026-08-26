@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from dvr_config import (
@@ -64,6 +66,18 @@ def readable(path: Path, description: str) -> None:
         fail(f"{description} is not readable: {path}", 2)
 
 
+def run_stream(
+    argv: tuple[str, ...], source: Path
+) -> subprocess.CompletedProcess[bytes]:
+    with source.open("rb") as stream:
+        return subprocess.run(argv, check=False, stdin=stream)
+
+
+def remote_script(script: str, *args: str) -> str:
+    command = f"sh -c {shlex.quote(script)} --"
+    return " ".join((command, *(shlex.quote(arg) for arg in args)))
+
+
 def check_pi(host: str, profile: Profile, *, start_tftp: bool) -> None:
     console_check = (
         "if grep -q '^ttyAMA0' /proc/consoles; then "
@@ -85,8 +99,8 @@ def check_pi(host: str, profile: Profile, *, start_tftp: bool) -> None:
 USB_CHECK = r"""
 set -eu
 
-grep -q '^ID=buildroot$' /etc/os-release || {
-	echo 'dvr-stage: the DVR is not running Buildroot' >&2
+tr '\000' '\n' < /proc/device-tree/compatible | grep -qx 'tvt,dhb-ax' || {
+	echo 'dvr-stage: the target is not the DHB_AX board' >&2
 	exit 1
 }
 boot_part=$(blkid -t 'LABEL=DHBAXBOOT' -o device)
@@ -102,14 +116,15 @@ grep -q "^$boot_part " /proc/swaps 2>/dev/null && {
 	echo "dvr-stage: $boot_part is active swap" >&2
 	exit 1
 }
-true
+:
 """
 
 
 HDD_CHECK = r"""
 set -eu
 
-partuuid=$1
+partuuid=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+label=$2
 [ "$(hostname)" = minimal ] || {
 	echo 'dvr-stage: the DVR is not the minimal initramfs' >&2
 	exit 1
@@ -124,6 +139,11 @@ root_part=$(blkid -t "PARTUUID=$partuuid" -o device)
 	echo 'dvr-stage: HDD root partition not found' >&2
 	exit 1
 }
+actual_label=$(blkid -s LABEL -o value "$root_part")
+[ "$actual_label" = "$label" ] || {
+	echo "dvr-stage: $root_part label is '$actual_label', expected '$label'" >&2
+	exit 1
+}
 grep -q "^$root_part " /proc/mounts && {
 	echo "dvr-stage: $root_part is already mounted" >&2
 	exit 1
@@ -132,7 +152,7 @@ grep -q "^$root_part " /proc/swaps 2>/dev/null && {
 	echo "dvr-stage: $root_part is active swap" >&2
 	exit 1
 }
-true
+:
 """
 
 
@@ -156,13 +176,14 @@ def check_usb(dvr_ipaddr: str) -> None:
 
 
 def check_hdd_root(profile: Profile, dvr_ipaddr: str) -> None:
-    assert profile.rootfs and profile.rootfs.partuuid
+    assert profile.rootfs and profile.rootfs.partuuid and profile.rootfs.label
     if ssh(
         f"root@{dvr_ipaddr}",
         "sh",
         "-s",
         "--",
         profile.rootfs.partuuid,
+        profile.rootfs.label,
         input_text=HDD_CHECK,
     ).returncode:
         fail("HDD-root staging preflight failed")
@@ -196,15 +217,15 @@ def preflight(
         readable(profile.rootfs.artifact, "root filesystem artifact")
 
     needs_pi = profile.kernel.source == "tftp" or (
-        not kernel_only and profile.rootfs.type == "nfs"
+        not kernel_only and profile.rootfs.source == "nfs"
     )
     if needs_pi:
         check_pi(settings.pi_ipaddr, profile, start_tftp=not check)
     if profile.kernel.source == "usb":
         check_usb(settings.dvr_ipaddr)
-    if not kernel_only and profile.rootfs.type == "hdd":
+    if not kernel_only and profile.rootfs.source == "hdd":
         check_hdd_root(profile, settings.dvr_ipaddr)
-    if not kernel_only and profile.rootfs.type == "nfs":
+    if not kernel_only and profile.rootfs.source == "nfs":
         check_nfs_root(profile, settings)
 
 
@@ -254,7 +275,6 @@ trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
 
 boot_part=$(blkid -t 'LABEL=DHBAXBOOT' -o device)
-
 mkdir -p "$boot_mount"
 modprobe vfat 2>/dev/null || true
 mount -t vfat "$boot_part" "$boot_mount"
@@ -301,59 +321,71 @@ def stage_usb_kernel(profile: Profile, dvr_ipaddr: str) -> None:
 HDD_INSTALL = r"""
 set -eu
 
-archive=$1
-partuuid=$2
+partuuid=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+label=$2
+expected_os_id=$3
+kernel_release=$4
+host_epoch=$5
 root_mount=/mnt/dhb-ax-root
 
 cleanup()
 {
 	sync
 	grep -q " $root_mount " /proc/mounts && umount "$root_mount" || true
-	rm -f "$archive"
 }
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
 
 root_part=$(blkid -t "PARTUUID=$partuuid" -o device)
+date -u -s "@$host_epoch" >/dev/null
 
-echo "Formatting $root_part as the Buildroot root filesystem..."
-mke2fs -F -t ext4 -L dhb-ax-root -m 0 "$root_part"
+echo "Formatting $root_part as $label..."
+mke2fs -F -t ext4 -L "$label" -m 0 "$root_part"
 mkdir -p "$root_mount"
 mount -t ext4 "$root_part" "$root_mount"
-tar -xpf "$archive" -C "$root_mount"
+tar --numeric-owner --acls --xattrs --xattrs-include='*' \
+	-xpf - -C "$root_mount"
+[ -x "$root_mount/sbin/init" ] || {
+	echo 'dvr-stage: installed rootfs has no executable /sbin/init' >&2
+	exit 1
+}
+installed_id=$(sed -n 's/^ID=//p' "$root_mount/etc/os-release" | tr -d '"')
+[ "$installed_id" = "$expected_os_id" ] || {
+	echo "dvr-stage: installed OS is '$installed_id', expected '$expected_os_id'" >&2
+	exit 1
+}
+[ -d "$root_mount/lib/modules/$kernel_release" ] || {
+	echo "dvr-stage: installed rootfs lacks modules for $kernel_release" >&2
+	exit 1
+}
 sync
 umount "$root_mount"
-echo "Installed rootfs on $root_part (PARTUUID=$partuuid)"
+echo "Installed $expected_os_id rootfs on $root_part (PARTUUID=$partuuid, LABEL=$label)"
 """
 
 
 def stage_hdd_root(profile: Profile, dvr_ipaddr: str) -> None:
-    assert profile.rootfs and profile.rootfs.artifact and profile.rootfs.partuuid
+    assert (
+        profile.rootfs
+        and profile.rootfs.artifact
+        and profile.rootfs.partuuid
+        and profile.rootfs.label
+        and profile.rootfs.expected_os_id
+        and profile.rootfs.kernel_release
+    )
     host = f"root@{dvr_ipaddr}"
-    temporary = f"/tmp/dvr-stage-rootfs-{os.getpid()}.tar"
     print(f"Staging {profile.rootfs.artifact} on {host} HDD...")
-    if run(
-        (
-            "scp",
-            "-q",
-            "-o",
-            "BatchMode=yes",
-            "--",
-            str(profile.rootfs.artifact),
-            f"{host}:{temporary}",
-        )
-    ).returncode:
-        fail(f"could not copy the root filesystem to {host}")
-    if ssh(
-        host,
-        "sh",
-        "-s",
-        "--",
-        temporary,
+    command = remote_script(
+        HDD_INSTALL,
         profile.rootfs.partuuid,
-        input_text=HDD_INSTALL,
+        profile.rootfs.label,
+        profile.rootfs.expected_os_id,
+        profile.rootfs.kernel_release,
+        str(int(time.time())),
+    )
+    if run_stream(
+        ("ssh", "-o", "BatchMode=yes", host, command), profile.rootfs.artifact
     ).returncode:
-        ssh(host, "rm", "-f", temporary)
         fail("could not install the HDD root filesystem")
 
 
@@ -362,23 +394,63 @@ set -eu
 
 export_path=$1
 archive=$2
+expected_os_id=$3
+kernel_release=$4
 
 parent=${export_path%/*}
+incoming=$export_path.incoming.$$
+previous=$export_path.previous.$$
+cleanup()
+{
+	rm -f -- "$archive"
+	rm -rf -- "$incoming"
+}
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+
 mkdir -p "$parent"
-rm -rf -- "$export_path"
-mkdir -m 0755 "$export_path"
-tar --numeric-owner -xpf "$archive" -C "$export_path"
-rm -f -- "$archive"
+rm -rf -- "$incoming" "$previous"
+mkdir -m 0755 "$incoming"
+tar --numeric-owner --acls --xattrs --xattrs-include='*' \
+	-xpf "$archive" -C "$incoming"
+[ -x "$incoming/sbin/init" ] || {
+	echo 'dvr-stage: NFS root has no executable /sbin/init' >&2
+	exit 1
+}
+installed_id=$(sed -n 's/^ID=//p' "$incoming/etc/os-release" | tr -d '"')
+[ "$installed_id" = "$expected_os_id" ] || {
+	echo "dvr-stage: NFS root OS is '$installed_id', expected '$expected_os_id'" >&2
+	exit 1
+}
+[ -d "$incoming/lib/modules/$kernel_release" ] || {
+	echo "dvr-stage: NFS root lacks modules for $kernel_release" >&2
+	exit 1
+}
+[ ! -e "$export_path" ] || mv "$export_path" "$previous"
+if ! mv "$incoming" "$export_path"; then
+	[ ! -e "$previous" ] || mv "$previous" "$export_path"
+	exit 1
+fi
+rm -rf -- "$previous"
 sync
 echo "Published NFS root at $export_path"
 """
 
 
 def stage_nfs_root(profile: Profile, pi_ipaddr: str) -> None:
-    assert profile.rootfs and profile.rootfs.artifact and profile.rootfs.export
+    assert (
+        profile.rootfs
+        and profile.rootfs.artifact
+        and profile.rootfs.export
+        and profile.rootfs.expected_os_id
+        and profile.rootfs.kernel_release
+    )
     host = pi_ipaddr
     remote_archive = f"/tmp/dvr-stage-rootfs-{os.getpid()}.tar"
-    print(f"Publishing {profile.rootfs.artifact} to {host}:{profile.rootfs.export}...")
+    print(
+        f"Publishing {profile.rootfs.artifact} to "
+        f"{host}:{profile.rootfs.export}..."
+    )
     if run(
         (
             "scp",
@@ -399,6 +471,8 @@ def stage_nfs_root(profile: Profile, pi_ipaddr: str) -> None:
         "--",
         profile.rootfs.export,
         remote_archive,
+        profile.rootfs.expected_os_id,
+        profile.rootfs.kernel_release,
         input_text=NFS_INSTALL,
     ).returncode:
         ssh(host, "rm", "-f", remote_archive)
@@ -406,9 +480,9 @@ def stage_nfs_root(profile: Profile, pi_ipaddr: str) -> None:
 
 
 def stage_rootfs(profile: Profile, settings: LocalSettings) -> None:
-    if profile.rootfs.type == "hdd":
+    if profile.rootfs.source == "hdd":
         stage_hdd_root(profile, settings.dvr_ipaddr)
-    elif profile.rootfs.type == "nfs":
+    elif profile.rootfs.source == "nfs":
         stage_nfs_root(profile, settings.pi_ipaddr)
 
 

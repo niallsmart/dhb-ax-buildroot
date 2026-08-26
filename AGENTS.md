@@ -24,15 +24,16 @@ This file is for repository workflow, device access and safety constraints.
   queue rather than editing these trees as source.
 - `artifacts/buildroot/` contains ignored production-image outputs;
   `artifacts/buildroot-minimal/` contains ignored diagnostic outputs;
+  `artifacts/debian/` contains ignored Debian rootfs outputs;
   `artifacts/toolchain/` contains the ignored shared SDK export, and
   `artifacts/legacy/` contains ignored historical outputs.
 
 
 
 `local.env` is the gitignored machine-local configuration and needs to be
-configured by the user. It carries the plaintext root password used for the
-Buildroot serial console, and the build exits rather than proceed without it.
-Buildroot derives the installed crypt hash. Add
+configured by the user. It carries the plaintext root password used for both
+maintained serial consoles, and either build exits rather than proceed without
+it. Each builder derives its installed crypt hash. Add
 further per-machine values as `DHB_AX_*` keys, documenting each in the
 tracked `local.env.example`. Nothing secret goes in `br2-external/`: that
 tree is public, and `buildroot.sh savedefconfig` rewrites the defconfig from
@@ -45,6 +46,7 @@ scripts/bootstrap-sources.sh
 scripts/buildroot.sh --config toolchain
 scripts/buildroot.sh --config main
 scripts/buildroot.sh --config minimal
+scripts/mmdebstrap.sh
 ```
 
 The first bootstrap prepares sources and exits non-zero when the SDK is not
@@ -55,7 +57,8 @@ Each configuration has a separate output volume, while downloads and the
 compiler cache are shared. `--config NAME --clean` drops only the selected
 output volume; `--distclean` drops all build, download and cache volumes.
 
-The production image is `artifacts/buildroot/uImage-hi3531-dhb-ax`. The
+The production image is `artifacts/buildroot/uImage-hi3531-dhb-ax`, and its
+module archive is embedded in `artifacts/debian/rootfs.tar`. The
 diagnostic image is
 `artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal`.
 
@@ -90,7 +93,40 @@ Deliberately temporary text is the exception, and has to name the thing that
 retires it -- as the `linux-dirclean` paragraph above names the check that
 lets the next person delete it.
 
-## Writing Shell Scripts
+## Reporting findings
+
+State the finding. Do not preface it with an account of how it was reached or
+how it sits against what you expected: whether a fact was checked rather than
+guessed, or overturned an earlier assumption, is not something the reader can
+use.
+
+    no:  Worth checking rather than guessing -- mmdebstrap's default already
+         covers trixie-updates and trixie-security.
+    yes: mmdebstrap's default already covers trixie-updates and
+         trixie-security.
+
+    no:  Decisive, and it points the other way from what I assumed: line 50
+         deletes a file that is never created.
+    yes: Line 50 deletes a file that is never created.
+
+"it turns out", "as suspected", "interestingly" and "good news" are the usual
+signs, along with any sentence that reports on the investigation rather than
+its result.
+
+Evidence is not narration. Name the command, file or hardware observation a
+claim rests on, and say plainly when something is unverified, because that
+changes how far the reader should trust it. What to leave out is the
+commentary about the search itself.
+
+## Answering from memory
+
+A message tagged `#memory` asks for an answer from what is already in context.
+Do not make tool calls to service it. Memory of the tree goes stale, so flag
+any claim you would otherwise have checked.
+
+## Python and Shell Scripts
+
+### Guards
 
 When a successful probe identifies an error condition, use the positive
 command followed by an `&&` failure block. Avoid expressing the same guard as
@@ -103,9 +139,14 @@ grep -q "^$device " /proc/mounts && {
 }
 ```
 
-If the guard is the final command in a script or function, follow it with
-`true` so the expected no-match case does not become the caller-visible exit
-status.
+If the guard is the final command in a script or function, follow it with `:`
+so the expected no-match case does not become the caller-visible exit status.
+
+### Checksums
+
+Only perform checksums on files transferred over unreliable transports. You
+can assume that files transferred via scp and rsync do not need checksum
+verification.
 
 ## Working on the device
 
@@ -124,7 +165,7 @@ changes. Put reusable hardware conclusions in the official porting guide.
 Use the UART for U-Boot, boot logs, recovery, or when Linux networking or Dropbear
 is unavailable.
 
-Under the Buildroot system the console getty asks for a password: log in as
+Under Buildroot and Debian the console getty asks for a password: log in as
 `root` with `DHB_AX_ROOT_PASSWD` from `local.env`. `dvr-boot` uses this
 password when it must log in for a clean reboot; interactive `just dvr-console`
 attaches need it as well.
@@ -152,9 +193,9 @@ Log in as `root` with password `1001chin`. The `dvr` hostname resolves to the
 DHCP reservation; the legacy static address is `192.168.4.77`. Telnet is
 unencrypted, so use it only on the local trusted network.
 
-### Buildroot Linux
+### Maintained Linux userspaces
 
-When the normal Buildroot system is running, use the SSH client directly through the
+When Buildroot or Debian is running, use the SSH client directly through the
 `dvr` hostname. Root login is public-key only:
 
 ```sh
@@ -174,15 +215,15 @@ under `tools/configs/`. Stage artifacts when their configured destinations
 need updating, then boot the same profile:
 
 ```sh
-tools/dvr-stage.sh main-tftp-nfs
-tools/dvr-boot.sh main-tftp-nfs
+tools/dvr-stage.sh buildroot-tftp-nfs
+tools/dvr-boot.sh buildroot-tftp-nfs
 ```
 
 Automatic boot is deliberately deferred. Manually boot the installed USB
 kernel and HDD root with:
 
 ```sh
-tools/dvr-boot.sh main-usb-hdd
+tools/dvr-boot.sh buildroot-usb-hdd
 ```
 
 Use the prompt-only profile whenever work requires a U-Boot prompt, then attach
@@ -222,27 +263,28 @@ Run either tool with `--help` for profile and preflight options.
 
 ## Installing the USB and HDD system
 
-The normal Buildroot system uses the USB kernel and HDD root. Boot the minimal
-initramfs, then partition both devices and install a clean system from the
-development host:
+Buildroot and Debian use the same USB kernel and separate HDD roots. Boot the
+minimal initramfs, then partition both devices and install clean systems from
+the development host:
 
 ```sh
 tools/dvr-stage.sh minimal-tftp
 tools/dvr-boot.sh minimal-tftp
 tools/dvr-prepare-storage.sh --destroy-all-data
-tools/dvr-stage.sh main-usb-hdd
+tools/dvr-stage.sh buildroot-usb-hdd
+tools/dvr-stage.sh debian-usb-hdd
 ```
 
 Storage preparation and full production staging require hostname `minimal` and
 `rootfs` mounted at `/`; they reject production HDD and NFS roots. Preparation
 destroys and recreates both approved storage devices and is not part of routine
-deployment. Full production staging copies the artifacts into RAM, reformats
-the existing HDD partition, installs the root filesystem, and updates the USB
+deployment. Full production staging streams the selected archive onto its
+fixed HDD partition, preserving filesystem metadata, and updates the USB
 uImage. It leaves the minimal image running. For kernel-only iteration from
-either the HDD or NFS system, use:
+either production HDD or NFS system, use:
 
 ```sh
-tools/dvr-stage.sh --kernel-only main-usb-hdd
+tools/dvr-stage.sh --kernel-only buildroot-usb-hdd
 ```
 
 Install the diagnostic image beside `/uImage`, without touching the HDD or
@@ -261,12 +303,12 @@ recovery:
 
 ```sh
 scripts/buildroot.sh
-tools/dvr-stage.sh main-tftp-nfs
+tools/dvr-stage.sh buildroot-tftp-nfs
 ```
 
-Boot that root with `tools/dvr-boot.sh main-tftp-nfs`. For ordinary driver
-work, copy specific modules or files rather than republishing the complete root
-filesystem.
+Boot that root with `tools/dvr-boot.sh buildroot-tftp-nfs`. Debian uses the
+parallel `debian-tftp-nfs` profile. For ordinary driver work, copy specific
+modules or files rather than republishing the complete root filesystem.
 
 ## Protecting the factory flash
 
