@@ -69,16 +69,11 @@ systemctl --root="$rootfs" enable \
 
 install -d -m 0755 "$output"
 chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
-	LC_ALL=C sort > "$output/.packages.txt.$$"
+	LC_ALL=C sort > "$output/packages.txt"
 
-archive=$output/.rootfs.tar.$$
 tar --sort=name --numeric-owner --acls --xattrs --xattrs-include='*' \
 	--format=posix --pax-option=delete=atime,delete=ctime \
-	-C "$rootfs" -cf "$archive" .
-chmod 0644 "$archive"
-mv -f "$archive" "$output/rootfs.tar"
-mv -f "$output/.packages.txt.$$" "$output/packages.txt"
-rm -f "$output/rootfs.tar.sha256"
+	-C "$rootfs" -cf "$output/rootfs.tar" .
 
 {
 	echo 'suite=trixie'
@@ -87,7 +82,6 @@ rm -f "$output/rootfs.tar.sha256"
 	echo "mmdebstrap=$(mmdebstrap --version | head -n 1)"
 	echo "kernel_release=$kernel_release"
 	echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-} > "$output/.build-info.txt.$$"
-mv -f "$output/.build-info.txt.$$" "$output/build-info.txt"
+} > "$output/build-info.txt"
 
 echo "Debian rootfs artifacts -> ${output#/work/}/"
