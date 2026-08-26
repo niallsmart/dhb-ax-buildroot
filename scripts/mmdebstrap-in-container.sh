@@ -31,7 +31,6 @@ kernel_release=$(tar -tf "$modules" |
 	sed -n 's#^lib/modules/\([^/][^/]*\)/$#\1#p' | sort -u)
 
 packages=$(paste -sd, "$package_list")
-mirrors=$(sed -n '/^deb /p' "$overlay/etc/apt/sources.list")
 
 mmdebstrap \
 	--architectures=armhf \
@@ -40,14 +39,13 @@ mmdebstrap \
 	--include="$packages" \
 	--aptopt='APT::Install-Recommends "false";' \
 	--aptopt='APT::Install-Suggests "false";' \
-	trixie "$rootfs" "$mirrors"
+	trixie "$rootfs"
 
 cp -a --no-preserve=ownership "$overlay/." "$rootfs/"
 sed -i "s/@DHB_AX_DVR_ETHADDR@/$DHB_AX_DVR_ETHADDR/" \
 	"$rootfs/etc/systemd/network/10-dhb-ax.link"
 ln -snf /usr/share/zoneinfo/America/New_York "$rootfs/etc/localtime"
 ln -snf /run/systemd/resolve/stub-resolv.conf "$rootfs/etc/resolv.conf"
-rm -f "$rootfs/etc/apt/sources.list.d/debian.sources"
 printf 'root:%s\n' "$DHB_AX_ROOT_PASSWD" | chroot "$rootfs" chpasswd
 
 install -d -m 0700 "$rootfs/root/.ssh"
