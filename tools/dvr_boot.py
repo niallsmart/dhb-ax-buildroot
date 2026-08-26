@@ -20,6 +20,7 @@ from pexpect.fdpexpect import fdspawn
 from dvr_config import LocalSettings, ProfileError, load_local_settings, load_profile
 
 TMUX_SESSION = "dvr"
+LOGIN_TIMEOUT = 180
 VENDOR_PASSWORD = "1001chin"
 
 
@@ -510,7 +511,7 @@ def boot(profile, settings: LocalSettings, console):
             ("overlap", r"kernel image will overwrite uboot"),
             ("reset", r"(?m)^\r*U-Boot 2010\.06"),
         ),
-        profile.boot.login_timeout,
+        LOGIN_TIMEOUT,
     )
     errors = {
         "panic": "kernel panic",

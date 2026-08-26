@@ -27,4 +27,3 @@ args = [
   "rw",
 ]
 hostname = "dvr"
-login_timeout = 180
