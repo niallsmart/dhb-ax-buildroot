@@ -93,6 +93,31 @@ Deliberately temporary text is the exception, and has to name the thing that
 retires it -- as the `linux-dirclean` paragraph above names the check that
 lets the next person delete it.
 
+## Reporting findings
+
+State the finding. Do not preface it with an account of how it was reached or
+how it sits against what you expected: whether a fact was checked rather than
+guessed, or overturned an earlier assumption, is not something the reader can
+use.
+
+    no:  Worth checking rather than guessing -- mmdebstrap's default already
+         covers trixie-updates and trixie-security.
+    yes: mmdebstrap's default already covers trixie-updates and
+         trixie-security.
+
+    no:  Decisive, and it points the other way from what I assumed: line 50
+         deletes a file that is never created.
+    yes: Line 50 deletes a file that is never created.
+
+"it turns out", "as suspected", "interestingly" and "good news" are the usual
+signs, along with any sentence that reports on the investigation rather than
+its result.
+
+Evidence is not narration. Name the command, file or hardware observation a
+claim rests on, and say plainly when something is unverified, because that
+changes how far the reader should trust it. What to leave out is the
+commentary about the search itself.
+
 ## Python and Shell Scripts
 
 ### Guards
