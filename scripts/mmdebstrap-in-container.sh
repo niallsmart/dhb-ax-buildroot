@@ -64,8 +64,6 @@ done
 install -d -m 0755 "$rootfs/srv/data"
 
 tar --numeric-owner -xpf "$modules" -C "$rootfs"
-install -d -m 0755 "$rootfs/usr/lib/dhb-ax"
-printf '%s\n' "$kernel_release" > "$rootfs/usr/lib/dhb-ax/kernel-release"
 chroot "$rootfs" depmod "$kernel_release"
 
 systemctl --root="$rootfs" enable \
