@@ -1,3 +1,3 @@
 # <file system>       <mount point> <type> <options>       <dump> <pass>
-LABEL=dhb-ax-data     /srv/data     ext4   defaults,nofail 0      2
-LABEL=dhb-ax-swap     none          swap   sw              0      0
+LABEL=dhb-ax-data     /srv/data     ext4   defaults,nofail,x-systemd.device-timeout=2s 0 2
+LABEL=dhb-ax-swap     none          swap   sw,nofail,x-systemd.device-timeout=2s        0 0
