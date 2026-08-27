@@ -20,3 +20,4 @@ curl
 rsync
 less
 vim-tiny
+hdparm
