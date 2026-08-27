@@ -2,7 +2,6 @@
 source = "tftp"
 artifact = "artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal"
 target = "uImage-hi3531-dhb-ax-minimal"
-load_address = "0x82000000"
 
 [rootfs]
 source = "initramfs"

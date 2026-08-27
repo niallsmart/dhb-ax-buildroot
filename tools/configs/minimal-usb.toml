@@ -2,7 +2,6 @@
 source = "usb"
 artifact = "artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal"
 target = "uImage-minimal"
-load_address = "0x82000000"
 usb_device = "0:1"
 
 [rootfs]

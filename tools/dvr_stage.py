@@ -66,30 +66,10 @@ def readable(path: Path, description: str) -> None:
         fail(f"{description} is not readable: {path}", 2)
 
 
-def run_stream(
-    argv: tuple[str, ...], source: Path
-) -> subprocess.CompletedProcess[bytes]:
-    with source.open("rb") as stream:
-        return subprocess.run(argv, check=False, stdin=stream)
-
-
-def remote_script(script: str, *args: str) -> str:
-    command = f"sh -c {shlex.quote(script)} --"
-    return " ".join((command, *(shlex.quote(arg) for arg in args)))
-
-
-def check_pi(host: str, *, start_tftp: bool) -> None:
-    console_check = (
-        "if grep -q '^ttyAMA0' /proc/consoles; then "
-        "echo 'error: ttyAMA0 is a Pi console'; exit 1; fi"
-    )
-    if ssh(host, console_check).returncode:
-        fail("Pi UART preflight failed")
-
+def check_pi(host: str) -> None:
     command = (
-        "sudo systemctl start tftpd-hpa && systemctl is-active --quiet tftpd-hpa"
-        if start_tftp
-        else "systemctl is-active --quiet tftpd-hpa"
+        "sudo systemctl start tftpd-hpa && "
+        "systemctl is-active --quiet tftpd-hpa"
     )
     if ssh(host, command).returncode:
         fail("tftpd-hpa is not active")
@@ -179,7 +159,6 @@ def preflight(
     settings: LocalSettings,
     *,
     kernel_only: bool,
-    check: bool,
 ) -> None:
     if profile.boot.action == "prompt":
         return
@@ -192,7 +171,7 @@ def preflight(
         not kernel_only and profile.rootfs.source == "tftp"
     )
     if needs_pi:
-        check_pi(settings.pi_ipaddr, start_tftp=not check)
+        check_pi(settings.pi_ipaddr)
     if profile.kernel.source == "usb":
         check_usb(settings.dvr_ipaddr)
     if not kernel_only and profile.rootfs.source == "hdd":
@@ -202,9 +181,13 @@ def preflight(
 def stage_tftp_file(artifact: Path, target: str, pi_ipaddr: str) -> None:
     print(f"Staging {artifact} on {pi_ipaddr}:/srv/tftp/{target}...")
     command = f"sudo tee /srv/tftp/{target} >/dev/null"
-    if run_stream(
-        ("ssh", "-o", "BatchMode=yes", pi_ipaddr, command), artifact
-    ).returncode:
+    with artifact.open("rb") as stream:
+        result = subprocess.run(
+            ("ssh", "-o", "BatchMode=yes", pi_ipaddr, command),
+            check=False,
+            stdin=stream,
+        )
+    if result.returncode:
         fail(f"could not publish {target} beneath /srv/tftp")
 
 
@@ -228,11 +211,7 @@ boot_part=$(blkid -t 'LABEL=DHBAXBOOT' -o device)
 mkdir -p "$boot_mount"
 modprobe vfat 2>/dev/null || true
 mount -t vfat "$boot_part" "$boot_mount"
-rm -f "$boot_mount/$kernel_name.new"
-cp "$uimage" "$boot_mount/$kernel_name.new"
-sync
-mv -f "$boot_mount/$kernel_name.new" "$boot_mount/$kernel_name"
-rm -f "$boot_mount/$kernel_name.sha256"
+cp "$uimage" "$boot_mount/$kernel_name"
 sync
 echo "Installed kernel on $boot_part as /$kernel_name"
 """
@@ -273,9 +252,7 @@ set -eu
 
 partuuid=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
 label=$2
-expected_os_id=$3
-kernel_release=$4
-host_epoch=$5
+host_epoch=$3
 root_mount=/mnt/dhb-ax-root
 
 cleanup()
@@ -294,22 +271,9 @@ mke2fs -F -t ext4 -L "$label" -m 0 "$root_part"
 mkdir -p "$root_mount"
 mount -t ext4 "$root_part" "$root_mount"
 gunzip -c | (cd "$root_mount" && cpio -idmu)
-[ -x "$root_mount/sbin/init" ] || {
-	echo 'dvr-stage: installed rootfs has no executable /sbin/init' >&2
-	exit 1
-}
-installed_id=$(sed -n 's/^ID=//p' "$root_mount/etc/os-release" | tr -d '"')
-[ "$installed_id" = "$expected_os_id" ] || {
-	echo "dvr-stage: installed OS is '$installed_id', expected '$expected_os_id'" >&2
-	exit 1
-}
-[ -d "$root_mount/lib/modules/$kernel_release" ] || {
-	echo "dvr-stage: installed rootfs lacks modules for $kernel_release" >&2
-	exit 1
-}
 sync
 umount "$root_mount"
-echo "Installed $expected_os_id rootfs on $root_part (PARTUUID=$partuuid, LABEL=$label)"
+echo "Installed rootfs on $root_part (PARTUUID=$partuuid, LABEL=$label)"
 """
 
 
@@ -319,22 +283,29 @@ def stage_hdd_root(profile: Profile, dvr_ipaddr: str) -> None:
         and profile.rootfs.artifact
         and profile.rootfs.partuuid
         and profile.rootfs.label
-        and profile.rootfs.expected_os_id
-        and profile.rootfs.kernel_release
     )
     host = f"root@{dvr_ipaddr}"
     print(f"Staging {profile.rootfs.artifact} on {host} HDD...")
-    command = remote_script(
-        HDD_INSTALL,
-        profile.rootfs.partuuid,
-        profile.rootfs.label,
-        profile.rootfs.expected_os_id,
-        profile.rootfs.kernel_release,
-        str(int(time.time())),
+    command = " ".join(
+        (
+            f"sh -c {shlex.quote(HDD_INSTALL)} --",
+            *(
+                shlex.quote(value)
+                for value in (
+                    profile.rootfs.partuuid,
+                    profile.rootfs.label,
+                    str(int(time.time())),
+                )
+            ),
+        )
     )
-    if run_stream(
-        ("ssh", "-o", "BatchMode=yes", host, command), profile.rootfs.artifact
-    ).returncode:
+    with profile.rootfs.artifact.open("rb") as stream:
+        result = subprocess.run(
+            ("ssh", "-o", "BatchMode=yes", host, command),
+            check=False,
+            stdin=stream,
+        )
+    if result.returncode:
         fail("could not install the HDD root filesystem")
 
 
@@ -384,10 +355,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
         settings = load_local_settings()
-        profile = load_profile(args.profile, local_settings=settings)
-        preflight(
-            profile, settings, kernel_only=args.kernel_only, check=args.check
-        )
+        profile = load_profile(args.profile)
+        preflight(profile, settings, kernel_only=args.kernel_only)
         if args.check:
             print(f"Profile '{profile.name}' staging preflight passed.")
             return 0

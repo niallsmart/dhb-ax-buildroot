@@ -2,13 +2,11 @@
 source = "tftp"
 artifact = "artifacts/buildroot/uImage-hi3531-dhb-ax"
 target = "uImage-hi3531-dhb-ax"
-load_address = "0x82000000"
 
 [rootfs]
 source = "tftp"
 artifact = "artifacts/debian/rootfs.cpio.gz"
 target = "rootfs-debian-armhf.cpio.gz"
-load_address = "0x88000000"
 
 [boot]
 action = "kernel"

@@ -23,6 +23,10 @@ TMUX_SESSION = "dvr"
 LOGIN_TIMEOUT = 180
 TRANSFER_TIMEOUT = 120
 VENDOR_PASSWORD = "1001chin"
+KERNEL_LOAD_ADDRESS = "0x82000000"
+# The initramfs is 128 MB above the kernel in the first DRAM bank, leaving the
+# rest of that bank below it available for the kernel's early allocations.
+INITRAMFS_LOAD_ADDRESS = "0x88000000"
 
 
 class BootFailure(Exception):
@@ -88,20 +92,18 @@ def preflight(profile, settings: LocalSettings):
     else:
         target = "U-Boot prompt"
     print(f"Preflight: {target}")
-    check_console = (
-        "if grep -q '^ttyAMA0' /proc/consoles; then "
-        "echo 'error: ttyAMA0 is a Pi console'; exit 1; fi"
-    )
-    if ssh(settings.pi_ipaddr, check_console).returncode:
-        fail("Pi UART preflight failed", 3)
-
     if (
         profile
-        and profile.kernel
-        and profile.kernel.source == "tftp"
+        and (
+            (profile.kernel and profile.kernel.source == "tftp")
+            or (profile.rootfs and profile.rootfs.source == "tftp")
+        )
         and ssh(
             settings.pi_ipaddr,
-            "systemctl is-active --quiet tftpd-hpa",
+            (
+                "sudo systemctl start tftpd-hpa && "
+                "systemctl is-active --quiet tftpd-hpa"
+            ),
         ).returncode
     ):
         fail("tftpd-hpa is not active", 3)
@@ -295,7 +297,6 @@ def identify_console(console):
             "maintained_login",
             r"(?m)^\r*[A-Za-z0-9][A-Za-z0-9._-]* login: *\r*$",
         ),
-        ("password", r"(?m)^\r*Password: *\r*$"),
     )
     for _ in range(12):
         state, _ = console.wait(cases, 5)
@@ -403,7 +404,7 @@ def load_usb(profile, console):
     run_uboot_command(console, "usb reset")
     print(f"Loading USB {kernel.usb_device}/{kernel.target}...")
     console.send(
-        f" fatload usb {kernel.usb_device} {kernel.load_address} {kernel.target}\r"
+        f" fatload usb {kernel.usb_device} {KERNEL_LOAD_ADDRESS} {kernel.target}\r"
     )
     state, _ = console.wait(
         (
@@ -505,7 +506,7 @@ def load_kernel(profile, console):
     if kernel.source == "usb":
         load_usb(profile, console)
     else:
-        load_tftp(kernel.target, kernel.load_address, console)
+        load_tftp(kernel.target, KERNEL_LOAD_ADDRESS, console)
 
 
 def load_initramfs(profile, console):
@@ -515,11 +516,11 @@ def load_initramfs(profile, console):
     rootfs = profile.rootfs
     size = load_tftp(
         rootfs.target,
-        rootfs.load_address,
+        INITRAMFS_LOAD_ADDRESS,
         console,
         transfer_timeout(rootfs.artifact),
     )
-    return f"initrd={rootfs.load_address},0x{size}"
+    return f"initrd={INITRAMFS_LOAD_ADDRESS},0x{size}"
 
 
 def boot(profile, settings: LocalSettings, console):
@@ -537,7 +538,7 @@ def boot(profile, settings: LocalSettings, console):
     configure_bootargs(profile, console, extra)
     load_kernel(profile, console)
     print("Booting from RAM...")
-    console.send(f" bootm {profile.kernel.load_address}\r")
+    console.send(f" bootm {KERNEL_LOAD_ADDRESS}\r")
     state, _ = console.wait(
         (
             (
@@ -573,7 +574,7 @@ def main(argv=None):
         profile = (
             None
             if args.status
-            else load_profile(args.profile, local_settings=settings)
+            else load_profile(args.profile)
         )
         preflight(profile, settings)
         if args.check:

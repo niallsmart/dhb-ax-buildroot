@@ -105,8 +105,8 @@ The production profiles are `buildroot-usb-hdd`, `buildroot-tftp`,
 `debian-usb-hdd`, and `debian-tftp`. The recovery profiles are
 `minimal-tftp` and `minimal-usb`; `uboot` leaves the board at the prompt.
 Use `dvr-boot --status` to identify the current console state and `--check` for
-a non-mutating preflight. `dvr-stage --kernel-only` skips an external root
-filesystem.
+a preflight. TFTP preflight starts `tftpd-hpa`. `dvr-stage --kernel-only` skips
+an external root filesystem.
 
 ## Storage bootstrap
 

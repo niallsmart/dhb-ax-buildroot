@@ -13,14 +13,10 @@ from typing import Any
 import tomllib
 
 PROFILE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
-REFERENCE = re.compile(r"\$\{([^{}]+)\}")
 ETHERNET_ADDRESS = re.compile(r"(?i)([0-9a-f]{2}:){5}[0-9a-f]{2}")
-LOAD_ADDRESS = re.compile(r"0x[0-9A-Fa-f]+")
 USB_DEVICE = re.compile(r"[0-9]+:[0-9]+")
 TARGET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 FILESYSTEM_LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,15}")
-OS_ID = re.compile(r"[a-z0-9][a-z0-9._-]*")
-KERNEL_RELEASE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
 PARTUUID = re.compile(
     r"PARTUUID=([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-"
     r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})"
@@ -45,7 +41,6 @@ class Kernel:
     source: str
     artifact: Path
     target: str
-    load_address: str
     usb_device: str | None = None
 
 
@@ -55,10 +50,7 @@ class Rootfs:
     artifact: Path | None = None
     device: str | None = None
     target: str | None = None
-    load_address: str | None = None
     label: str | None = None
-    expected_os_id: str | None = None
-    kernel_release: str | None = None
 
     @property
     def partuuid(self) -> str | None:
@@ -114,58 +106,6 @@ def _artifact(repo_root: Path, value: str) -> Path:
     return path if path.is_absolute() else repo_root / path
 
 
-def _lookup(data: Mapping[str, Any], reference: str) -> Any:
-    value: Any = data
-    for part in reference.split("."):
-        if not isinstance(value, dict) or part not in value:
-            raise ProfileError(f"unknown profile reference: {reference}")
-        value = value[part]
-    return value
-
-
-def _interpolate(
-    value: Any,
-    data: Mapping[str, Any],
-    environ: Mapping[str, str],
-    resolving: tuple[str, ...] = (),
-) -> Any:
-    if isinstance(value, list):
-        return [_interpolate(item, data, environ, resolving) for item in value]
-    if isinstance(value, dict):
-        return {
-            key: _interpolate(item, data, environ, resolving + (key,))
-            for key, item in value.items()
-        }
-    if not isinstance(value, str):
-        return value
-
-    def replace(match: re.Match[str]) -> str:
-        reference = match.group(1)
-        if reference.startswith("env."):
-            variable = reference.removeprefix("env.")
-            if not variable.startswith("DHB_AX_"):
-                raise ProfileError(f"unsupported environment reference: {reference}")
-            replacement = environ.get(variable)
-            if not replacement:
-                raise ProfileError(f"environment variable is not set: {variable}")
-            return replacement
-
-        if reference in resolving:
-            raise ProfileError(f"cyclic profile reference: {reference}")
-        replacement = _interpolate(
-            _lookup(data, reference), data, environ, resolving + (reference,)
-        )
-        if not isinstance(replacement, (str, int, float, bool)):
-            raise ProfileError(f"profile reference is not a scalar: {reference}")
-        return str(replacement)
-
-    previous = None
-    while previous != value:
-        previous = value
-        value = REFERENCE.sub(replace, value)
-    return value
-
-
 def load_local_settings(
     environ: Mapping[str, str] | None = None,
 ) -> LocalSettings:
@@ -206,7 +146,7 @@ def _kernel(data: Mapping[str, Any], repo_root: Path) -> Kernel:
     _keys(
         table,
         "kernel",
-        {"source", "artifact", "target", "load_address", "usb_device"},
+        {"source", "artifact", "target", "usb_device"},
     )
     source = _string(table, "kernel", "source")
     if source not in ("usb", "tftp"):
@@ -214,9 +154,6 @@ def _kernel(data: Mapping[str, Any], repo_root: Path) -> Kernel:
     target = _string(table, "kernel", "target")
     if not TARGET_NAME.fullmatch(target):
         raise ProfileError("kernel.target must be a safe filename")
-    load_address = _string(table, "kernel", "load_address")
-    if not LOAD_ADDRESS.fullmatch(load_address):
-        raise ProfileError("kernel.load_address must be hexadecimal")
     usb_device = table.get("usb_device")
     if source == "usb":
         if not isinstance(usb_device, str) or not USB_DEVICE.fullmatch(usb_device):
@@ -227,26 +164,8 @@ def _kernel(data: Mapping[str, Any], repo_root: Path) -> Kernel:
         source=source,
         artifact=_artifact(repo_root, _string(table, "kernel", "artifact")),
         target=target,
-        load_address=load_address,
         usb_device=usb_device,
     )
-
-
-def _production_kernel_release(repo_root: Path) -> str:
-    defconfig = repo_root / "br2-external" / "configs" / "dhb_ax_defconfig"
-    try:
-        lines = defconfig.read_text(encoding="utf-8").splitlines()
-    except OSError as error:
-        raise ProfileError(f"cannot read production defconfig: {defconfig}") from error
-    prefix = 'BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="'
-    values = [
-        line.removeprefix(prefix).removesuffix('"')
-        for line in lines
-        if line.startswith(prefix) and line.endswith('"')
-    ]
-    if len(values) != 1 or not KERNEL_RELEASE.fullmatch(values[0]):
-        raise ProfileError("production defconfig must select one safe kernel release")
-    return values[0]
 
 
 def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
@@ -259,9 +178,7 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
             "artifact",
             "device",
             "target",
-            "load_address",
             "label",
-            "expected_os_id",
         },
     )
     source = _string(table, "rootfs", "source")
@@ -271,16 +188,8 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
     artifact = table.get("artifact")
     device = table.get("device")
     target = table.get("target")
-    load_address = table.get("load_address")
     label = table.get("label")
-    expected_os_id = table.get("expected_os_id")
-    kernel_release = None
     if source == "hdd":
-        if not isinstance(expected_os_id, str) or not OS_ID.fullmatch(
-            expected_os_id
-        ):
-            raise ProfileError("HDD roots require a safe rootfs.expected_os_id")
-        kernel_release = _production_kernel_release(repo_root)
         if not isinstance(artifact, str) or not artifact:
             raise ProfileError("HDD roots require rootfs.artifact")
         if not isinstance(device, str) or not PARTUUID.fullmatch(device):
@@ -289,29 +198,18 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
             raise ProfileError(
                 "HDD roots require rootfs.label as a safe filesystem label"
             )
-        if target is not None or load_address is not None:
-            raise ProfileError(
-                "rootfs.target and rootfs.load_address are only valid for "
-                "TFTP roots"
-            )
+        if target is not None:
+            raise ProfileError("rootfs.target is only valid for TFTP roots")
     elif source == "tftp":
         if not isinstance(artifact, str) or not artifact:
             raise ProfileError("TFTP roots require rootfs.artifact")
         if not isinstance(target, str) or not TARGET_NAME.fullmatch(target):
             raise ProfileError("rootfs.target must be a safe filename")
-        if not isinstance(load_address, str) or not LOAD_ADDRESS.fullmatch(
-            load_address
-        ):
-            raise ProfileError("rootfs.load_address must be hexadecimal")
-        if any(
-            value is not None for value in (device, label, expected_os_id)
-        ):
-            raise ProfileError(
-                "TFTP roots have no device, label or expected_os_id"
-            )
+        if any(value is not None for value in (device, label)):
+            raise ProfileError("TFTP roots have no device or label")
     elif any(
         value is not None
-        for value in (artifact, device, target, load_address, label, expected_os_id)
+        for value in (artifact, device, target, label)
     ):
         raise ProfileError("initramfs roots have no external fields")
 
@@ -320,14 +218,11 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
         artifact=_artifact(repo_root, artifact) if artifact else None,
         device=device,
         target=target,
-        load_address=load_address,
         label=label,
-        expected_os_id=expected_os_id,
-        kernel_release=kernel_release,
     )
 
 
-def _boot(data: Mapping[str, Any]) -> Boot:
+def _boot(data: Mapping[str, Any], rootfs: Rootfs | None) -> Boot:
     table = _table(data, "boot")
     _keys(table, "boot", {"action", "args", "hostname"})
     action = _string(table, "boot", "action")
@@ -346,15 +241,17 @@ def _boot(data: Mapping[str, Any]) -> Boot:
     ):
         raise ProfileError("kernel profiles require a non-empty boot.args array")
     hostname = _string(table, "boot", "hostname")
-    return Boot(action=action, args=tuple(args), hostname=hostname)
+    arguments = tuple(args)
+    if rootfs and rootfs.source == "hdd":
+        assert rootfs.device is not None
+        arguments += (f"root={rootfs.device}",)
+    return Boot(action=action, args=arguments, hostname=hostname)
 
 
 def load_profile(
     name: str,
     *,
     repo_root: Path | None = None,
-    environ: Mapping[str, str] | None = None,
-    local_settings: LocalSettings | None = None,
 ) -> Profile:
     if not PROFILE_NAME.fullmatch(name):
         raise ProfileError("profile name must contain only letters, digits, '_' or '-'")
@@ -371,24 +268,15 @@ def load_profile(
     if not isinstance(raw, dict):
         raise ProfileError(f"invalid boot profile: {name}")
     _keys(raw, "profile", {"kernel", "rootfs", "boot"})
-    environ = os.environ if environ is None else environ
-    local_settings = local_settings or load_local_settings(environ)
-    references = dict(raw)
-    references["local"] = {
-        "pi_ipaddr": local_settings.pi_ipaddr,
-        "dvr_ipaddr": local_settings.dvr_ipaddr,
-        "dvr_netmask": local_settings.dvr_netmask,
-        "dvr_ethaddr": local_settings.dvr_ethaddr,
-    }
-    data = _interpolate(raw, references, environ)
-    boot = _boot(data)
+    boot = _boot(raw, None)
     if boot.action == "prompt":
-        if "kernel" in data or "rootfs" in data:
+        if "kernel" in raw or "rootfs" in raw:
             raise ProfileError("prompt profiles cannot define kernel or rootfs tables")
         return Profile(name=name, boot=boot)
 
-    kernel = _kernel(data, repo_root)
-    rootfs = _rootfs(data, repo_root)
+    rootfs = _rootfs(raw, repo_root)
+    boot = _boot(raw, rootfs)
+    kernel = _kernel(raw, repo_root)
     return Profile(
         name=name,
         boot=boot,
