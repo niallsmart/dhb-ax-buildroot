@@ -119,6 +119,7 @@ docker run --rm $tty_flags \
 	--env "BUILD_CONFIG=$build_config" \
 	--mount "type=bind,source=$repo,target=/work,readonly" \
 	--mount "type=bind,source=$repo/artifacts,target=/work/artifacts" \
+	--mount "type=bind,source=$repo/br2-external,target=/work/br2-external" \
 	--mount "type=bind,source=$buildroot_src,target=/buildroot,readonly" \
 	--mount "type=volume,source=$volume_output,target=/output" \
 	--mount "type=volume,source=$volume_dl,target=/dl" \
