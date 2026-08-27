@@ -118,11 +118,11 @@ claim rests on, and say plainly when something is unverified, because that
 changes how far the reader should trust it. What to leave out is the
 commentary about the search itself.
 
-## Answering from memory
+## Message Tags
 
-A message tagged `#memory` asks for an answer from what is already in context.
-Do not make tool calls to service it. Memory of the tree goes stale, so flag
-any claim you would otherwise have checked.
+* When a message is tagged `#memory` respond from what is already in context. Do not make tool calls to service it. Memory of the tree goes stale, so flag any claim you would otherwise have checked.
+
+* When a message is tagged `#q`, then just reply to the question without inferring an implied action. Prefer to answer from memory, but you can use tool calls when mmory is incomplete or stale.
 
 ## Python and Shell Scripts
 
