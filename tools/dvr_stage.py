@@ -78,7 +78,7 @@ def remote_script(script: str, *args: str) -> str:
     return " ".join((command, *(shlex.quote(arg) for arg in args)))
 
 
-def check_pi(host: str, profile: Profile, *, start_tftp: bool) -> None:
+def check_pi(host: str, *, start_tftp: bool) -> None:
     console_check = (
         "if grep -q '^ttyAMA0' /proc/consoles; then "
         "echo 'error: ttyAMA0 is a Pi console'; exit 1; fi"
@@ -86,14 +86,13 @@ def check_pi(host: str, profile: Profile, *, start_tftp: bool) -> None:
     if ssh(host, console_check).returncode:
         fail("Pi UART preflight failed")
 
-    if profile.kernel and profile.kernel.source == "tftp":
-        command = (
-            "sudo systemctl start tftpd-hpa && systemctl is-active --quiet tftpd-hpa"
-            if start_tftp
-            else "systemctl is-active --quiet tftpd-hpa"
-        )
-        if ssh(host, command).returncode:
-            fail("tftpd-hpa is not active")
+    command = (
+        "sudo systemctl start tftpd-hpa && systemctl is-active --quiet tftpd-hpa"
+        if start_tftp
+        else "systemctl is-active --quiet tftpd-hpa"
+    )
+    if ssh(host, command).returncode:
+        fail("tftpd-hpa is not active")
 
 
 USB_CHECK = r"""
@@ -156,20 +155,6 @@ grep -q "^$root_part " /proc/swaps 2>/dev/null && {
 """
 
 
-NFS_GUARD = r"""
-set -eu
-
-dvr_ipaddr=$1
-dvr_ipaddr_pattern=$(printf '%s\n' "$dvr_ipaddr" | sed 's/\./\\./g')
-if ss -Htn state established '( sport = :2049 )' 2>/dev/null |
-	grep -Eq "${dvr_ipaddr_pattern}:[0-9]+"; then
-	echo 'dvr-stage: DVR has an active NFS session' >&2
-	echo 'boot the minimal image before publishing a complete rootfs' >&2
-	exit 1
-fi
-"""
-
-
 def check_usb(dvr_ipaddr: str) -> None:
     if ssh(f"root@{dvr_ipaddr}", "sh", "-s", input_text=USB_CHECK).returncode:
         fail("USB kernel staging preflight failed")
@@ -189,19 +174,6 @@ def check_hdd_root(profile: Profile, dvr_ipaddr: str) -> None:
         fail("HDD-root staging preflight failed")
 
 
-def check_nfs_root(profile: Profile, settings: LocalSettings) -> None:
-    if ssh(
-        settings.pi_ipaddr,
-        "sudo",
-        "sh",
-        "-s",
-        "--",
-        settings.dvr_ipaddr,
-        input_text=NFS_GUARD,
-    ).returncode:
-        fail("NFS-root staging preflight failed")
-
-
 def preflight(
     profile: Profile,
     settings: LocalSettings,
@@ -217,45 +189,23 @@ def preflight(
         readable(profile.rootfs.artifact, "root filesystem artifact")
 
     needs_pi = profile.kernel.source == "tftp" or (
-        not kernel_only and profile.rootfs.source == "nfs"
+        not kernel_only and profile.rootfs.source == "tftp"
     )
     if needs_pi:
-        check_pi(settings.pi_ipaddr, profile, start_tftp=not check)
+        check_pi(settings.pi_ipaddr, start_tftp=not check)
     if profile.kernel.source == "usb":
         check_usb(settings.dvr_ipaddr)
     if not kernel_only and profile.rootfs.source == "hdd":
         check_hdd_root(profile, settings.dvr_ipaddr)
-    if not kernel_only and profile.rootfs.source == "nfs":
-        check_nfs_root(profile, settings)
 
 
-def stage_tftp_kernel(profile: Profile, pi_ipaddr: str) -> None:
-    assert profile.kernel
-    host = pi_ipaddr
-    target = profile.kernel.target
-    temporary = f"/tmp/dvr-stage-{os.getpid()}-{target}"
-    incoming = f"/srv/tftp/.dvr-stage-{os.getpid()}-{target}.incoming"
-    print(f"Staging {profile.kernel.artifact} on {host}:/srv/tftp/{target}...")
-    if run(
-        (
-            "scp",
-            "-q",
-            "-o",
-            "BatchMode=yes",
-            "--",
-            str(profile.kernel.artifact),
-            f"{host}:{temporary}",
-        )
+def stage_tftp_file(artifact: Path, target: str, pi_ipaddr: str) -> None:
+    print(f"Staging {artifact} on {pi_ipaddr}:/srv/tftp/{target}...")
+    command = f"sudo tee /srv/tftp/{target} >/dev/null"
+    if run_stream(
+        ("ssh", "-o", "BatchMode=yes", pi_ipaddr, command), artifact
     ).returncode:
-        fail(f"could not copy the kernel to {host}")
-    command = (
-        f"sudo install -m0644 {temporary} {incoming} && "
-        f"sudo mv -f {incoming} /srv/tftp/{target}"
-    )
-    if ssh(host, command).returncode:
-        ssh(host, f"sudo rm -f {temporary} {incoming}")
-        fail("could not install the kernel beneath /srv/tftp")
-    ssh(host, f"rm -f {temporary}")
+        fail(f"could not publish {target} beneath /srv/tftp")
 
 
 USB_INSTALL = r"""
@@ -343,8 +293,7 @@ echo "Formatting $root_part as $label..."
 mke2fs -F -t ext4 -L "$label" -m 0 "$root_part"
 mkdir -p "$root_mount"
 mount -t ext4 "$root_part" "$root_mount"
-tar --numeric-owner --acls --xattrs --xattrs-include='*' \
-	-xpf - -C "$root_mount"
+gunzip -c | (cd "$root_mount" && cpio -idmu)
 [ -x "$root_mount/sbin/init" ] || {
 	echo 'dvr-stage: installed rootfs has no executable /sbin/init' >&2
 	exit 1
@@ -389,108 +338,22 @@ def stage_hdd_root(profile: Profile, dvr_ipaddr: str) -> None:
         fail("could not install the HDD root filesystem")
 
 
-NFS_INSTALL = r"""
-set -eu
-
-export_path=$1
-archive=$2
-expected_os_id=$3
-kernel_release=$4
-
-parent=${export_path%/*}
-incoming=$export_path.incoming.$$
-previous=$export_path.previous.$$
-cleanup()
-{
-	rm -f -- "$archive"
-	rm -rf -- "$incoming"
-}
-trap cleanup EXIT
-trap 'exit 130' HUP INT TERM
-
-mkdir -p "$parent"
-rm -rf -- "$incoming" "$previous"
-mkdir -m 0755 "$incoming"
-tar --numeric-owner --acls --xattrs --xattrs-include='*' \
-	-xpf "$archive" -C "$incoming"
-[ -x "$incoming/sbin/init" ] || {
-	echo 'dvr-stage: NFS root has no executable /sbin/init' >&2
-	exit 1
-}
-installed_id=$(sed -n 's/^ID=//p' "$incoming/etc/os-release" | tr -d '"')
-[ "$installed_id" = "$expected_os_id" ] || {
-	echo "dvr-stage: NFS root OS is '$installed_id', expected '$expected_os_id'" >&2
-	exit 1
-}
-[ -d "$incoming/lib/modules/$kernel_release" ] || {
-	echo "dvr-stage: NFS root lacks modules for $kernel_release" >&2
-	exit 1
-}
-[ ! -e "$export_path" ] || mv "$export_path" "$previous"
-if ! mv "$incoming" "$export_path"; then
-	[ ! -e "$previous" ] || mv "$previous" "$export_path"
-	exit 1
-fi
-rm -rf -- "$previous"
-sync
-echo "Published NFS root at $export_path"
-"""
-
-
-def stage_nfs_root(profile: Profile, pi_ipaddr: str) -> None:
-    assert (
-        profile.rootfs
-        and profile.rootfs.artifact
-        and profile.rootfs.export
-        and profile.rootfs.expected_os_id
-        and profile.rootfs.kernel_release
-    )
-    host = pi_ipaddr
-    remote_archive = f"/tmp/dvr-stage-rootfs-{os.getpid()}.tar"
-    print(
-        f"Publishing {profile.rootfs.artifact} to "
-        f"{host}:{profile.rootfs.export}..."
-    )
-    if run(
-        (
-            "scp",
-            "-q",
-            "-o",
-            "BatchMode=yes",
-            "--",
-            str(profile.rootfs.artifact),
-            f"{host}:{remote_archive}",
-        )
-    ).returncode:
-        fail(f"could not copy the root filesystem to {host}")
-    if ssh(
-        host,
-        "sudo",
-        "sh",
-        "-s",
-        "--",
-        profile.rootfs.export,
-        remote_archive,
-        profile.rootfs.expected_os_id,
-        profile.rootfs.kernel_release,
-        input_text=NFS_INSTALL,
-    ).returncode:
-        ssh(host, "rm", "-f", remote_archive)
-        fail("could not publish the NFS root filesystem")
-
-
 def stage_rootfs(profile: Profile, settings: LocalSettings) -> None:
     if profile.rootfs.source == "hdd":
         stage_hdd_root(profile, settings.dvr_ipaddr)
-    elif profile.rootfs.source == "nfs":
-        stage_nfs_root(profile, settings.pi_ipaddr)
+    elif profile.rootfs.source == "tftp":
+        stage_tftp_file(
+            profile.rootfs.artifact, profile.rootfs.target, settings.pi_ipaddr
+        )
 
 
 def stage_kernel(profile: Profile, settings: LocalSettings) -> None:
     if profile.kernel.source == "usb":
         stage_usb_kernel(profile, settings.dvr_ipaddr)
     else:
-        stage_tftp_kernel(profile, settings.pi_ipaddr)
+        stage_tftp_file(
+            profile.kernel.artifact, profile.kernel.target, settings.pi_ipaddr
+        )
 
 
 def stage(

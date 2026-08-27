@@ -1,3 +1,11 @@
+# The libata boot arguments reduce SATA link bring-up time. The disk is still
+# not registered until around eleven seconds into boot.
+#
+# /srv/data is automounted, so nothing waits for the disk at boot and the mount
+# happens on first access. Swap has no equivalent and has to be activated, so it
+# carries a timeout that clears the probe; nofail keeps a boot without the disk
+# from failing, at the cost of waiting that long before giving up on it.
+#
 # <file system>       <mount point> <type> <options>       <dump> <pass>
-LABEL=dhb-ax-data     /srv/data     ext4   defaults,nofail 0      2
-LABEL=dhb-ax-swap     none          swap   sw              0      0
+LABEL=dhb-ax-data     /srv/data     ext4   defaults,noauto,x-systemd.automount,x-systemd.device-timeout=30s 0 2
+LABEL=dhb-ax-swap     none          swap   sw,nofail,x-systemd.device-timeout=30s        0 0

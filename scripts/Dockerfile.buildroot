@@ -20,6 +20,7 @@ RUN apt-get update \
       libssl-dev \
       locales \
       perl \
+      pkg-config \
       python3 \
       python3-dev \
       python3-venv \
@@ -50,4 +51,4 @@ ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 # volumes, then drops to this user; see scripts/buildroot-in-container.sh.
 RUN useradd --create-home --uid 1000 --shell /bin/sh br
 
-WORKDIR /buildroot
+WORKDIR /work

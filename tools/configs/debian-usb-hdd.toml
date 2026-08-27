@@ -7,7 +7,7 @@ usb_device = "0:1"
 
 [rootfs]
 source = "hdd"
-artifact = "artifacts/debian/rootfs.tar"
+artifact = "artifacts/debian/rootfs.cpio.gz"
 device = "PARTUUID=8EBB5255-A43A-4B4E-953D-E81D2E0A2A6F"
 label = "dhb-ax-debian"
 expected_os_id = "debian"

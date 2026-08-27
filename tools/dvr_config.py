@@ -54,7 +54,8 @@ class Rootfs:
     source: str
     artifact: Path | None = None
     device: str | None = None
-    export: str | None = None
+    target: str | None = None
+    load_address: str | None = None
     label: str | None = None
     expected_os_id: str | None = None
     kernel_release: str | None = None
@@ -72,10 +73,6 @@ class Boot:
     action: str
     args: tuple[str, ...] = ()
     hostname: str | None = None
-
-    @property
-    def bootargs(self) -> str:
-        return " ".join(self.args)
 
 
 @dataclass(frozen=True)
@@ -261,60 +258,60 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
             "source",
             "artifact",
             "device",
-            "export",
+            "target",
+            "load_address",
             "label",
             "expected_os_id",
         },
     )
     source = _string(table, "rootfs", "source")
-    if source not in ("hdd", "nfs", "initramfs"):
-        raise ProfileError("rootfs.source must be 'hdd', 'nfs', or 'initramfs'")
+    if source not in ("hdd", "tftp", "initramfs"):
+        raise ProfileError("rootfs.source must be 'hdd', 'tftp', or 'initramfs'")
 
     artifact = table.get("artifact")
     device = table.get("device")
-    export = table.get("export")
+    target = table.get("target")
+    load_address = table.get("load_address")
     label = table.get("label")
     expected_os_id = table.get("expected_os_id")
     kernel_release = None
-    if source in ("hdd", "nfs"):
+    if source == "hdd":
         if not isinstance(expected_os_id, str) or not OS_ID.fullmatch(
             expected_os_id
         ):
-            raise ProfileError(
-                "external roots require a safe rootfs.expected_os_id"
-            )
+            raise ProfileError("HDD roots require a safe rootfs.expected_os_id")
         kernel_release = _production_kernel_release(repo_root)
-    if source == "hdd":
         if not isinstance(artifact, str) or not artifact:
             raise ProfileError("HDD roots require rootfs.artifact")
         if not isinstance(device, str) or not PARTUUID.fullmatch(device):
             raise ProfileError("HDD roots require rootfs.device as PARTUUID=<UUID>")
-        if export is not None:
-            raise ProfileError("rootfs.export is only valid for NFS roots")
         if not isinstance(label, str) or not FILESYSTEM_LABEL.fullmatch(label):
             raise ProfileError(
                 "HDD roots require rootfs.label as a safe filesystem label"
             )
-    elif source == "nfs":
+        if target is not None or load_address is not None:
+            raise ProfileError(
+                "rootfs.target and rootfs.load_address are only valid for "
+                "TFTP roots"
+            )
+    elif source == "tftp":
         if not isinstance(artifact, str) or not artifact:
-            raise ProfileError("NFS roots require rootfs.artifact")
-        if (
-            not isinstance(export, str)
-            or not export.startswith("/srv/")
-            or "/../" in export
-            or "/./" in export
-            or "//" in export
-            or export.endswith(("/..", "/.", "/"))
-            or not re.fullmatch(r"[A-Za-z0-9_./-]+", export)
+            raise ProfileError("TFTP roots require rootfs.artifact")
+        if not isinstance(target, str) or not TARGET_NAME.fullmatch(target):
+            raise ProfileError("rootfs.target must be a safe filename")
+        if not isinstance(load_address, str) or not LOAD_ADDRESS.fullmatch(
+            load_address
         ):
-            raise ProfileError("rootfs.export must be a canonical path beneath /srv")
-        if device is not None:
-            raise ProfileError("rootfs.device is only valid for HDD roots")
-        if label is not None:
-            raise ProfileError("rootfs.label is only valid for HDD roots")
+            raise ProfileError("rootfs.load_address must be hexadecimal")
+        if any(
+            value is not None for value in (device, label, expected_os_id)
+        ):
+            raise ProfileError(
+                "TFTP roots have no device, label or expected_os_id"
+            )
     elif any(
         value is not None
-        for value in (artifact, device, export, label, expected_os_id)
+        for value in (artifact, device, target, load_address, label, expected_os_id)
     ):
         raise ProfileError("initramfs roots have no external fields")
 
@@ -322,7 +319,8 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
         source=source,
         artifact=_artifact(repo_root, artifact) if artifact else None,
         device=device,
-        export=export,
+        target=target,
+        load_address=load_address,
         label=label,
         expected_os_id=expected_os_id,
         kernel_release=kernel_release,

@@ -12,9 +12,7 @@
 # or the two will collide on the same network.
 #
 # Runs before udhcpc, so the DHCP request carries the correct address and the
-# reservation matches. It has no effect on an NFS root, where the kernel
-# configures the interface before userspace starts; that path uses static
-# addressing instead -- see tools/dvr-boot.sh.
+# reservation matches.
 
 set -e
 

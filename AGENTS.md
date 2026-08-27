@@ -58,9 +58,13 @@ compiler cache are shared. `--config NAME --clean` drops only the selected
 output volume; `--distclean` drops all build, download and cache volumes.
 
 The production image is `artifacts/buildroot/uImage-hi3531-dhb-ax`, and its
-module archive is embedded in `artifacts/debian/rootfs.tar`. The
+module archive is embedded in `artifacts/debian/rootfs.cpio.gz`. The
 diagnostic image is
 `artifacts/buildroot-minimal/uImage-hi3531-dhb-ax-minimal`.
+
+Each userspace is emitted once, as a gzipped cpio. The same archive serves both
+destinations: U-Boot loads it to RAM as an initramfs root, and `dvr-stage`
+streams it onto the HDD partition.
 
 # Commit Conventions
 
@@ -118,11 +122,11 @@ claim rests on, and say plainly when something is unverified, because that
 changes how far the reader should trust it. What to leave out is the
 commentary about the search itself.
 
-## Answering from memory
+## Message Tags
 
-A message tagged `#memory` asks for an answer from what is already in context.
-Do not make tool calls to service it. Memory of the tree goes stale, so flag
-any claim you would otherwise have checked.
+* When a message is tagged `#memory` respond from what is already in context. Do not make tool calls to service it. Memory of the tree goes stale, so flag any claim you would otherwise have checked.
+
+* When a message is tagged `#q`, then just reply to the question without inferring an implied action. Prefer to answer from memory, but you can use tool calls when mmory is incomplete or stale.
 
 ## Python and Shell Scripts
 
@@ -215,8 +219,8 @@ under `tools/configs/`. Stage artifacts when their configured destinations
 need updating, then boot the same profile:
 
 ```sh
-tools/dvr-stage.sh buildroot-tftp-nfs
-tools/dvr-boot.sh buildroot-tftp-nfs
+tools/dvr-stage.sh buildroot-tftp
+tools/dvr-boot.sh buildroot-tftp
 ```
 
 Automatic boot is deliberately deferred. Manually boot the installed USB
@@ -276,12 +280,11 @@ tools/dvr-stage.sh debian-usb-hdd
 ```
 
 Storage preparation and full production staging require hostname `minimal` and
-`rootfs` mounted at `/`; they reject production HDD and NFS roots. Preparation
-destroys and recreates both approved storage devices and is not part of routine
-deployment. Full production staging streams the selected archive onto its
-fixed HDD partition, preserving filesystem metadata, and updates the USB
-uImage. It leaves the minimal image running. For kernel-only iteration from
-either production HDD or NFS system, use:
+`rootfs` mounted at `/`; they reject production HDD roots. Preparation destroys
+and recreates both approved storage devices and is not part of routine
+deployment. Full production staging streams the selected archive onto its fixed
+HDD partition and updates the USB uImage. It leaves the minimal image running.
+For kernel-only iteration from a production HDD system, use:
 
 ```sh
 tools/dvr-stage.sh --kernel-only buildroot-usb-hdd
@@ -296,19 +299,29 @@ tools/dvr-stage.sh minimal-usb
 
 Read each tool before changing its device-identification checks.
 
-## NFS development and recovery
+## TFTP initramfs development and recovery
 
-The Raspberry Pi can export a root filesystem for development, provisioning or
-recovery:
+U-Boot can load a complete root filesystem into RAM alongside the kernel, for
+development, provisioning or recovery:
 
 ```sh
 scripts/buildroot.sh
-tools/dvr-stage.sh buildroot-tftp-nfs
+tools/dvr-stage.sh buildroot-tftp
 ```
 
-Boot that root with `tools/dvr-boot.sh buildroot-tftp-nfs`. Debian uses the
-parallel `debian-tftp-nfs` profile. For ordinary driver work, copy specific
-modules or files rather than republishing the complete root filesystem.
+Boot that root with `tools/dvr-boot.sh buildroot-tftp`. Debian uses the parallel
+`debian-tftp` profile.
+
+The root is unpacked into RAM and does not survive a reboot: anything edited on
+the board is gone at the next boot, and changing it means rebuilding and
+restaging. `dvr-boot` reads the transferred size back from U-Boot and appends
+the matching `initrd=` argument, so the kernel finds the archive wherever it
+landed.
+
+Buildroot's archive is a few megabytes and stages in seconds. Debian's is around
+79 MB, so its transfer takes minutes and it occupies about 214 MB of the board's
+1 GB once unpacked. For ordinary driver work, copy specific modules or files
+over SSH rather than restaging the complete root filesystem.
 
 ## Protecting the factory flash
 
