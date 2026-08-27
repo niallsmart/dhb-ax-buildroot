@@ -15,6 +15,7 @@ board. The status column is this repository's.
 | Hardware SPI | Low | Low | An ARM PL022 at `0x200C0000`, IRQ 44. `spi-pl022` binds with no override. The board bit-bangs instead, so the pins need muxing to function 1 first. [Detail][soc] |
 | Spare timers | Low | Low | Four SP804 blocks, not two. Timers 1–3 at `0x20010000`, `0x20130000` and `0x20140000` are unused: six spare 32-bit timers. [Detail][soc] |
 | Inherited firmware framebuffer | Low | Low | U-Boot leaves one 480x300 ARGB1555 buffer mirrored to its main HD path and both CVBS outputs. Reserving it and using `simple-framebuffer` would give a fixed diagnostic display. [Handoff][vou] |
+| SATA 3 Gbps link speed | Low | Low | The `ahci_hi3531` glue hardcodes both PHYs to 1.5 Gbps, carrying over the vendor `hi_sata_init()` default rather than its unused 3 Gbps register values. Both the AHCI controller and an attached Samsung 860 EVO negotiate 3.0/6.0 Gbps capability but link at 1.5 Gbps. Swapping in the vendor's 3 Gbps PHY constants and confirming clean link-up is the outstanding work. [Detail][sata-phy] |
 | SD/MMC | Low | Medium | `dw_mmc` may fit, and the socket may not exist. The pins are function 4 of the `VIU3` run, so enabling it excludes the fourth video input. [Detail][soc] |
 | DMA | Low | Medium | An ARM PL080 at `0x100D0000`. Its periphid collides with mainline's Samsung PL080S entry — read the warning before enabling. [Detail][soc] |
 | Audio | Low | High | Needs an ASoC platform driver written from scratch. [Detail][audio] |
@@ -24,6 +25,7 @@ board. The status column is this repository's.
 
 [mcu]: https://github.com/niallsmart/dhb-ax-guide/blob/main/doc/20-front-panel-mcu.md
 [sata]: https://github.com/niallsmart/dhb-ax-guide/blob/main/doc/07-sata-storage.md#u-boot-cannot-read-the-sata-disk
+[sata-phy]: https://github.com/niallsmart/dhb-ax-guide/blob/main/doc/07-sata-storage.md#mainline-support
 [wdt]: https://github.com/niallsmart/dhb-ax-guide/blob/main/doc/10-rtc-watchdog-misc.md
 [soc]: https://github.com/niallsmart/dhb-ax-guide/blob/main/doc/01-soc-overview.md
 [vou]: https://github.com/niallsmart/dhb-ax-guide/blob/main/doc/12-video-output.md
