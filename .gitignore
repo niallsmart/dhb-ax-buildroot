@@ -6,28 +6,18 @@
 logs
 __pycache__
 
-# machine-local build configuration, including the root password hash and
-# network configuration
+# machine-local configuration, including the root password hash, network
+# configuration and other credentials
 local.env
+*.pem
 
 # Regenerable source trees, ~4 GB.
 # Recreate with scripts/bootstrap-sources.sh
 kernel/
 buildroot/
 
-# Buildroot's output tree and download cache live in Docker named volumes
-# (dhb-ax-br-output, dhb-ax-br-dl), not here -- see scripts/buildroot.sh.
-# These two exist only if someone runs Buildroot outside the container.
-# Anchored, so a directory called "output" elsewhere is not swallowed.
-/output/
-/dl/
-
 # Build outputs. Recreate with scripts/buildroot.sh.
-/artifacts/
-
-# Large binary assets, kept locally but not in source control.
-#   vm-assets/  vendor tooling VM
-vm-assets/
+artifacts/
 
 # backups/, rootfs/ and pcb/ now live only in the sibling guide. The rules stay
 # as a guard: nothing here reads them, so a copy appearing in this tree is an
@@ -37,23 +27,14 @@ backups/
 rootfs/
 pcb/
 
-# Content extracted from vendor firmware. Kept locally for analysis, not
-# redistributed: it is third-party copyrighted material, the same reason
-# backups/ and rootfs/ are excluded.
-#
-# boot.jpg / logo.jpeg are the same asset -- the boot splash at offset
-# 0xC0000 in SPI NOR. It is a reseller's logo, not the manufacturer's, so
-# it belongs to a third party twice over.
+
+# Other local artifacts
+
 *.jpeg
 *.jpg
+*.png
 *.bin
 *.pdf
-
-# Personal images used as framebuffer test material, and the raw ARGB1555
-# buffers built from them. This repository is public.
-IMG_*.png
-IMG_*.jpg
-IMG_*.jpeg
 *.raw
 
-*.pem
+doc/temp-*
