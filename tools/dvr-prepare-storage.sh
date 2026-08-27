@@ -14,7 +14,7 @@ target=root@${DHB_AX_DVR_IPADDR}
 if [ "${1:-}" != "--destroy-all-data" ] || [ "$#" -ne 1 ]; then
 	echo "usage: $0 --destroy-all-data" >&2
 	echo "" >&2
-	echo "This erases the 1 TB WDC HDD and 8 GB Corsair USB drive." >&2
+	echo "This erases the 250 GB Samsung SSD and 8 GB Corsair USB drive." >&2
 	exit 2
 fi
 
@@ -56,8 +56,9 @@ find_device()
 
 # These identifiers come from the actual devices fitted to this DVR. The
 # topology check distinguishes the SATA disk from removable USB storage even
-# if Linux assigns their sdX names in a different order.
-hdd=$(find_device 1953525168 0 /10080000.sata/ WDCWD10EURX-63C)
+# if Linux assigns their sdX names in a different order. The model is compared
+# with its spaces removed, as sysfs pads the field.
+hdd=$(find_device 488397168 0 /10080000.sata/ SamsungSSD860)
 usb=$(find_device 15728640 1 /100b0000.usb/ FlashVoyager)
 [ "$hdd" != "$usb" ] || fail "HDD and USB resolved to the same device"
 

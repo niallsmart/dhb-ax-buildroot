@@ -1,24 +1,13 @@
 # Buildroot configuration for the DHB_AX board (HiSilicon Hi3531).
-#
-# Build with scripts/buildroot.sh.
-#
-# Stage 3: the kernel is built from the patch queue and device trees under
-# board/dhb-ax/, and packaged as the appended-DTB uImage the vendor U-Boot
-# needs.  Stage 4 adds the userspace tools the roadmap wants.
 
-# Target.  Dual Cortex-A9.  The vendor 3.0.8 godnet_defconfig sets CONFIG_VFP
-# and CONFIG_VFPv3 but leaves CONFIG_NEON unset, and nothing has confirmed
-# NEON on this part, so it stays off -- matching what the working kernel is
-# built with today.
+# The verified vendor configuration enables VFPv3 but not NEON.
 BR2_arm=y
 BR2_cortex_a9=y
 BR2_ARM_ENABLE_VFP=y
 BR2_ARM_EABIHF=y
 BR2_ARM_FPU_VFPV3D16=y
 
-# Shared Buildroot-produced musl toolchain. scripts/buildroot.sh --config
-# toolchain stages this relocatable SDK in the common download volume, and
-# each image output tree unpacks its own copy from there.
+# scripts/buildroot.sh --config toolchain stages the shared musl SDK.
 BR2_TOOLCHAIN_EXTERNAL=y
 BR2_TOOLCHAIN_EXTERNAL_CUSTOM=y
 BR2_TOOLCHAIN_EXTERNAL_DOWNLOAD=y
@@ -35,71 +24,46 @@ BR2_TOOLCHAIN_EXTERNAL_HAS_SSP_STRONG=y
 BR2_CCACHE=y
 BR2_CCACHE_INITIAL_SETUP="--max-size=10G"
 
-# The patch queue.  Buildroot looks for <dir>/<package>/*.patch, so the eleven
-# kernel patches live in board/dhb-ax/patches/linux/.
 BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/patches"
 
-# Buildroot fetches the tarball from kernel.org and checks it against the sha256 in
-# board/dhb-ax/patches/linux/linux.hash (BR2_GLOBAL_PATCH_DIR is a hash source)
-#
-# linux.config is a *full* .config, not a savedefconfig.  Buildroot copies it
-# into place and runs olddefconfig, which gives any absent symbol its Kconfig
-# default.  A minimal defconfig here would silently turn on a great deal.
+# linux.hash pins the kernel source archive. linux.config is a complete kernel
+# configuration; Buildroot runs olddefconfig over it.
 BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.18.42"
 BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
 BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/linux.config"
 
-# The vendor U-Boot 2010.06 has no FDT commands and passes ATAGs, so the DTB
-# rides appended to the zImage inside a legacy uImage.
-#
-# BR2_LINUX_KERNEL_APPENDED_UIMAGE does exactly that but cannot be used here:
-# its two loops over LINUX_DTS_NAME disagree about basename, which breaks as
-# soon as a device tree sits in a subdirectory -- and ours must, because patch
-# 0001 wires them into arch/arm/boot/dts/hisilicon/Makefile.  The kernel is
-# built as a plain zImage and board/dhb-ax/post-image.sh does the append and
-# the mkimage wrap, with the same arguments the old build used.
-#
-# TODO: Try and use the native BR2_LINUX_KERNEL_APPENDED_UIMAGE
-#
+# The vendor U-Boot loads a legacy uImage with an appended DTB. post-image.sh
+# appends the DTB and runs mkimage because Buildroot's uImage target cannot use
+# this DTS subdirectory layout.
 BR2_LINUX_KERNEL_ZIMAGE=y
 BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/post-image.sh"
 
-# post-image.sh needs mkimage.  Buildroot selects host-uboot-tools
-# automatically for the uImage kernel targets, but we do not use those, so it
-# has to be asked for by name.
+# post-image.sh uses mkimage.
 BR2_PACKAGE_HOST_UBOOT_TOOLS=y
 
-# CUSTOM_DTS_DIR rsyncs the tree in preserving structure, so dts/hisilicon/
-# lands at arch/arm/boot/dts/hisilicon/ -- where patch 0001 already adds both
-# DTBs to the Makefile.  Matching the kernel's own layout means that patch
-# needs no change.
+# Keep the DTS layout expected by the kernel patch queue.
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
 BR2_LINUX_KERNEL_CUSTOM_DTS_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/dts"
 
-# Emit the generated userspace as rootfs.tar for installation on the SATA HDD
-# or publication as an NFS root.
-BR2_TARGET_ROOTFS_TAR=y
-# BR2_TARGET_ROOTFS_CPIO is not set
+# The gzipped cpio serves as both the TFTP initramfs and HDD-root archive.
+BR2_TARGET_ROOTFS_CPIO=y
+BR2_TARGET_ROOTFS_CPIO_GZIP=y
+# BR2_TARGET_ROOTFS_TAR is not set
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/rootfs-overlay-network $(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/rootfs-overlay"
 BR2_INIT_BUSYBOX=y
 BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/busybox-network.fragment"
 BR2_TARGET_GENERIC_GETTY=y
 BR2_TARGET_GENERIC_HOSTNAME="dhb-ax"
 
-# Root password for the getty on the serial console. Dropbear is public-key
-# only.
-#
-# The plaintext password comes from the gitignored local.env, and
-# scripts/buildroot-in-container.sh refuses to build without it.
-#
+# The serial getty authenticates root with the password from gitignored local.env.
+# Dropbear permits public-key authentication only.
 BR2_TARGET_ENABLE_ROOT_LOGIN=y
 BR2_TARGET_GENERIC_ROOT_PASSWD="$(DHB_AX_ROOT_PASSWD)"
 
-# Obtain the reserved address on eth0 through the normal Buildroot init script.
-# When root is NFS over eth0, Buildroot's nfs_check prevents ifup from
-# reconfiguring eth0 and disrupting the root mount.
+# DHCP obtains the board's reservation after the network overlay applies its
+# factory MAC address.
 BR2_SYSTEM_DHCP="eth0"
 BR2_PACKAGE_DROPBEAR=y
 BR2_PACKAGE_DROPBEAR_CLIENT=y
@@ -110,19 +74,8 @@ BR2_PACKAGE_GESFTPSERVER=y
 # BR2_PACKAGE_OPENSSH is not set
 # BR2_PACKAGE_LIGHTTPD is not set
 
-# Musl's 32-bit ABI uses a 64-bit time_t without the glibc-only
-# BR2_TIME_BITS_64 switch. The filesystem tools therefore retain Y2038-safe
-# timestamps without a configuration declaration that musl cannot select.
-
-# Flash tools, read-only members only.  This board's SPI NOR and NAND hold the
-# only factory system and the standing rule is that nothing writes to them, so
-# an image that cannot perform the operation beats remembering not to type it.
-#
-# Careful: mtd's sub-options default to y.  Selecting BR2_PACKAGE_MTD alone
-# installs flash_erase, flashcp, nandwrite, ubiformat and the rest -- naming
-# the three we want does nothing, because they were already on.  The writers
-# have to be turned off by name.  post-build.sh then checks the result, since
-# not every tool has a symbol to switch off.
+# Keep only read-only MTD tools: maintained images never write factory flash.
+# The MTD package enables writers by default, so disable each one explicitly.
 BR2_PACKAGE_MTD=y
 BR2_PACKAGE_MTD_MTDINFO=y
 BR2_PACKAGE_MTD_NANDDUMP=y
@@ -142,21 +95,13 @@ BR2_PACKAGE_MTD_MTD_DEBUG=y
 # BR2_PACKAGE_MTD_UBINIZE is not set
 # BR2_PACKAGE_MTD_UBIHEALTHD is not set
 
-# Runtime validation uses ethtool for link and MAC capability inspection, and
-# i2c-tools for the bit-banged bus and DS1307-compatible RTC.
-#
-# i2c-tools is hidden unless BUSYBOX_SHOW_OTHERS is set -- Buildroot conceals
-# packages that overlap a BusyBox applet.  Without it the selection below is
-# dropped silently, which is what the defconfig check in
-# scripts/buildroot-in-container.sh caught.
+# Keep i2c-tools visible despite its BusyBox applet overlap.
 BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y
 BR2_PACKAGE_ETHTOOL=y
 BR2_PACKAGE_I2C_TOOLS=y
 
-# Storage provisioning and maintenance. The HDD and USB flash drive are used 
-# as Linux storage targets, so retain their partitioning, formatting and
-# checking tools. Flash-specific writers remain disabled below and are still
-# removed and asserted absent by post-build.sh.
+# Provisioning needs partitioning, filesystem and checking tools for the
+# approved SATA and USB devices.
 BR2_PACKAGE_UTIL_LINUX=y
 BR2_PACKAGE_UTIL_LINUX_BINARIES=y
 BR2_PACKAGE_E2FSPROGS=y
@@ -164,15 +109,11 @@ BR2_PACKAGE_E2FSPROGS_DEBUGFS=y
 BR2_PACKAGE_E2FSPROGS_FSCK=y
 # BR2_PACKAGE_E2FSPROGS_RESIZE2FS is not set
 # BR2_PACKAGE_E2FSPROGS_E4DEFRAG is not set
-# e2scrub is not listed: it needs bash, coreutils, lvm2 and util-linux, none
-# of which are selected, so kconfig drops the symbol entirely rather than
-# writing it as unset.  Asserting on it would fail for the wrong reason.
 BR2_PACKAGE_DOSFSTOOLS=y
 BR2_PACKAGE_DOSFSTOOLS_FSCK_FAT=y
 BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT=y
 # BR2_PACKAGE_DOSFSTOOLS_FATLABEL is not set
 
-# post-build.sh retains storage/filesystem tools but removes any flash writers
-# that a package default might reintroduce.
+# Post-build scripts install SSH material and reject flash writers.
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/post-build-ssh.sh $(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/post-build.sh"
 BR2_ROOTFS_POST_BUILD_SCRIPT_ARGS="$(BR2_EXTERNAL_DHB_AX_PATH)/../artifacts/local/ssh"

@@ -64,16 +64,30 @@ install -d -m 0755 "$rootfs/srv/data"
 tar --numeric-owner -xpf "$modules" -C "$rootfs"
 chroot "$rootfs" depmod "$kernel_release"
 
+# fstrim.timer runs weekly against everything mounted, which is what keeps the
+# SSD's free blocks known to the drive. util-linux's postinst already enables
+# it; naming it here states that the image depends on it, so a change to that
+# default is caught rather than silently dropping TRIM.
 systemctl --root="$rootfs" enable \
-	ssh nftables systemd-networkd systemd-resolved systemd-timesyncd >/dev/null
+	ssh nftables systemd-networkd systemd-resolved systemd-timesyncd \
+	fstrim.timer >/dev/null
 
 install -d -m 0755 "$output"
 chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
 	LC_ALL=C sort > "$output/packages.txt"
 
-tar --sort=name --numeric-owner --acls --xattrs --xattrs-include='*' \
-	--format=posix --pax-option=delete=atime,delete=ctime \
-	-C "$rootfs" -cf "$output/rootfs.tar" .
+# systemd opens /dev/console before it mounts devtmpfs, and this archive is
+# unpacked into an empty ramfs when it serves as the initramfs root. Debian
+# leaves no device nodes behind, so the node has to be here.
+[ -c "$rootfs/dev/console" ] || mknod -m 0600 "$rootfs/dev/console" c 5 1
+
+# newc, gzipped: U-Boot loads this to RAM as the initramfs root, and
+# tools/dvr-stage.sh streams the same archive onto the HDD partition. newc
+# carries no extended attributes or ACLs; no package installed here sets either.
+(cd "$rootfs" && find . -print0 |
+	LC_ALL=C sort -z |
+	cpio --null --create --format=newc --quiet) |
+	gzip -9 > "$output/rootfs.cpio.gz"
 
 {
 	echo 'suite=trixie'
@@ -83,5 +97,7 @@ tar --sort=name --numeric-owner --acls --xattrs --xattrs-include='*' \
 	echo "kernel_release=$kernel_release"
 	echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$output/build-info.txt"
+
+rm -f "$output/rootfs.tar" "$output/rootfs.tar.sha256"
 
 echo "Debian rootfs artifacts -> ${output#/work/}/"

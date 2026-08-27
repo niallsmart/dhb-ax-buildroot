@@ -21,6 +21,7 @@ from dvr_config import LocalSettings, ProfileError, load_local_settings, load_pr
 
 TMUX_SESSION = "dvr"
 LOGIN_TIMEOUT = 180
+TRANSFER_TIMEOUT = 120
 VENDOR_PASSWORD = "1001chin"
 
 
@@ -125,19 +126,14 @@ def preflight(profile, settings: LocalSettings):
             3,
         )
 
-    if (
-        profile
-        and profile.kernel
-        and profile.kernel.source == "tftp"
-        and ssh(
-            settings.pi_ipaddr,
-            f"test -r /srv/tftp/{profile.kernel.target}",
-        ).returncode
-    ):
-        fail(
-            f"kernel is not readable beneath /srv/tftp: {profile.kernel.target}",
-            3,
-        )
+    staged = []
+    if profile and profile.kernel and profile.kernel.source == "tftp":
+        staged.append(profile.kernel.target)
+    if profile and profile.rootfs and profile.rootfs.source == "tftp":
+        staged.append(profile.rootfs.target)
+    for target in staged:
+        if ssh(settings.pi_ipaddr, f"test -r /srv/tftp/{target}").returncode:
+            fail(f"not readable beneath /srv/tftp: {target}", 3)
 
 
 CSI = r"(?:\x1b\[[0-?]*[ -/]*[@-~])*"
@@ -376,10 +372,14 @@ def reach_uboot(settings: LocalSettings, console):
     fail("clean reboot did not reach the U-Boot prompt within 60 seconds", 6)
 
 
-def configure_bootargs(profile, console):
-    expected = profile.boot.bootargs
+def configure_bootargs(profile, console, extra=()):
+    # One setenv per argument. The vendor U-Boot CLI has a short line limit and
+    # truncates a full bootargs line, which produces a kernel that boots with
+    # the wrong arguments rather than an obvious failure.
+    arguments = (*profile.boot.args, *extra)
+    expected = " ".join(arguments)
     print(f"Configuring temporary {profile.rootfs.source}-root bootargs...")
-    first, *remaining = profile.boot.args
+    first, *remaining = arguments
     run_uboot_command(console, f"setenv bootargs {first}")
     for argument in remaining:
         run_uboot_command(console, f"setenv bootargs ${{bootargs}} {argument}")
@@ -444,13 +444,29 @@ def recover_phy(console):
     time.sleep(30)
 
 
-def load_tftp(profile, settings, console):
-    kernel = profile.kernel
-    configure_uboot_network(settings, console)
-    command = f"tftp {kernel.load_address} {kernel.target}"
+def transfer_timeout(artifact):
+    # The vendor U-Boot moves a few hundred KB/s at best, and the Debian
+    # initramfs is around 135 MB. Allow for 200 KB/s and never less than the
+    # time a kernel-sized transfer has always been given.
+    return max(TRANSFER_TIMEOUT, int(artifact.stat().st_size / 200_000))
+
+
+def transferred_size(console):
+    # U-Boot sets filesize to the byte count of the last transfer, in hex.
+    # That is what the kernel's initrd= argument wants, and reading it back
+    # means a stale local artifact cannot describe what actually landed in RAM.
+    output = run_uboot_command(console, "printenv filesize")
+    values = re.findall(r"(?m)^\r*filesize=([0-9A-Fa-f]+)\r*$", output)
+    if not values:
+        fail("U-Boot did not report a filesize after the transfer", 8)
+    return values[-1]
+
+
+def load_tftp(target, load_address, console, timeout=TRANSFER_TIMEOUT):
+    command = f"tftp {load_address} {target}"
 
     for attempt in range(3):
-        print(f"Loading {kernel.target}...")
+        print(f"Loading {target}...")
         console.send(f" {command}\r")
         state, _ = console.wait(
             (
@@ -464,11 +480,11 @@ def load_tftp(profile, settings, console):
                 ),
                 ("phy", r"PHY not link!"),
             ),
-            120,
+            timeout,
         )
         if state == "success":
             require_uboot_prompt(console, "U-Boot prompt did not return after TFTP")
-            return
+            return transferred_size(console)
         if state == "failure":
             fail("TFTP transfer failed", 8)
         if state == "timeout":
@@ -484,11 +500,26 @@ def load_tftp(profile, settings, console):
             time.sleep(10)
 
 
-def load_image(profile, settings, console):
-    if profile.kernel.source == "usb":
+def load_kernel(profile, console):
+    kernel = profile.kernel
+    if kernel.source == "usb":
         load_usb(profile, console)
     else:
-        load_tftp(profile, settings, console)
+        load_tftp(kernel.target, kernel.load_address, console)
+
+
+def load_initramfs(profile, console):
+    # The initramfs has to land before the bootargs are set: its size is not
+    # known until U-Boot reports what it transferred, and the kernel needs that
+    # size in initrd= to find the archive.
+    rootfs = profile.rootfs
+    size = load_tftp(
+        rootfs.target,
+        rootfs.load_address,
+        console,
+        transfer_timeout(rootfs.artifact),
+    )
+    return f"initrd={rootfs.load_address},0x{size}"
 
 
 def boot(profile, settings: LocalSettings, console):
@@ -497,8 +528,14 @@ def boot(profile, settings: LocalSettings, console):
         print("U-Boot prompt reached successfully.")
         return
 
-    configure_bootargs(profile, console)
-    load_image(profile, settings, console)
+    if profile.kernel.source == "tftp" or profile.rootfs.source == "tftp":
+        configure_uboot_network(settings, console)
+
+    extra = ()
+    if profile.rootfs.source == "tftp":
+        extra = (load_initramfs(profile, console),)
+    configure_bootargs(profile, console, extra)
+    load_kernel(profile, console)
     print("Booting from RAM...")
     console.send(f" bootm {profile.kernel.load_address}\r")
     state, _ = console.wait(

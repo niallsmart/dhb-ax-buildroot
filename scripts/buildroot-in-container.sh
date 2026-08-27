@@ -146,7 +146,8 @@ export_kernel_modules() {
 # like products of the current configuration.
 prune_disabled_images() {
 	if ! grep -qx 'BR2_TARGET_ROOTFS_CPIO=y' "$output/.config"; then
-		rm -f "$output/images/rootfs.cpio" "$artifacts/rootfs.cpio"
+		rm -f "$output/images/rootfs.cpio" "$artifacts/rootfs.cpio" \
+			"$output/images/rootfs.cpio.gz" "$artifacts/rootfs.cpio.gz"
 	fi
 	if ! grep -qx 'BR2_TARGET_ROOTFS_TAR=y' "$output/.config"; then
 		rm -f "$output/images/rootfs.tar" "$artifacts/rootfs.tar"

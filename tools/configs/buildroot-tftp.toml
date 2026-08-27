@@ -5,10 +5,10 @@ target = "uImage-hi3531-dhb-ax"
 load_address = "0x82000000"
 
 [rootfs]
-source = "nfs"
-artifact = "artifacts/buildroot/rootfs.tar"
-export = "/srv/dhb-ax/rootfs"
-expected_os_id = "buildroot"
+source = "tftp"
+artifact = "artifacts/buildroot/rootfs.cpio.gz"
+target = "rootfs-hi3531-dhb-ax.cpio.gz"
+load_address = "0x88000000"
 
 [boot]
 action = "kernel"
@@ -19,9 +19,5 @@ args = [
   "mem=512M@0x80000000",
   "mem=512M@0xc0000000",
   "libata.force=2.00:norst,2.00:nodbdelay,2.01:norst,2.01:nodbdelay,2.03:norst,2.03:nodbdelay,2.04:norst,2.04:nodbdelay",
-  "root=/dev/nfs",
-  "nfsroot=${local.pi_ipaddr}:${rootfs.export},vers=3,tcp,nolock",
-  "ip=${local.dvr_ipaddr}:::${local.dvr_netmask}:dhb-ax:eth0:off",
-  "rw",
 ]
 hostname = "dhb-ax"
