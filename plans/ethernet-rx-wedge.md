@@ -13,15 +13,21 @@ Throughput work unrelated to the wedge is in
 
 ## The fault
 
-Descriptor exhaustion is not recoverable on this SoC.  When the RX ring runs
+Descriptor exhaustion does not seem to be recoverable on this SoC.  When the RX ring runs
 dry the DMA sets RU in CSR5 and moves the receive process to state 4.  From
 there it ignores receive poll demand, the DMA start/stop bit, the MAC receiver
 enable, and a channel software reset.  Only a software reset of all three DMA
 channels clears it — the same cure `hi3531_reset_dma_channels()` already
 applies at probe.
 
-Nothing detects it.  RU and receive-process-stopped are masked off in CSR7, no
-error counter moves, and the netdev watchdog covers transmit only.
+Patches 0015 and 0016 make it visible and self-clearing: RU and
+receive-process-stopped are unmasked, the state is recorded, and the
+three-channel reset is installed as this instance's DMA reset so the core's
+own close and reopen is the cure.  The fault itself is untouched.
+
+We have not verified whether the vendor Linux has somehow avoided or recovered from this
+condition. That would seem to be required to copper-fasten whether the above is somehow
+triggered by the driver, or is a lower-level hardware issue.
 
 ## Established
 
@@ -54,6 +60,28 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
   offload on (fixed), GRO on, pause frames off both directions, IRQ 119 on
   CPU0, DMA channel-1 interrupt mask `0x0001a061`, bus mode `0x00201000`,
   operation mode `0x03202002`.
+- Detect-and-recover works.  Four-stream inbound TCP on a 512-entry ring
+  wedged and recovered, and the transfer ran to completion: 2.16 GB at
+  412 Mbit/s over 45 s, where the same test used to stop for good after
+  40-110 MB.  Recovery costs about 3.5 s, nearly all of it PHY
+  renegotiation after the reopen.
+- A 1024-entry ring wedges too.  One RU in a 45 s four-stream run, 2.12 GB
+  at 404 Mbit/s.  The earlier reading of "RU never set across 12,025
+  samples" was the 10 ms sampler missing it; the interrupt sees every one.
+  The larger ring lowers the rate, it does not remove the fault.
+- Unmasking RU is only safe if it is masked again at the wedge.  The
+  condition survives the interrupt being acknowledged, so the channel
+  re-interrupts as fast as the handler can clear it and the workqueue that
+  would run the reset never gets a CPU.  It presents as an RCU stall in
+  `stmmac_napi_poll_rx` with the close blocked behind it, and the board
+  needs `sysrq-b` to get out.  0016 masks both sources when it asks for the
+  reset; `hi3531_dma_init_chan()` re-arms them on reopen.
+- `ethtool -S eth0` reports `rx_desc_low_water`, the fewest descriptors seen
+  in the DMA's hands since the previous read.  It is measured from CSR19,
+  because cur_rx and dirty_rx describe only the driver's own progress.
+- `dwmac_hi3531.rx_ring_size=` selects the probe-time ring, 64 to 1024.
+- GMAC debug at the wedge reads `0x00000117`, `0x00000120` or `0x00000137`
+  across five events, not the `0x00000220` recorded on 2026-08-28.
 - Ruled out as contributors: L2 cache (wedge reproduced with `L2_CTRL` both
   ways, `L2_RINT` clear), RPS, CPU frequency scaling (no `cpufreq` driver),
   TCP buffer sizing.
@@ -61,8 +89,11 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
 ## Open
 
 1. Whether the ring approaches exhaustion smoothly as offered rate rises, or
-   is emptied by an occasional long stall.  These need different fixes and the
-   evidence so far does not separate them.
+   is emptied by an occasional long stall.  These need different fixes.  One
+   run each of the same four-stream test read a low-water mark of 126 of 512
+   and 525 of 1024: the ring drains by about 390 descriptors either way,
+   which is a fixed backlog rather than a capacity that scales with the
+   ring.  Two runs is not a result; step 3 is the measurement.
 2. Whether the vendor driver avoids the wedge, or has simply never been driven
    to the received packet rate that triggers it.  Its 256-entry ring survives
    only workloads that were also survivable on mainline.
@@ -151,13 +182,15 @@ The port is under active development; prefer a fast loop over isolation.
 - Iterate over TFTP with `tools/dvr-stage.sh buildroot-tftp`, or
   `--kernel-only` from a production HDD root.  Do not restage a Debian rootfs
   to change a driver; copy the module.
-- Recover a wedged interface in place rather than rebooting:
+- The driver recovers a wedged interface on its own.  The equivalent by
+  hand, for a kernel without 0016:
 
       ip link set eth0 down
       for c in 0x101c1000 0x101c1100 0x101c1200; do busybox devmem $c 32 1; done
       ip link set eth0 up
 
-  Step 1 makes this automatic.
+- Select a test ring size at boot, with `dwmac_hi3531.rx_ring_size=` on the
+  kernel command line.
 - Vendor runs cost a full reboot each.  Batch every vendor capture into one
   boot.
 
@@ -194,7 +227,22 @@ offered against vendor, and 400 Mbit/s against mainline-1024.  Neither system
 approached descriptor exhaustion and neither wedged; both ended with the ring
 almost entirely DMA-owned.  Single-flow UDP is not a usable reproducer.
 
+### 2026-08-28 — step 1 landed
+
+Patches 0015 and 0016.  RU and receive-process-stopped unmasked (CSR7
+`0x0001a1e1`, against the vendor's `0x0001a061`), the three-channel reset
+installed as the instance's DMA reset so the core's close and reopen clears
+the wedge, CSR5/CSR19/CSR21 and the GMAC debug register recorded before it,
+`rx_desc_low_water` in `ethtool -S`, and the probe-time ring size on the
+kernel command line.
+
+Four-stream inbound TCP recovered from every wedge: three in one 45 s run at
+512 before the interrupt-storm fix, one after, one at 1024.  The storm was
+the one surprise -- unmasking RU without masking it again starves the reset
+workqueue and stalls the board.
+
 ### Next
 
-Step 1: unmask RU, add detect-and-recover and the low-water mark, and make the
-ring size a module parameter.
+Step 2: build a generator that wedges mainline at 512 within a bounded time,
+3 runs out of 3.  Four-stream inbound TCP already does it in 45 s; confirm
+the repeat rate and record received pps, then sweep frame size down.
