@@ -1,0 +1,76 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] net: stmmac: size the Hi3531 RX ring for burst receive
+
+The Hi3531 receive engine cannot be restarted once it suspends for want of
+a receive descriptor.  When the ring runs dry the DMA sets RU in CSR5 and
+moves the receive process to state 4, and from there it ignores a receive
+poll demand, ignores the DMA start/stop bit, ignores the MAC receiver
+enable, and survives both a channel software reset and a full interface
+down/up.  Only a software reset of all three DMA channels clears it, which
+is why hi3531_reset_dma_channels() exists for the probe path.
+
+Descriptor exhaustion is therefore not a recoverable condition on this
+SoC, and it is reachable: with the DWMAC1000 default of 512 descriptors a
+four-stream inbound TCP test wedges the interface within the first
+seconds, after 40-110 MB.  Receive checksum offload is unavailable here,
+so every byte is summed on the CPU and a scheduling delay long enough to
+drain the ring is easy to hit.
+
+Doubling the ring to the 1024 the core allows removes the exhaustion.  The
+same test then sustains 1.52 GB, and a 900 Mbit/s UDP flood sustains
+6.29 GB offered, without the RU bit being set once.
+
+The size is a module parameter because characterising the approach to
+exhaustion means sweeping it, and ethtool -G is not usable for that: on a
+healthy interface it wedges receive by a second route, leaving CSR19
+walking addresses outside the ring CSR3 points at.
+
+This does not repair the underlying fault; it keeps the driver away from
+the state that triggers it.
+---
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+@@ -68,6 +68,11 @@
+ #define HI3531_GMAC_IF_SPEED_10		0x1
+ #define HI3531_GMAC_IF_SPEED_100	0x3
+ 
++static unsigned int rx_ring_size = DMA_MAX_RX_SIZE;
++module_param(rx_ring_size, uint, 0444);
++MODULE_PARM_DESC(rx_ring_size,
++		 "receive descriptors per ring, 64 to 1024 (default 1024)");
++
+ struct hi3531_dwmac {
+ 	struct device *dev;
+ 	void __iomem *gmac;
+@@ -114,6 +119,16 @@ static struct mac_device_info *hi3531_dwmac_setup(void *arg)
+ 	mac->pcsr = priv->ioaddr + HI3531_GMAC1_MAC_OFFSET;
+ 	priv->dmaaddr = priv->ioaddr + HI3531_GMAC1_DMA_OFFSET;
+ 
++	/*
++	 * A receive process that suspends for want of a descriptor on this
++	 * SoC cannot be resumed: poll demand, the DMA start bit, the MAC
++	 * receiver enable and a channel software reset all leave it in state
++	 * 4, and only a reset of all three DMA channels recovers it.  Carry
++	 * enough descriptors that an inbound burst does not empty the ring
++	 * while a CPU busy with software checksums is late to refill it.
++	 */
++	priv->dma_conf.dma_rx_size = rx_ring_size;
++
+ 	return mac;
+ }
+ 
+@@ -239,6 +254,13 @@ static int hi3531_dwmac_probe(struct platform_device *pdev)
+ 	struct hi3531_dwmac *dwmac;
+ 	int ret;
+ 
++	if (rx_ring_size < DMA_MIN_RX_SIZE || rx_ring_size > DMA_MAX_RX_SIZE) {
++		dev_err(&pdev->dev,
++			"rx_ring_size %u is outside %u-%u\n", rx_ring_size,
++			DMA_MIN_RX_SIZE, DMA_MAX_RX_SIZE);
++		return -EINVAL;
++	}
++
+ 	ret = stmmac_get_platform_resources(pdev, &res);
+ 	if (ret)
+ 		return ret;
