@@ -367,13 +367,26 @@ def reach_uboot(settings: LocalSettings, console):
     print("Rebooting and interrupting autoboot...")
     console.send("reboot\r")
 
+    reset_after_restart = True
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         console.send(" ")
         state, _ = console.wait((("uboot", UBOOT_PROMPT),), 0.25)
-        if state == "uboot":
+        if state != "uboot":
+            continue
+        if not reset_after_restart:
             return
-    fail("clean reboot did not reach the U-Boot prompt within 60 seconds", 6)
+
+        print("Resetting U-Boot to clear the MCU watchdog...")
+        time.sleep(0.5)
+        console.send(" reset\r")
+        time.sleep(0.5)
+        reset_after_restart = False
+        deadline = time.monotonic() + 60
+
+    if reset_after_restart:
+        fail("clean reboot did not reach the U-Boot prompt within 60 seconds", 6)
+    fail("U-Boot reset did not reach the prompt within 60 seconds", 6)
 
 
 def configure_bootargs(profile, console, extra=()):
@@ -526,46 +539,54 @@ def load_initramfs(profile, console):
     return f"initrd={rootfs.load_address},0x{size}"
 
 
+def boot_vendor(console):
+    print("Resuming the vendor boot path...")
+    time.sleep(0.5)
+    console.send(" reset\r")
+    time.sleep(0.5)
+    print("Waiting for the vendor boot console to settle...")
+    state, _ = console.wait(
+        (
+            ("kernel", r"Starting kernel"),
+            ("login", r"(?m)^\r*\(none\) login: *\r$"),
+        ),
+        90,
+    )
+    if state == "login":
+        print("Vendor Linux login prompt reached successfully.")
+        return
+    if state != "kernel":
+        fail("vendor kernel did not start before the timeout", 9)
+
+    state, _ = console.wait(
+        (("login", r"(?m)^\r*\(none\) login: *\r$"),), 60
+    )
+    if state == "login":
+        print("Vendor Linux login prompt reached successfully.")
+        return
+
+    deadline = time.monotonic() + LOGIN_TIMEOUT
+    while time.monotonic() < deadline:
+        console.send("\r")
+        state, _ = console.wait(
+            (("login", r"(?m)^\r*\(none\) login: *\r$"),), 10
+        )
+        if state == "login":
+            print("Vendor Linux login prompt reached successfully.")
+            return
+
+    fail("vendor Linux login prompt did not appear before the timeout", 9)
+
+
 def boot(profile, settings: LocalSettings, console):
     reach_uboot(settings, console)
+    if profile.boot.action == "vendor":
+        boot_vendor(console)
+        return
+
     if profile.boot.action == "prompt":
         print("U-Boot prompt reached successfully.")
         return
-    if profile.boot.action == "vendor":
-        print("Resuming the vendor boot path...")
-        console.send(" reset\r")
-        state, _ = console.wait(
-            (
-                ("kernel", r"Starting kernel"),
-                ("login", r"(?m)^\r*\(none\) login: *\r$"),
-            ),
-            90,
-        )
-        if state == "login":
-            print("Vendor Linux login prompt reached successfully.")
-            return
-        if state != "kernel":
-            fail("vendor kernel did not start before the timeout", 9)
-
-        print("Waiting for the vendor boot console to settle...")
-        state, _ = console.wait(
-            (("login", r"(?m)^\r*\(none\) login: *\r$"),), 60
-        )
-        if state == "login":
-            print("Vendor Linux login prompt reached successfully.")
-            return
-
-        deadline = time.monotonic() + LOGIN_TIMEOUT
-        while time.monotonic() < deadline:
-            console.send("\r")
-            state, _ = console.wait(
-                (("login", r"(?m)^\r*\(none\) login: *\r$"),), 10
-            )
-            if state == "login":
-                print("Vendor Linux login prompt reached successfully.")
-                return
-
-        fail("vendor Linux login prompt did not appear before the timeout", 9)
 
     if profile.kernel.source == "tftp" or profile.rootfs.source == "tftp":
         configure_uboot_network(settings, console)
