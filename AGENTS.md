@@ -66,7 +66,7 @@ Each userspace is emitted once, as a gzipped cpio. The same archive serves both
 destinations: U-Boot loads it to RAM as an initramfs root, and `dvr-stage`
 streams it onto the HDD partition.
 
-# Commit Conventions
+## Commit Conventions
 
 Keep each commit to one logical change, and add a body only when the reason or supporting evidence is not obvious.
 
@@ -155,9 +155,11 @@ verification.
 ## Working on the device
 
 The board can run the vendor 3.0.8 kernel or the mainline port. Run `uname -r`
-before interpreting runtime results. Avoid multi-register `devmem` loops over
-the serial console: echo interleaving can produce plausible but garbled output.
-Prefer individual reads and cross-check surprising values.
+before interpreting runtime results.
+
+When performing diagnostics, debugging or benchmarking on the Debian image, you
+can install any `apt` package that would help. This is preferable to rolling
+your own tools.
 
 ## Talking to the DVR
 
