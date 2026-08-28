@@ -41,7 +41,7 @@ BR2_LINUX_KERNEL_CUSTOM_DTS_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/dts"
 BR2_TARGET_ROOTFS_INITRAMFS=y
 # BR2_TARGET_ROOTFS_TAR is not set
 BR2_INIT_BUSYBOX=y
-BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/busybox-network.fragment $(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/busybox-minimal.fragment"
+BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/busybox-network.fragment $(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/busybox-minimal.fragment $(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/busybox-debug.fragment"
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/rootfs-overlay-network"
 BR2_TARGET_GENERIC_GETTY=y
 BR2_TARGET_GENERIC_HOSTNAME="minimal"
