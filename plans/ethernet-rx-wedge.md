@@ -71,17 +71,57 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
   The larger ring lowers the rate, it does not remove the fault.
 - Unmasking RU is only safe if it is masked again at the wedge.  The
   condition survives the interrupt being acknowledged, so the channel
-  re-interrupts as fast as the handler can clear it and the workqueue that
-  would run the reset never gets a CPU.  It presents as an RCU stall in
-  `stmmac_napi_poll_rx` with the close blocked behind it, and the board
-  needs `sysrq-b` to get out.  0016 masks both sources when it asks for the
-  reset; `hi3531_dma_init_chan()` re-arms them on reopen.
+  re-interrupts as fast as the handler can clear it.  0016 masks both
+  sources when it asks for the reset; `hi3531_dma_init_chan()` re-arms them
+  on reopen.  That removed the interrupt storm but not the stall it was
+  blamed for -- see the repeated-recovery entry below.
+- Repeated recovery stalls the board.  After a few successful recoveries a
+  later one never completes: CPU0 stays in `stmmac_napi_poll_rx` with
+  interrupts on, RCU reports the stall, and `page_pool_release_retry()`
+  reports the same pool stuck with 1345 inflight pages for minutes.  It took
+  the fifth wedge in one session and the third in another, and both times
+  the fatal one arrived a few seconds after a completed recovery (link up at
+  312.5 s, wedge at 318.6 s).  The board needs `sysrq-b`.  The suspect is
+  the page pool: `dev_close` cannot reclaim RX pages the wedged DMA still
+  holds, so every cycle leaks a poolful.
+- The reproducer is four-stream inbound TCP against `iperf3 -s`, ring 512,
+  30 to 45 s.  It wedged 3 runs out of 3, first wedge between 1.3 s and 19 s
+  in, at 30k received pps and 320-350 Mbit/s.
+- Smaller frames do not bring the wedge on; they push it away.  Received pps
+  saturates near 38k whatever the frame size, so shrinking frames only lowers
+  the bit rate, and the ring drains less.  Ring 512, four streams, 30 s, frame
+  size set with `ip link set eth0 mtu` on the board because macOS rejects
+  `iperf3 -M`:
+
+      MTU 1500   348 Mbit/s   30353 pps   1435 B   low-water  24   wedged at 1.3 s
+      MTU 1000   293 Mbit/s   36144 pps   1014 B   low-water  34   no wedge
+      MTU  600   192 Mbit/s   39058 pps    614 B   low-water  91   no wedge
+      MTU  400   126 Mbit/s   38181 pps    414 B   low-water 162   no wedge
+
+  Bytes per second is what empties the ring here, not packets per second.
 - `ethtool -S eth0` reports `rx_desc_low_water`, the fewest descriptors seen
   in the DMA's hands since the previous read.  It is measured from CSR19,
   because cur_rx and dirty_rx describe only the driver's own progress.
 - `dwmac_hi3531.rx_ring_size=` selects the probe-time ring, 64 to 1024.
 - GMAC debug at the wedge reads `0x00000117`, `0x00000120` or `0x00000137`
   across five events, not the `0x00000220` recorded on 2026-08-28.
+- Recovery in place works and is much cheaper than closing and reopening.
+  0016 rebuilds the DMA around the rings it already has, so the page pool
+  survives and the link is never dropped.  A 45 s four-stream run at 512
+  wedged 0.8 s in, recovered, and finished at 472 Mbit/s received and 39k
+  pps, against 319-360 Mbit/s when each recovery cost a PHY renegotiation.
+  Six wedges recovered this way across three runs with no page-pool message
+  and no RCU stall, where close-and-reopen stalled on the third.
+- The three-channel reset clears GMAC1's control register along with the
+  DMA: a 1000/full interface reads `0x0061080c` there and reads zero
+  afterwards.  Opening the interface does not care, because phylink
+  programs speed and duplex on link-up, but an in-place reset never gets
+  that call.
+- `GMAC_CORE_INIT` asserts port select unconditionally, which selects MII.
+  Restoring the link bits before `stmmac_core_init()` runs is not enough --
+  the register came back `0x0061880c` and receive stayed dead against a
+  1000 Mb/s link.  0016 overrides `core_init` to put the three bits back
+  afterwards.
 - Ruled out as contributors: L2 cache (wedge reproduced with `L2_CTRL` both
   ways, `L2_RINT` clear), RPS, CPU frequency scaling (no `cpufreq` driver),
   TCP buffer sizing.
@@ -99,6 +139,15 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
    only workloads that were also survivable on mainline.
 3. Whether a receive process in state 4 can be restarted by anything short of
    the three-channel reset.  Every documented DWMAC1000 mechanism has failed.
+4. What blocks the in-place reset on the wedge that eventually hangs the
+   board.  `Reset DMA.` printed and `stmmac_hw_setup()` never did, so it
+   stops between taking `rtnl` and rebuilding.  No RCU stall was reported
+   and the console stopped responding, including to sysrq over a serial
+   break, which points at a sleeping deadlock rather than a spin.  The
+   teardown has since been reordered to match `__stmmac_release()` --
+   `napi_disable` first, then the transmit timers, then `netif_tx_disable`,
+   with `priv->lock` held only across the rebuild.  That ordering is
+   untested: the board needs a power cycle to boot the kernel carrying it.
 
 ## Plan
 
@@ -117,16 +166,13 @@ to, and it is the instrument for everything that follows.
 - Make the probe-time ring size a module parameter so ring experiments cost a
   reboot rather than a rebuild.
 
-### 2. Reproduce on demand
+### 2. Reproduce on demand — done
 
-No further comparison work until the generator wedges mainline at 512
-descriptors repeatably, 3 runs out of 3, within a bounded time.
-
-Single-flow UDP is not that generator.  Use multiple flows and drive past
-468 Mbit/s *received*; match runs on received packets/s, not offered, because
-half the offered load is discarded before it reaches the DMA.  Sweep frame
-size downward once a working rate is found: small frames raise descriptor
-demand for the same bit rate.
+`iperf3 -c dvr -P 4 -t 30` against `iperf3 -s` on the board, ring 512, wedges
+3 runs out of 3.  The frame-size sweep is done and points the other way from
+the expectation recorded here: received pps is capped near 38k, so smaller
+frames lower the bit rate and move the ring away from exhaustion.  Keep full
+MTU for every run that has to wedge.
 
 ### 3. Characterise the approach to exhaustion
 
@@ -198,6 +244,12 @@ Per run, record: received Mbit/s and pps, payload size, flow count, duration,
 ring size, low-water mark, RU count, CSR8, and CSR5/CSR19/GMAC debug at the
 end.  Sender-side throughput alone is not a result.
 
+Count wedges from the `receive DMA suspended` lines in `dmesg`, not from
+`rx_buf_unav_irq`.  That counter is cumulative and runs ahead of the log,
+because the core counts an RU that arrived while the mask was being written
+and 0016 deliberately does not report it twice.  `rx_desc_low_water` is the
+one statistic that resets on read.
+
 Treat a wedge as confirmed when the receive process is in state 4 with no
 packet or current-descriptor progress after descriptors have been returned to
 DMA ownership.  Preserve the register samples before any recovery reset.
@@ -241,8 +293,43 @@ Four-stream inbound TCP recovered from every wedge: three in one 45 s run at
 the one surprise -- unmasking RU without masking it again starves the reset
 workqueue and stalls the board.
 
+### 2026-08-28 — step 2 done, recovery found wanting
+
+Four-stream inbound TCP at ring 512 wedged 3 runs out of 3, first wedge from
+1.3 s to 19 s into the run at 30k received pps.  Swept frame size with the
+board's MTU: 1500, 1000, 600, 400.  Only full MTU wedges.  pps flattens near
+38k across the sweep while bit rate falls with frame size, and the low-water
+mark rises from 24 to 162 as frames shrink, so the ring is emptied by bytes
+per second rather than packets per second.
+
+Two sessions ended with the board stalled in `stmmac_napi_poll_rx` after a
+wedge that followed a completed recovery, each with a page pool stuck at 1345
+inflight pages.  Recovery survives isolated wedges and does not survive a
+run of them.
+
+### 2026-08-28 — recovery moved in place
+
+0016 now rebuilds the DMA around the rings it already has instead of going
+through `dev_close()` and `dev_open()`: the suspend and resume pair with the
+parts that release memory or touch the PHY left out.  Received throughput at
+512 rose to 472 Mbit/s and 39k pps because a recovery no longer costs a PHY
+renegotiation, and six wedges recovered without the page-pool leak.
+
+Two hardware facts came out of it.  The three-channel reset clears GMAC1's
+control register, and `GMAC_CORE_INIT` then re-asserts port select, so the
+link bits have to be carried across the reset and put back again after
+`core_init` -- the first attempt did only the former and brought the MAC up
+in MII mode against a gigabit link.
+
+The sixth wedge still hung the board between `rtnl_lock()` and
+`stmmac_hw_setup()`, with no stall report and an unresponsive console.
+
 ### Next
 
-Step 2: build a generator that wedges mainline at 512 within a bounded time,
-3 runs out of 3.  Four-stream inbound TCP already does it in 45 s; confirm
-the repeat rate and record received pps, then sweep frame size down.
+Boot the kernel with the reordered teardown and repeat the stress run: three
+45 s runs at 512, watching for a wedge that does not come back.  The board is
+hung and needs a power cycle first.
+
+Then step 3: at fixed received pps, sweep the ring across 256, 512 and 1024
+and record the low-water mark and whether RU fires.  Use full MTU; the frame
+size sweep showed nothing else reaches the rate that wedges.
