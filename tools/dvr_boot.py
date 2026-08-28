@@ -522,7 +522,7 @@ def recover_phy(console):
     print("Reinitializing the PHY before retrying TFTP...")
     run_uboot_command(console, "mii write 1 e 0")
     run_uboot_command(console, "mii write 1 0 1140")
-    time.sleep(30)
+    time.sleep(15)
 
 
 def transfer_timeout(artifact):
