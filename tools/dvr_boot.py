@@ -23,6 +23,7 @@ TMUX_SESSION = "dvr"
 LOGIN_TIMEOUT = 180
 TRANSFER_TIMEOUT = 120
 VENDOR_PASSWORD = "1001chin"
+VENDOR_KERNEL_PREFIX = "3.0.8"
 
 
 class BootFailure(Exception):
@@ -242,6 +243,22 @@ class Console:
         ):
             fail("could not send Enter through tmux", 4)
 
+    def send_slow(self, text, interval=0.02, settle=1):
+        enter = text.endswith("\r")
+        text = text.removesuffix("\r")
+        for character in text:
+            if tmux(
+                "send-keys", "-t", self.session, "-l", "--", character, capture=True
+            ).returncode:
+                fail("could not send keys through tmux", 4)
+            time.sleep(interval)
+        if (
+            enter
+            and tmux("send-keys", "-t", self.session, "Enter", capture=True).returncode
+        ):
+            fail("could not send Enter through tmux", 4)
+        time.sleep(settle)
+
     def send_secret(self, text):
         buffer_name = f"dvr-console-secret-{os.getpid()}"
         if tmux("load-buffer", "-b", buffer_name, "-", input_text=text).returncode:
@@ -350,11 +367,54 @@ def login(console, password):
         fail("Linux console login failed", 5)
 
 
+def is_vendor_linux(console):
+    console.send("printf 'DVR_KERNEL='; uname -r\r")
+    state, _ = console.wait(
+        (
+            (
+                "vendor",
+                rf"(?m)^\r*DVR_KERNEL={re.escape(VENDOR_KERNEL_PREFIX)}[^\r\n]*\r*$",
+            ),
+            ("other", r"(?m)^\r*DVR_KERNEL=[^\r\n]+\r*$"),
+        ),
+        10,
+    )
+    if state == "vendor":
+        return True
+    if state == "other":
+        return False
+    fail("could not identify the running Linux kernel", 5)
+
+
+def stop_vendor_daemon(console):
+    console.send_slow("killall td3531\r")
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        time.sleep(1)
+        console.send_slow("pidof td3531&&echo TD_RUN||echo TD_STOP\r")
+        state, _ = console.wait(
+            (
+                ("running", r"(?m)^\r*TD_RUN\r*$"),
+                ("stopped", r"(?m)^\r*TD_STOP\r*$"),
+            ),
+            2,
+        )
+        if state == "stopped":
+            return
+    fail("vendor ./td3531 daemon did not stop", 6)
+
+
+def disarm_vendor_mcu_watchdog(console):
+    console.send_slow("stty -F /dev/ttyAMA1 9600 cs8 -cstopb -parenb -icanon min 0 time 5\r")
+    console.send_slow("printf '\\xa0\\x08\\x00\\x00\\xa8' > /dev/ttyAMA1\r")
+
+
 def reach_uboot(settings: LocalSettings, console):
     state = identify_console(console)
     if state == "uboot":
         return
 
+    vendor_linux = state == "vendor_login"
     if state == "vendor_login":
         print("Logging in to vendor Linux through the serial console...")
         login(console, VENDOR_PASSWORD)
@@ -363,16 +423,33 @@ def reach_uboot(settings: LocalSettings, console):
             "Logging in to the maintained Linux system through the serial console..."
         )
         login(console, settings.root_password)
+    elif state == "shell":
+        vendor_linux = is_vendor_linux(console)
+
+    if vendor_linux:
+        print("Stopping the vendor front-panel daemon...")
+        stop_vendor_daemon(console)
+        print("Disabling the MCU watchdog...")
+        disarm_vendor_mcu_watchdog(console)
 
     print("Rebooting and interrupting autoboot...")
     console.send("reboot\r")
 
+    reset_after_restart = True
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         console.send(" ")
         state, _ = console.wait((("uboot", UBOOT_PROMPT),), 0.25)
-        if state == "uboot":
+        if state != "uboot":
+            continue
+        if not reset_after_restart:
             return
+        print("Resetting U-Boot ...")
+        time.sleep(0.5)
+        console.send(" reset\r")
+        time.sleep(0.5)
+        reset_after_restart = False
+        deadline = time.monotonic() + 60
     fail("clean reboot did not reach the U-Boot prompt within 60 seconds", 6)
 
 
@@ -445,7 +522,7 @@ def recover_phy(console):
     print("Reinitializing the PHY before retrying TFTP...")
     run_uboot_command(console, "mii write 1 e 0")
     run_uboot_command(console, "mii write 1 0 1140")
-    time.sleep(30)
+    time.sleep(15)
 
 
 def transfer_timeout(artifact):
@@ -526,8 +603,51 @@ def load_initramfs(profile, console):
     return f"initrd={rootfs.load_address},0x{size}"
 
 
+def boot_vendor(console):
+    print("Resuming the vendor boot path...")
+    time.sleep(0.5)
+    console.send(" reset\r")
+    time.sleep(0.5)
+    print("Waiting for the vendor boot console to settle...")
+    state, _ = console.wait(
+        (
+            ("kernel", r"Starting kernel"),
+            ("login", r"(?m)^\r*\(none\) login: *\r$"),
+        ),
+        90,
+    )
+    if state == "login":
+        print("Vendor Linux login prompt reached successfully.")
+        return
+    if state != "kernel":
+        fail("vendor kernel did not start before the timeout", 9)
+
+    state, _ = console.wait(
+        (("login", r"(?m)^\r*\(none\) login: *\r$"),), 60
+    )
+    if state == "login":
+        print("Vendor Linux login prompt reached successfully.")
+        return
+
+    deadline = time.monotonic() + LOGIN_TIMEOUT
+    while time.monotonic() < deadline:
+        console.send("\r")
+        state, _ = console.wait(
+            (("login", r"(?m)^\r*\(none\) login: *\r$"),), 10
+        )
+        if state == "login":
+            print("Vendor Linux login prompt reached successfully.")
+            return
+
+    fail("vendor Linux login prompt did not appear before the timeout", 9)
+
+
 def boot(profile, settings: LocalSettings, console):
     reach_uboot(settings, console)
+    if profile.boot.action == "vendor":
+        boot_vendor(console)
+        return
+
     if profile.boot.action == "prompt":
         print("U-Boot prompt reached successfully.")
         return

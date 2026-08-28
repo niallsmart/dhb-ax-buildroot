@@ -331,11 +331,11 @@ def _boot(data: Mapping[str, Any]) -> Boot:
     table = _table(data, "boot")
     _keys(table, "boot", {"action", "args", "hostname"})
     action = _string(table, "boot", "action")
-    if action not in ("kernel", "prompt"):
-        raise ProfileError("boot.action must be 'kernel' or 'prompt'")
-    if action == "prompt":
+    if action not in ("kernel", "prompt", "vendor"):
+        raise ProfileError("boot.action must be 'kernel', 'prompt' or 'vendor'")
+    if action in ("prompt", "vendor"):
         if set(table) != {"action"}:
-            raise ProfileError("prompt profiles may only set boot.action")
+            raise ProfileError(f"{action} profiles may only set boot.action")
         return Boot(action=action)
 
     args = table.get("args")
@@ -382,9 +382,11 @@ def load_profile(
     }
     data = _interpolate(raw, references, environ)
     boot = _boot(data)
-    if boot.action == "prompt":
+    if boot.action in ("prompt", "vendor"):
         if "kernel" in data or "rootfs" in data:
-            raise ProfileError("prompt profiles cannot define kernel or rootfs tables")
+            raise ProfileError(
+                f"{boot.action} profiles cannot define kernel or rootfs tables"
+            )
         return Profile(name=name, boot=boot)
 
     kernel = _kernel(data, repo_root)
