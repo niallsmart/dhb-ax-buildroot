@@ -1,10 +1,9 @@
 # Enabling the L2 cache
 
-The Hi3531 has a 256 KB unified L2 cache that this port does not use. The
-block is a HiSilicon "L2 Cache V200", not an ARM PL310, so no mainline driver
-binds to it. The vendor 3.0.8 SDK ships a complete driver for it
-(`arch/arm/mm/cache-hil2v200.c`), and that driver is what has to be
-forward-ported.
+The branch enables the Hi3531's 256 KB unified L2 cache with a maintained port
+of the vendor 3.0.8 SDK driver (`arch/arm/mm/cache-hil2v200.c`). The block is a
+HiSilicon "L2 Cache V200", not an ARM PL310, so no upstream driver binds to it.
+This document records the implementation and the remaining validation work.
 
 This is a performance change only. The board boots and runs correctly with
 the outer cache off.
@@ -20,13 +19,15 @@ the outer cache off.
 | The SDK's Godnet U-Boot leaves the block off | Godnet's `cleanup_before_linux()` contains disable/enable call sites, but `include/configs/godnet.h` defines `CONFIG_L2_OFF`, which compiles those calls and the Godnet L2 implementation out |
 | Vendor Linux enables the block | The running 3.0.8 kernel logs `L2cache cache controller enabled`; individual `devmem` reads show `L2_CTRL=0x1`, `L2_AUCTRL=0x01803000`, `L2_INTMASK=0x3fff`, `L2_RINT=0`, and both lockdown registers zero |
 | `CONFIG_CACHE_L2X0=y` in `linux.config` | force-selected by `ARCH_HI3xxx` in `arch/arm/mach-hisi/Kconfig` |
-| Nothing binds in the maintained kernel | no L2 node in `hi3531.dtsi`, and `init_IRQ()` only calls `l2x0_of_init()` when the machine descriptor sets `l2c_aux_val`/`l2c_aux_mask`, which the generic DT machine does not |
+| The HiL2V200 driver binds on this branch | `hi3531.dtsi` describes the controller, each board DTS enables it, and the boot log reports `hil2v200: enabled outer cache` |
 
-`CONFIG_CACHE_L2X0=y` is therefore inert, not wrong. It cannot be turned off
-without patching `mach-hisi/Kconfig`, and leaving it on costs a few KB of
-unreachable text. Do not point an `arm,pl310-cache` compatible at
-`0x20700000`: the register layouts do not overlap, and PL310's control
-register offset is this block's `L2_AUCTRL`.
+`CONFIG_CACHE_L2X0=y` remains inert, not wrong. The generic DT machine supplies
+a nonzero `l2c_aux_mask`, so `init_IRQ()` calls `l2x0_of_init()`, which returns
+`-ENODEV` because the tree has no l2x0-compatible node. The option cannot be
+turned off without patching `mach-hisi/Kconfig`, and leaving it on costs a few
+KB of unused text. Do not point an `arm,pl310-cache` compatible at
+`0x20700000`: the register layouts do not overlap, and PL310's control register
+offset is this block's `L2_AUCTRL`.
 
 Full hardware detail, including the register map and the evidence that this
 is not a PL310, is in the guide's
@@ -69,19 +70,18 @@ header with a stub, one file under `arch/arm/mm/`.
 No machine descriptor is needed. The board matches
 `__mach_desc_GENERIC_DT` and should keep doing so.
 
-The vendor's own ordering — a platform device and driver bound at
-`device_initcall`, after `smp_init()` — is proven on this silicon, but it is
-later than necessary and carries platform-device boilerplate that buys
-nothing here.
+The vendor's platform driver binds at `device_initcall`, after `smp_init()`.
+Initialization during `init_IRQ()` runs before DMA and avoids platform-device
+boilerplate.
 
-## What has to change from the vendor driver
+## Differences from the vendor driver
 
-The `outer_cache` hooks the vendor fills still exist. The work is API drift
-and a handful of defects, not reverse engineering.
+The maintained driver keeps the applicable `outer_cache` hooks while accounting
+for API drift and the vendor defects below.
 
 | Vendor code | Problem | Port to |
 |---|---|---|
-| `outer_cache.inv_all = l2cache_inv_all` | the field no longer exists in `struct outer_cache_fns` | drop the assignment; keep `__l2cache_inv_all()` as an internal helper for init |
+| `outer_cache.inv_all = l2cache_inv_all` | the current `struct outer_cache_fns` has no `inv_all` field | drop the assignment; keep `__l2cache_inv_all()` as an internal helper for init |
 | `l2cache_disable()` writes `0` to `L2_CTRL` and nothing else | `outer_disable()` is contracted to clean *and* invalidate before disabling; dirty lines would be dropped whenever the hook is used, including ARM's single-CPU soft-restart path. This is a regression against the vendor's own U-Boot, whose `l2cache_disable()` cleans and invalidates every way first | flush all ways, write `0`, then `dsb(st)`, as `l2c_disable()` does |
 | `l2cache_handle()` clears with `writel_relaxed(0, ..INTCLR)` | the maintenance path proves that `AUTO_END` is write-1-to-clear: both kernel generations and U-Boot read `L2_RINT` and write it back after every operation. The header gives each error bit the same position in `RINT` and `INTCLR`, although those error bits remain untested. If they share the established semantics, writing `0` clears nothing and a latched error re-fires forever | read `L2_RINT` and write it back to `L2_INTCLR`. The same applies to the init path's "clean last error int" write |
 | `l2cache_inv_range()` rounds `start` down and invalidates every touched line | for an unaligned DMA buffer, invalidating a partial first or last line can discard dirty bytes belonging to an adjacent object. Mainline's `l2c210_inv_range()` clean-invalidates partial boundary lines for exactly this reason | clean then invalidate each partial boundary line; invalidate only fully covered interior lines. Handle a range contained in one line without letting the interior loop wrap or overrun |
@@ -251,7 +251,8 @@ an L2 line; that is why `inv_range` needs the boundary handling above.
 
 ## Verification
 
-**Both CPUs online is the first check, and the cheapest.**
+**Both CPUs online is the first check, and the cheapest.** This is verified on
+hardware: `nproc` reports 2 and the boot log reports both processors activated.
 `arch/arm/kernel/smp.c:156` calls `sync_cache_w(&secondary_data)` immediately
 before `smp_boot_secondary()`, and that reaches `outer_clean_range()` through
 `asm/cacheflush.h:393`. CPU1 reads `secondary_data` with its MMU and caches
@@ -263,30 +264,30 @@ loudly, before any data is at risk. Check `nproc` before anything else.
 MMIO register, unlike the socfpga and rockchip SMP operations, which clean a
 trampoline they placed in DRAM. Do not add one.
 
-Then:
+The hardware-verified state is:
 
-1. The driver's own boot line, and no `l2x0:` line.
-2. `devmem 0x20700000` reads `0x00000001`. `0x20700004` reads with bits 12,
-   13 and 15 set — the vendor system shows `0x01803000`, which has 12 and 13
-   but not 15, so this value is expected to differ from the recorded one.
-3. `0x20700108` (`L2_RINT`) stays `0` under load — no latched bus or ECC
-   errors. Read it by hand; no interrupt handler is installed.
-4. `/sys/devices/system/cpu/cpu0/cache/index2/` should report level 2,
-   unified, size 262144, line 32, sets 1024. `CLIDR` does not describe an
+1. The boot log contains the driver's `enabled outer cache` line and no
+   `l2x0:` line.
+2. `devmem 0x20700000` reads `0x00000001`; `0x20700004` reads
+   `0x0180b000`, with bits 12, 13 and 15 set in addition to reset bits 23 and
+   24.
+3. `0x20700108` (`L2_RINT`) reads `0`, and `0x20700100` (`L2_INTMASK`) reads
+   `0`.
+4. `/sys/devices/system/cpu/cpu0/cache/index2/` reports level 2, unified,
+   size 256K, line 32, sets 1024, 8 ways, and shared CPU list `0-1`. `CLIDR`
+   does not describe an
    external L2, but `init_cache_level()` extends the level count from the
    device tree via `of_find_last_cache_level()`, so this entry comes from the
-   `next-level-cache` phandle. Unverified on hardware. Note that the phandle
-   walk ignores `status`, so the entry appears even with the controller
-   disabled: it confirms the description, never that the cache is running.
-5. Boot once with the node disabled and confirm that the driver line is absent
-   and `L2_CTRL` remains `0`. This proves that the A/B switch controls
-   hardware, rather than only changing the cache description.
+   `next-level-cache` phandle. The phandle walk ignores `status`, so the entry
+   confirms the description rather than the controller state.
+5. A mainline boot with the node disabled recorded `L2_CTRL=0`; the enabled
+   board node records `L2_CTRL=1`, so the DT switch controls the hardware.
 
-Before hardware boot, build both normal and minimal configurations and run the
-new schema through `dt_binding_check`; compile success alone does not validate
-the binding or the two DT instances.
+The minimal configuration builds and the production configuration boots on
+hardware. Full validation still requires `dt_binding_check` and both DT
+instances through `dtbs_check`; compile success alone does not validate them.
 
-Then exercise the DMA masters hard, because a missing sync in the range ops
+Exercise the DMA masters hard, because a missing sync in the range ops
 shows up as silent corruption and nowhere else:
 
 - SATA: write and re-read a multi-GB file on the HDD, compare.
@@ -306,7 +307,7 @@ Debian trixie is available as a root filesystem, so `sysbench`, `lmbench` and
 
 | Measurement | Why it should move |
 |---|---|
-| `lmbench` `lat_mem_rd` / `bw_mem` | direct read of whether a 256 KB working set now hits |
+| `lmbench` `lat_mem_rd` / `bw_mem` | direct read of whether a 256 KB working set hits in L2 |
 | `iperf3` TCP single stream (231 Mbit/s baseline) | software checksums are per-byte memory work |
 | `scp` 256 MB, both directions (27.84 s / 30.06 s baseline) | same, plus SATA |
 | `openssl speed -evp aes-128-cbc`, `sha256` | CPU-bound with a small working set; isolates the L2 from the network path |
@@ -362,9 +363,9 @@ The diagnostic build without the `outer_cache.sync` hook is subject to the
 stricter isolation in the benchmark section; it must never run against a
 writable production filesystem.
 
-## Error reporting is deferred
+## Error reporting
 
-The first cut leaves `L2_INTMASK` at `0` and registers no handlers for SPI
+The driver leaves `L2_INTMASK` at `0` and registers no handlers for SPI
 37, 38 and 39. The datasheet establishes ECC on the tag and data RAMs, with
 single-bit correction; the vendor header identifies parity/ECC, bus-error and
 maintenance-completion interrupt sources.
@@ -376,8 +377,9 @@ genirq's spurious detection would not shut it down. A storm at boot is worse
 than no error reporting. `L2_RINT` is read by hand during verification
 instead.
 
-Wiring them up later means fixing the clear, registering the three lines from
-an `arch_initcall`, and only then unmasking.
+An interrupt implementation requires a verified clear operation, registration
+of the three lines from an `arch_initcall`, and unmasking only after the
+handlers are live.
 
 ## Open questions
 
@@ -385,8 +387,8 @@ an `arch_initcall`, and only then unmasking.
   `AUTO_END` is settled by every working vendor maintenance implementation;
   the error bits are inferred from the header's matching `RINT`/`INTCLR`
   positions. Confirm them on hardware by latching an error through
-  `L2_INTTEST` (`0x404`) before relying on the deferred error path. Nothing
-  in the first cut depends on the error-bit answer.
+  `L2_INTTEST` (`0x404`) before relying on an interrupt path. The maintained
+  driver does not depend on the error-bit answer.
 - What sets `L2_AUCTRL` bits 23 and 24. The recorded vendor value is
   `0x01803000`; the vendor driver only ORs in bits 12 and 13, so those two
   come from reset or from earlier firmware. Read `L2_AUCTRL` on the minimal
@@ -400,16 +402,11 @@ an `arch_initcall`, and only then unmasking.
   mainline expects `outer_cache.resume`. This board has no working suspend
   path, so leave the hook unimplemented and note it.
 
-## Follow-up
+## Documentation state
 
-On success, update the `L2 cache` row in [remaining-work.md](remaining-work.md)
-and move the reusable hardware conclusions — the interrupt-clear semantics,
-what the shared-attribute override is worth, the measured gain, the sync cost
-— into the guide's SoC overview, which currently ends its L2 section at "the
-work is adapting it to device tree probing and current locking conventions".
-
-The guide's SoC overview also needs two corrections regardless of outcome: it
-cites the SDK as the only source for the L2's size and line length, which
-datasheet §3.11.2 states directly, and its porting-implications paragraph
-lists the `outer_cache` hooks to fill without noting that `inv_all` no longer
-exists.
+The repository README and [remaining-work.md](../doc/remaining-work.md) record
+the verified boot state and the outstanding stress and performance checks.
+The guide's SoC overview carries the reusable controller facts and live
+register evidence. Measured gain, the shared-attribute override's contribution,
+and the global sync cost remain benchmark outputs rather than established
+hardware conclusions.
