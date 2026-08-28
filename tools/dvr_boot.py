@@ -23,6 +23,7 @@ TMUX_SESSION = "dvr"
 LOGIN_TIMEOUT = 180
 TRANSFER_TIMEOUT = 120
 VENDOR_PASSWORD = "1001chin"
+VENDOR_KERNEL_PREFIX = "3.0.8"
 
 
 class BootFailure(Exception):
@@ -242,6 +243,22 @@ class Console:
         ):
             fail("could not send Enter through tmux", 4)
 
+    def send_slow(self, text, interval=0.02, settle=1):
+        enter = text.endswith("\r")
+        text = text.removesuffix("\r")
+        for character in text:
+            if tmux(
+                "send-keys", "-t", self.session, "-l", "--", character, capture=True
+            ).returncode:
+                fail("could not send keys through tmux", 4)
+            time.sleep(interval)
+        if (
+            enter
+            and tmux("send-keys", "-t", self.session, "Enter", capture=True).returncode
+        ):
+            fail("could not send Enter through tmux", 4)
+        time.sleep(settle)
+
     def send_secret(self, text):
         buffer_name = f"dvr-console-secret-{os.getpid()}"
         if tmux("load-buffer", "-b", buffer_name, "-", input_text=text).returncode:
@@ -350,11 +367,54 @@ def login(console, password):
         fail("Linux console login failed", 5)
 
 
+def is_vendor_linux(console):
+    console.send("printf 'DVR_KERNEL='; uname -r\r")
+    state, _ = console.wait(
+        (
+            (
+                "vendor",
+                rf"(?m)^\r*DVR_KERNEL={re.escape(VENDOR_KERNEL_PREFIX)}[^\r\n]*\r*$",
+            ),
+            ("other", r"(?m)^\r*DVR_KERNEL=[^\r\n]+\r*$"),
+        ),
+        10,
+    )
+    if state == "vendor":
+        return True
+    if state == "other":
+        return False
+    fail("could not identify the running Linux kernel", 5)
+
+
+def stop_vendor_daemon(console):
+    console.send_slow("killall td3531\r")
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        time.sleep(1)
+        console.send_slow("pidof td3531&&echo TD_RUN||echo TD_STOP\r")
+        state, _ = console.wait(
+            (
+                ("running", r"(?m)^\r*TD_RUN\r*$"),
+                ("stopped", r"(?m)^\r*TD_STOP\r*$"),
+            ),
+            2,
+        )
+        if state == "stopped":
+            return
+    fail("vendor ./td3531 daemon did not stop", 6)
+
+
+def disarm_vendor_mcu_watchdog(console):
+    console.send_slow("stty -F /dev/ttyAMA1 9600 cs8 -cstopb -parenb -icanon min 0 time 5\r")
+    console.send_slow("printf '\\xa0\\x08\\x00\\x00\\xa8' > /dev/ttyAMA1\r")
+
+
 def reach_uboot(settings: LocalSettings, console):
     state = identify_console(console)
     if state == "uboot":
         return
 
+    vendor_linux = state == "vendor_login"
     if state == "vendor_login":
         print("Logging in to vendor Linux through the serial console...")
         login(console, VENDOR_PASSWORD)
@@ -363,6 +423,14 @@ def reach_uboot(settings: LocalSettings, console):
             "Logging in to the maintained Linux system through the serial console..."
         )
         login(console, settings.root_password)
+    elif state == "shell":
+        vendor_linux = is_vendor_linux(console)
+
+    if vendor_linux:
+        print("Stopping the vendor front-panel daemon...")
+        stop_vendor_daemon(console)
+        print("Disabling the MCU watchdog...")
+        disarm_vendor_mcu_watchdog(console)
 
     print("Rebooting and interrupting autoboot...")
     console.send("reboot\r")
@@ -376,17 +444,13 @@ def reach_uboot(settings: LocalSettings, console):
             continue
         if not reset_after_restart:
             return
-
-        print("Resetting U-Boot to clear the MCU watchdog...")
+        print("Resetting U-Boot after the vendor Linux restart...")
         time.sleep(0.5)
         console.send(" reset\r")
         time.sleep(0.5)
         reset_after_restart = False
         deadline = time.monotonic() + 60
-
-    if reset_after_restart:
-        fail("clean reboot did not reach the U-Boot prompt within 60 seconds", 6)
-    fail("U-Boot reset did not reach the prompt within 60 seconds", 6)
+    fail("clean reboot did not reach the U-Boot prompt within 60 seconds", 6)
 
 
 def configure_bootargs(profile, console, extra=()):
