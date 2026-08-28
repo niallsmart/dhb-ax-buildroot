@@ -1,0 +1,477 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] ARM: mm: add HiSilicon L2 Cache V200 driver
+
+The Hi3531 carries a 256 KB unified outer cache that no mainline driver
+binds to.  It is a HiSilicon "L2 Cache V200", not an ARM PL310: the register
+layouts do not overlap, and PL310's control register offset is this block's
+auxiliary control register.  The vendor 3.0.8 SDK ships a working driver for
+it, and this is that driver adapted to device-tree probing and current
+outer-cache conventions.
+
+Initialisation follows the uniphier outer cache: a single call at the end of
+init_IRQ(), after irqchip_init() and before any DMA, with no machine
+descriptor involved.  The board keeps matching __mach_desc_GENERIC_DT.
+
+Several vendor behaviours are corrected rather than carried over.  Disabling
+cleans and invalidates first, as outer_disable() requires.  Interrupt status
+is cleared by writing back what L2_RINT reads, which is how every vendor
+maintenance path clears AUTO_END; the vendor handler's write of zero would
+clear nothing.  Range invalidation cleans partial boundary lines before
+invalidating them, so an unaligned DMA buffer cannot discard dirty bytes of an
+adjacent object, and every range operation ends in a sync inside the lock.
+The lock is a raw spinlock because outer-cache operations run from atomic
+context.
+
+The shared-attribute override is set.  Section 3.11.2 of the datasheet states
+that shared accesses are cacheable but do not allocate, and an SMP kernel maps
+kernel and user memory as Shared, so without the override most of what the
+board runs would never populate the cache.
+
+Error reporting is deferred: the three interrupt lines stay masked and no
+handler is registered.
+---
+diff --git a/arch/arm/include/asm/hardware/cache-hil2v200.h b/arch/arm/include/asm/hardware/cache-hil2v200.h
+new file mode 100644
+--- /dev/null
++++ b/arch/arm/include/asm/hardware/cache-hil2v200.h
+@@ -0,0 +1,20 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * HiSilicon L2 Cache V200 outer cache controller.
++ */
++
++#ifndef __CACHE_HIL2V200_H
++#define __CACHE_HIL2V200_H
++
++#include <linux/errno.h>
++
++#ifdef CONFIG_CACHE_HIL2V200
++int hil2v200_cache_init(void);
++#else
++static inline int hil2v200_cache_init(void)
++{
++	return -ENODEV;
++}
++#endif
++
++#endif /* __CACHE_HIL2V200_H */
+diff --git a/arch/arm/kernel/irq.c b/arch/arm/kernel/irq.c
+--- a/arch/arm/kernel/irq.c
++++ b/arch/arm/kernel/irq.c
+@@ -34,6 +34,7 @@
+ #include <linux/export.h>
+ #include <linux/vmalloc.h>
+ 
++#include <asm/hardware/cache-hil2v200.h>
+ #include <asm/hardware/cache-l2x0.h>
+ #include <asm/hardware/cache-uniphier.h>
+ #include <asm/outercache.h>
+@@ -146,6 +147,7 @@ void __init init_IRQ(void)
+ 	}
+ 
+ 	uniphier_cache_init();
++	hil2v200_cache_init();
+ }
+ 
+ #ifdef CONFIG_SPARSE_IRQ
+diff --git a/arch/arm/mm/Kconfig b/arch/arm/mm/Kconfig
+--- a/arch/arm/mm/Kconfig
++++ b/arch/arm/mm/Kconfig
+@@ -970,6 +970,16 @@ config CACHE_FEROCEON_L2_WRITETHROUGH
+ 	  Say Y here to use the Feroceon L2 cache in writethrough mode.
+ 	  Unless you specifically require this, say N for writeback mode.
+ 
++config CACHE_HIL2V200
++	bool "Enable the HiSilicon L2 Cache V200 outer cache controller"
++	depends on ARCH_HI3xxx
++	select OUTER_CACHE
++	select OUTER_CACHE_SYNC
++	help
++	  This option enables the HiSilicon L2 Cache V200 unified outer cache
++	  found on Hi3531.  It is not a PL310 and is probed
++	  from its own device-tree node.
++
+ config MIGHT_HAVE_CACHE_L2X0
+ 	bool
+ 	help
+diff --git a/arch/arm/mm/Makefile b/arch/arm/mm/Makefile
+--- a/arch/arm/mm/Makefile
++++ b/arch/arm/mm/Makefile
+@@ -94,6 +94,7 @@ obj-$(CONFIG_CFI)		+= proc.o
+ obj-$(CONFIG_OUTER_CACHE)	+= l2c-common.o
+ obj-$(CONFIG_CACHE_B15_RAC)	+= cache-b15-rac.o
+ obj-$(CONFIG_CACHE_FEROCEON_L2)	+= cache-feroceon-l2.o
++obj-$(CONFIG_CACHE_HIL2V200)	+= cache-hil2v200.o
+ obj-$(CONFIG_CACHE_L2X0)	+= cache-l2x0.o l2c-l2x0-resume.o
+ obj-$(CONFIG_CACHE_L2X0_PMU)	+= cache-l2x0-pmu.o
+ obj-$(CONFIG_CACHE_XSC3L2)	+= cache-xsc3l2.o
+diff --git a/arch/arm/mm/cache-hil2v200.c b/arch/arm/mm/cache-hil2v200.c
+new file mode 100644
+--- /dev/null
++++ b/arch/arm/mm/cache-hil2v200.c
+@@ -0,0 +1,296 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * HiSilicon L2 Cache V200 outer cache controller.
++ *
++ * Derived from the Hi3531 SDK's arch/arm/mm/cache-hil2v200.c.  The block is
++ * not a PL310 and shares no register layout with one: PL310's control
++ * register offset is this controller's auxiliary control register, so an
++ * "arm,pl310-cache" node pointed at it would write the wrong bits.
++ *
++ * Maintenance comes in two forms.  L2_MAINT_AUTO cleans or invalidates a
++ * whole way and reports completion through the AUTO_END bit of L2_RINT.
++ * L2_CLEAN and L2_INVALID take a physical address and act on the line
++ * containing it.  Both are serialised by the raw spinlock below, which the
++ * range operations also hold across their closing sync.
++ */
++
++#define pr_fmt(fmt) "hil2v200: " fmt
++
++#include <linux/init.h>
++#include <linux/io.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/sizes.h>
++#include <linux/spinlock.h>
++
++#include <asm/barrier.h>
++#include <asm/hardware/cache-hil2v200.h>
++#include <asm/outercache.h>
++
++#include "cache-hil2v200.h"
++
++static void __iomem *l2cache_base;
++static DEFINE_RAW_SPINLOCK(l2cache_lock);
++
++/*
++ * Three eviction buffers and three write buffers sit between the L1 and main
++ * memory (datasheet section 3.11.2).  Reading L2_SYNC drains them.  This runs
++ * without the lock: it is reachable from mb() through ARM_HEAVY_MB, including
++ * from callers that already hold it.  Everything below therefore writes with
++ * writel_relaxed(), whose ARM implementation does not call back in here.
++ */
++static void l2cache_sync(void)
++{
++	readl_relaxed(l2cache_base + REG_L2_SYNC);
++}
++
++static inline void l2cache_inv_line(unsigned long addr)
++{
++	writel_relaxed(addr | BIT_L2_INVALID_BYADDRESS,
++		       l2cache_base + REG_L2_INVALID);
++}
++
++static inline void l2cache_clean_line(unsigned long addr)
++{
++	writel_relaxed(addr | BIT_L2_CLEAN_BYADDRESS,
++		       l2cache_base + REG_L2_CLEAN);
++}
++
++static inline void l2cache_clean_inv_line(unsigned long addr)
++{
++	l2cache_clean_line(addr);
++	l2cache_inv_line(addr);
++}
++
++/*
++ * AUTO_END is write-1-to-clear: every vendor maintenance implementation,
++ * kernel and U-Boot alike, reads L2_RINT and writes the value back.  This also
++ * acknowledges any other asserted status; their clear semantics are inferred
++ * from matching RINT and INTCLR bit positions rather than hardware-tested.
++ */
++static void l2cache_clear_int(void)
++{
++	writel_relaxed(readl_relaxed(l2cache_base + REG_L2_RINT),
++		       l2cache_base + REG_L2_INTCLR);
++}
++
++static void l2cache_maint_way(unsigned int way, bool clean)
++{
++	u32 reg = (way << BIT_L2_MAINT_AUTO_WAYADDRESS) |
++		  BIT(BIT_L2_MAINT_AUTO_START);
++
++	if (clean)
++		reg |= BIT(BIT_L2_MAINT_AUTO_CLEAN);
++
++	writel_relaxed(reg, l2cache_base + REG_L2_MAINT_AUTO);
++
++	while (!(readl_relaxed(l2cache_base + REG_L2_RINT) &
++		 BIT(BIT_L2_RINT_AUTO_END)))
++		cpu_relax();
++
++	l2cache_clear_int();
++}
++
++/*
++ * All-way helpers without the lock, for callers that already hold it.
++ */
++static void __l2cache_inv_all(void)
++{
++	unsigned int way;
++
++	for (way = 0; way < L2_WAY_NUM; way++)
++		l2cache_maint_way(way, false);
++}
++
++static void __l2cache_flush_all(void)
++{
++	unsigned int way;
++
++	for (way = 0; way < L2_WAY_NUM; way++)
++		l2cache_maint_way(way, true);
++
++	__l2cache_inv_all();
++}
++
++static void l2cache_flush_all(void)
++{
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&l2cache_lock, flags);
++	__l2cache_flush_all();
++	l2cache_sync();
++	raw_spin_unlock_irqrestore(&l2cache_lock, flags);
++}
++
++/*
++ * A partial line at either end of the range may hold dirty bytes belonging to
++ * an adjacent object, so clean it before invalidating it and invalidate only
++ * the fully covered interior.  If both partial boundaries share one line,
++ * both boundary cases touch it; the interior loop still does nothing.
++ */
++static void l2cache_inv_range(unsigned long start, unsigned long end)
++{
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&l2cache_lock, flags);
++
++	if (start & (L2_LINE_SIZE - 1)) {
++		start &= ~(L2_LINE_SIZE - 1);
++		l2cache_clean_inv_line(start);
++		start += L2_LINE_SIZE;
++	}
++
++	if (end & (L2_LINE_SIZE - 1)) {
++		end &= ~(L2_LINE_SIZE - 1);
++		l2cache_clean_inv_line(end);
++	}
++
++	while (start < end) {
++		l2cache_inv_line(start);
++		start += L2_LINE_SIZE;
++	}
++
++	l2cache_sync();
++	raw_spin_unlock_irqrestore(&l2cache_lock, flags);
++}
++
++static void l2cache_clean_range(unsigned long start, unsigned long end)
++{
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&l2cache_lock, flags);
++
++	start &= ~(L2_LINE_SIZE - 1);
++	while (start < end) {
++		l2cache_clean_line(start);
++		start += L2_LINE_SIZE;
++	}
++
++	l2cache_sync();
++	raw_spin_unlock_irqrestore(&l2cache_lock, flags);
++}
++
++static void l2cache_flush_range(unsigned long start, unsigned long end)
++{
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&l2cache_lock, flags);
++
++	start &= ~(L2_LINE_SIZE - 1);
++	while (start < end) {
++		l2cache_clean_inv_line(start);
++		start += L2_LINE_SIZE;
++	}
++
++	l2cache_sync();
++	raw_spin_unlock_irqrestore(&l2cache_lock, flags);
++}
++
++/*
++ * outer_disable() is contracted to clean and invalidate before the controller
++ * stops, so that no dirty line is dropped.
++ */
++static void l2cache_disable(void)
++{
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&l2cache_lock, flags);
++	__l2cache_flush_all();
++	l2cache_sync();
++	writel_relaxed(0, l2cache_base + REG_L2_CTRL);
++	dsb(st);
++	raw_spin_unlock_irqrestore(&l2cache_lock, flags);
++}
++
++/*
++ * No outer_cache.resume hook: this board has no working suspend path, and the
++ * vendor's suspend/resume pair is written against a platform driver rather
++ * than the resume hook mainline calls.
++ */
++int __init hil2v200_cache_init(void)
++{
++	struct device_node *np;
++	u32 aux;
++
++	np = of_find_compatible_node(NULL, NULL, "hisilicon,hi3531-l2-cache");
++	if (!np)
++		return -ENODEV;
++
++	/*
++	 * of_find_compatible_node() returns disabled nodes too, so the status
++	 * property is what makes the device tree an on/off switch for the
++	 * controller rather than only for its description.
++	 */
++	if (!of_device_is_available(np)) {
++		of_node_put(np);
++		return -ENODEV;
++	}
++
++	l2cache_base = of_iomap(np, 0);
++	of_node_put(np);
++	if (!l2cache_base) {
++		pr_err("failed to map registers\n");
++		return -ENOMEM;
++	}
++
++	l2cache_clear_int();
++
++	/*
++	 * The SDK's Godnet U-Boot compiles its L2 support out and hands over a
++	 * disabled controller.  Other firmware might not, and its cache would
++	 * hold dirty lines that must reach memory before it stops.
++	 */
++	if (readl_relaxed(l2cache_base + REG_L2_CTRL) &
++	    BIT(BIT_L2_CTRL_CACHE_ENABLE)) {
++		__l2cache_flush_all();
++		l2cache_sync();
++		writel_relaxed(0, l2cache_base + REG_L2_CTRL);
++		dsb(st);
++	}
++
++	/*
++	 * An SMP kernel maps kernel and user memory as Shared, and section
++	 * 3.11.2 states that a shared access is cacheable but does not
++	 * allocate.  SHARED_ATTRIBUTE_OVER_EN lifts that, which is what PL310
++	 * platforms express as "arm,shared-override".  Forcible write-allocate
++	 * and exclusive caching stay off; the latter would need a matching
++	 * Cortex-A9 setting to be coherent.
++	 */
++	aux = readl_relaxed(l2cache_base + REG_L2_AUCTRL);
++	aux |= BIT(BIT_L2_AUCTRL_EVENT_BUS_EN) |
++	       BIT(BIT_L2_AUCTRL_MONITOR_EN) |
++	       BIT(BIT_L2_AUCTRL_SHARED_ATTRIBUTE_OVER_EN);
++	writel_relaxed(aux, l2cache_base + REG_L2_AUCTRL);
++
++	/* Firmware may have left ways locked, which would cost capacity. */
++	writel_relaxed(0, l2cache_base + REG_L2_DLOCKWAY);
++	writel_relaxed(0, l2cache_base + REG_L2_ILOCKWAY);
++
++	writel_relaxed(0, l2cache_base + REG_L2_SPECIAL_CHECK0);
++	writel_relaxed(0, l2cache_base + REG_L2_SPECIAL_CHECK1);
++	l2cache_clear_int();
++
++	/*
++	 * No error handler is installed.  Keep SPI 37, 38 and 39 masked until
++	 * handlers clear the asserted status reliably; inspect L2_RINT directly.
++	 */
++	writel_relaxed(0, l2cache_base + REG_L2_INTMASK);
++
++	__l2cache_inv_all();
++
++	writel_relaxed(BIT(BIT_L2_CTRL_CACHE_ENABLE),
++		       l2cache_base + REG_L2_CTRL);
++	dsb(st);
++
++	outer_cache.inv_range = l2cache_inv_range;
++	outer_cache.clean_range = l2cache_clean_range;
++	outer_cache.flush_range = l2cache_flush_range;
++	outer_cache.flush_all = l2cache_flush_all;
++	outer_cache.disable = l2cache_disable;
++	outer_cache.sync = l2cache_sync;
++
++	pr_info("enabled outer cache, %d KB, %d ways, %d-byte lines\n",
++		L2_SIZE / SZ_1K, L2_WAY_NUM, L2_LINE_SIZE);
++
++	return 0;
++}
+diff --git a/arch/arm/mm/cache-hil2v200.h b/arch/arm/mm/cache-hil2v200.h
+new file mode 100644
+--- /dev/null
++++ b/arch/arm/mm/cache-hil2v200.h
+@@ -0,0 +1,64 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Register map of the HiSilicon L2 Cache V200 controller, taken from the
++ * Hi3531 SDK's arch/arm/mm/cache-hil2v200.h and trimmed to what the driver
++ * touches.  The datasheet describes the cache in section 3.11.2 but
++ * publishes no register map, so vendor source is the only specification.
++ */
++#ifndef __CACHE_HIL2V200_REGS_H
++#define __CACHE_HIL2V200_REGS_H
++
++#define REG_L2_CTRL			0x0000
++#define REG_L2_AUCTRL			0x0004
++#define REG_L2_INTMASK			0x0100
++#define REG_L2_RINT			0x0108
++#define REG_L2_INTCLR			0x010c
++#define REG_L2_SYNC			0x0200
++#define REG_L2_MAINT_AUTO		0x020c
++#define REG_L2_INVALID			0x0210
++#define REG_L2_CLEAN			0x0214
++#define REG_L2_DLOCKWAY			0x0300
++#define REG_L2_ILOCKWAY			0x0304
++#define REG_L2_SPECIAL_CHECK0		0x0804
++#define REG_L2_SPECIAL_CHECK1		0x0808
++
++/* L2_CTRL */
++#define BIT_L2_CTRL_CACHE_ENABLE	0
++
++/* L2_AUCTRL */
++#define BIT_L2_AUCTRL_SHARED_ATTRIBUTE_OVER_EN	15
++#define BIT_L2_AUCTRL_MONITOR_EN		13
++#define BIT_L2_AUCTRL_EVENT_BUS_EN		12
++
++/* L2_RINT, and the same positions in L2_INTMASK, L2_MINT and L2_INTCLR */
++#define BIT_L2_RINT_AUTO_END		14
++
++/*
++ * L2_MAINT_AUTO drives a whole-way clean and/or invalidate: bit 0 starts the
++ * operation, bit 1 selects clean, and the way number sits at bit 2.
++ * Completion is reported as AUTO_END in L2_RINT.
++ */
++#define BIT_L2_MAINT_AUTO_WAYADDRESS	2
++#define BIT_L2_MAINT_AUTO_CLEAN		1
++#define BIT_L2_MAINT_AUTO_START		0
++
++/*
++ * L2_INVALID and L2_CLEAN take an address with bit 0 set to select the
++ * by-address form of the operation.  Unlike the neighbouring WAYADDRESS and
++ * LINEADDRESS constants in the vendor header, which are bit positions, these
++ * two are masks OR-ed straight into the address.  Both the V100 and V200
++ * vendor drivers use them that way.
++ */
++#define BIT_L2_INVALID_BYADDRESS	1
++#define BIT_L2_CLEAN_BYADDRESS		1
++
++/*
++ * Geometry.  Datasheet section 3.11.2 gives the 256 KB size and the 32-byte
++ * line; the way count comes from the vendor header's L2_WAY_NUM and is not
++ * corroborated by the datasheet.
++ */
++#define L2_SIZE				0x40000
++#define L2_LINE_SIZE			0x20
++#define L2_WAY_NUM			0x8
++
++#endif /* __CACHE_HIL2V200_REGS_H */

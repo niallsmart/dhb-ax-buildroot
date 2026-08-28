@@ -1,0 +1,83 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] dt-bindings: cache: document the Hi3531 L2 cache
+
+Describe the HiSilicon L2 Cache V200 node the driver probes: one register
+region, the three error interrupts, and the fixed geometry of this
+instantiation.
+---
+diff --git a/Documentation/devicetree/bindings/cache/hisilicon,hi3531-l2-cache.yaml b/Documentation/devicetree/bindings/cache/hisilicon,hi3531-l2-cache.yaml
+new file mode 100644
+--- /dev/null
++++ b/Documentation/devicetree/bindings/cache/hisilicon,hi3531-l2-cache.yaml
+@@ -0,0 +1,71 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/cache/hisilicon,hi3531-l2-cache.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: HiSilicon L2 Cache V200 controller
++
++maintainers:
++  - Niall Smart <niall.smart@gmail.com>
++
++description:
++  The unified L2 cache controller on the Hi3531.
++  It is a HiSilicon design rather than an ARM PL310, with its own register
++  layout, and reports parity, ECC and bus errors on three interrupt lines.
++
++allOf:
++  - $ref: /schemas/cache-controller.yaml#
++
++properties:
++  compatible:
++    const: hisilicon,hi3531-l2-cache
++
++  reg:
++    maxItems: 1
++
++  interrupts:
++    items:
++      - description: special check 0
++      - description: special check 1
++      - description: combined error
++
++  cache-level:
++    const: 2
++
++  cache-unified: true
++
++  cache-size:
++    const: 262144
++
++  cache-sets:
++    const: 1024
++
++  cache-line-size:
++    const: 32
++
++required:
++  - compatible
++  - reg
++  - interrupts
++  - cache-level
++  - cache-unified
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    #include <dt-bindings/interrupt-controller/arm-gic.h>
++
++    cache-controller@20700000 {
++        compatible = "hisilicon,hi3531-l2-cache";
++        reg = <0x20700000 0x1000>;
++        interrupts = <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>,
++                     <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH>,
++                     <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
++        cache-unified;
++        cache-level = <2>;
++        cache-size = <262144>;
++        cache-sets = <1024>;
++        cache-line-size = <32>;
++    };
