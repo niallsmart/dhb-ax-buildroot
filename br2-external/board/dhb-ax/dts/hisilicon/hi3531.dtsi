@@ -46,12 +46,14 @@
 			compatible = "arm,cortex-a9";
 			device_type = "cpu";
 			reg = <0>;
+			next-level-cache = <&l2>;
 		};
 
 		cpu1: cpu@1 {
 			compatible = "arm,cortex-a9";
 			device_type = "cpu";
 			reg = <1>;
+			next-level-cache = <&l2>;
 		};
 	};
 
@@ -107,6 +109,31 @@
 				     "hisilicon,sysctrl";
 			reg = <0x20050000 0x1000>;
 			reboot-offset = <0x4>;
+		};
+
+		/*
+		 * L2 cache.  The block is a HiSilicon "L2 Cache V200", not a
+		 * PL310, and REG_BASE_L2CACHE in the vendor platform.h agrees
+		 * with the datasheet address map.  The register file ends at
+		 * 0x80c.  The three SPI numbers follow the same "vendor IRQ
+		 * minus 32" rule as SATA and Ethernet above.
+		 *
+		 * Datasheet section 3.11.2 gives the size and the line
+		 * length.  The way count behind cache-sets comes from the
+		 * SDK's L2_WAY_NUM and is not corroborated by the datasheet.
+		 */
+		l2: cache-controller@20700000 {
+			compatible = "hisilicon,hi3531-l2-cache";
+			reg = <0x20700000 0x1000>;
+			interrupts = <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
+			cache-unified;
+			cache-level = <2>;
+			cache-size = <262144>;
+			cache-sets = <1024>;
+			cache-line-size = <32>;
+			status = "disabled";
 		};
 
 		timer0: timer@20000000 {
