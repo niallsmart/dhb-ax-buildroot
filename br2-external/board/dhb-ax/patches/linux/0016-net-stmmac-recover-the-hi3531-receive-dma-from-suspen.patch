@@ -1,0 +1,248 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] net: stmmac: recover the Hi3531 receive DMA from suspend
+
+When the Hi3531 receive process suspends for want of a descriptor it stays
+suspended.  It ignores a receive poll demand, the DMA start/stop bit, the
+MAC receiver enable and a channel software reset, and an interface down/up
+does not clear it either.  Only a software reset of all three DMA channels
+does, which is why hi3531_reset_dma_channels() already exists for probe.
+
+Nothing reported the condition.  RU and receive-process-stopped are masked
+off by the DWMAC1000 default, no error counter moves, and the netdev
+watchdog covers transmit only, so an interface that stopped receiving
+looked healthy: link up at 1000 Mb/s, transmit working, no log message.
+
+Unmask both, and on either one record CSR5, CSR19, CSR21 and the GMAC
+debug register -- the state the wedge is diagnosed from -- before handing
+the interface to the core's reset path.  Installing the three-channel
+reset as this instance's DMA reset is what makes that path a cure rather
+than the down/up that was already known not to work: every open now runs
+it.  This is the same sequence that recovers the interface by hand.
+
+The counters this makes visible are the existing ethtool -S
+rx_buf_unav_irq and rx_process_stopped_irq.
+---
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+@@ -32,6 +32,8 @@
+ #include <linux/platform_device.h>
+ 
+ #include "common.h"
++#include "dwmac1000.h"
++#include "dwmac_dma.h"
+ #include "stmmac.h"
+ #include "stmmac_platform.h"
+ 
+@@ -80,6 +82,120 @@ struct hi3531_dwmac {
+ 	void __iomem *syscfg;
+ };
+ 
++/*
++ * Reset all three DMA channels, as the vendor driver does at probe.  The SoC
++ * reset register does not clear this block, so a kernel started by a warm
++ * restart inherits whatever the previous kernel left running.  Resetting only
++ * the channel this instance owns is not enough: the receive engine comes up
++ * wedged, reporting descriptors unavailable with a current-descriptor
++ * register that never latches, and stays that way until the interface is
++ * taken down and brought back up.
++ *
++ * The same reset is the only cure for a receive process that has suspended
++ * for want of a descriptor, so this is also the DMA reset the instance
++ * installs: every interface open runs it.
++ */
++static int hi3531_reset_dma_channels(void __iomem *gmac)
++{
++	unsigned int chan;
++
++	for (chan = 0; chan < HI3531_DMA_CHANNELS; chan++) {
++		void __iomem *bus_mode = gmac + HI3531_DMA_CHAN_BASE +
++					 chan * HI3531_DMA_CHAN_STRIDE;
++		u32 value;
++		int ret;
++
++		writel(HI3531_DMA_BUS_MODE_SWR, bus_mode);
++
++		ret = readl_poll_timeout(bus_mode, value,
++					 !(value & HI3531_DMA_BUS_MODE_SWR),
++					 100, 100000);
++		if (ret) {
++			pr_err("hi3531-dwmac: DMA channel %u stuck in reset (%08x)\n",
++			       chan, value);
++			return ret;
++		}
++	}
++
++	return 0;
++}
++
++static int hi3531_dma_reset(void __iomem *ioaddr)
++{
++	return hi3531_reset_dma_channels(ioaddr - HI3531_GMAC1_DMA_OFFSET);
++}
++
++/*
++ * RU and receive-process-stopped are masked off by the DWMAC1000 default,
++ * which on this SoC means the one condition the receive engine does not
++ * survive goes unreported.  Nothing else notices it either: no error
++ * counter moves, and the netdev watchdog covers transmit only.
++ */
++static void hi3531_dma_init_chan(struct stmmac_priv *priv, void __iomem *ioaddr,
++				 struct stmmac_dma_cfg *dma_cfg, u32 chan)
++{
++	u32 value;
++
++	dwmac1000_dma_ops.init_chan(priv, ioaddr, dma_cfg, chan);
++
++	value = readl(ioaddr + DMA_CHAN_INTR_ENA(chan));
++	value |= DMA_INTR_ENA_RUE | DMA_INTR_ENA_RSE;
++	writel(value, ioaddr + DMA_CHAN_INTR_ENA(chan));
++}
++
++/*
++ * A suspended receive process ignores poll demand, the DMA start bit, the
++ * MAC receiver enable and a channel software reset alike, so there is
++ * nothing to resume: record the state that describes the failure and ask
++ * the core to close and reopen the interface, whose reopen runs the
++ * three-channel reset that is the only cure.
++ *
++ * Mask the two sources on the way out.  The condition they report does not
++ * go away when the interrupt is acknowledged, so leaving them enabled means
++ * the channel re-interrupts as fast as the handler can clear it, and the
++ * reset that would end it never gets a CPU: an RCU stall in the receive
++ * softirq, with the close blocked behind it.  hi3531_dma_init_chan() arms
++ * them again when the interface reopens.
++ */
++static void hi3531_rx_suspended(struct stmmac_priv *priv, void __iomem *ioaddr,
++				u32 chan, u32 status)
++{
++	u32 value = readl(ioaddr + DMA_CHAN_INTR_ENA(chan));
++
++	/* An interrupt already in flight when the mask is written arrives
++	 * with the condition still set, so the mask doubles as the record
++	 * that this wedge has been dealt with.
++	 */
++	if (!(value & (DMA_INTR_ENA_RUE | DMA_INTR_ENA_RSE)))
++		return;
++
++	writel(value & ~(DMA_INTR_ENA_RUE | DMA_INTR_ENA_RSE),
++	       ioaddr + DMA_CHAN_INTR_ENA(chan));
++
++	netdev_err(priv->dev,
++		   "receive DMA suspended: CSR5 %08x CSR19 %08x CSR21 %08x GMAC debug %08x\n",
++		   status,
++		   readl(ioaddr + dma_chan_base_addr(DMA_CUR_RX_DESC_ADDR, chan)),
++		   readl(ioaddr + dma_chan_base_addr(DMA_CUR_RX_BUF_ADDR, chan)),
++		   readl(priv->hw->pcsr + GMAC_DEBUG));
++
++	stmmac_global_err(priv);
++}
++
++static int hi3531_dma_interrupt(struct stmmac_priv *priv, void __iomem *ioaddr,
++				struct stmmac_extra_stats *x, u32 chan, u32 dir)
++{
++	u32 status = readl(ioaddr + DMA_CHAN_STATUS(chan));
++	int ret;
++
++	ret = dwmac1000_dma_ops.dma_interrupt(priv, ioaddr, x, chan, dir);
++
++	if (unlikely(status & (DMA_STATUS_RU | DMA_STATUS_RPS)))
++		hi3531_rx_suspended(priv, ioaddr, chan, status);
++
++	return ret;
++}
++
+ static int hi3531_get_hw_feature(void __iomem *ioaddr,
+ 				 struct dma_features *dma_cap)
+ {
+@@ -103,6 +219,9 @@ static struct mac_device_info *hi3531_dwmac_setup(void *arg)
+ 		return NULL;
+ 
+ 	dma_ops->get_hw_feature = hi3531_get_hw_feature;
++	dma_ops->reset = hi3531_dma_reset;
++	dma_ops->init_chan = hi3531_dma_init_chan;
++	dma_ops->dma_interrupt = hi3531_dma_interrupt;
+ 
+ 	priv->hw = mac;
+ 	if (dwmac1000_setup(priv))
+@@ -174,42 +293,6 @@ static void hi3531_fix_mac_speed(void *arg, int speed, unsigned int mode)
+ 		 speed, old, val);
+ }
+ 
+-/*
+- * Reset all three DMA channels, as the vendor driver does at probe.  The SoC
+- * reset register does not clear this block, so a kernel started by a warm
+- * restart inherits whatever the previous kernel left running.  Resetting only
+- * the channel this instance owns is not enough: the receive engine comes up
+- * wedged, reporting descriptors unavailable with a current-descriptor
+- * register that never latches, and stays that way until the interface is
+- * taken down and brought back up.
+- */
+-static int hi3531_reset_dma_channels(struct platform_device *pdev,
+-				     struct hi3531_dwmac *dwmac)
+-{
+-	unsigned int chan;
+-
+-	for (chan = 0; chan < HI3531_DMA_CHANNELS; chan++) {
+-		void __iomem *bus_mode = dwmac->gmac + HI3531_DMA_CHAN_BASE +
+-					 chan * HI3531_DMA_CHAN_STRIDE;
+-		u32 value;
+-		int ret;
+-
+-		writel(HI3531_DMA_BUS_MODE_SWR, bus_mode);
+-
+-		ret = readl_poll_timeout(bus_mode, value,
+-					 !(value & HI3531_DMA_BUS_MODE_SWR),
+-					 100, 100000);
+-		if (ret) {
+-			dev_err(&pdev->dev,
+-				"DMA channel %u stuck in reset (%08x)\n",
+-				chan, value);
+-			return ret;
+-		}
+-	}
+-
+-	return 0;
+-}
+-
+ static int hi3531_dwmac_init(struct platform_device *pdev, void *arg)
+ {
+ 	struct hi3531_dwmac *dwmac = arg;
+@@ -242,7 +325,7 @@ static int hi3531_dwmac_init(struct platform_device *pdev, void *arg)
+ 		dev_warn(&pdev->dev,
+ 			 "CRG selects the fixed default MDIO clock, not bus/2\n");
+ 
+-	ret = hi3531_reset_dma_channels(pdev, dwmac);
++	ret = hi3531_reset_dma_channels(dwmac->gmac);
+ 	if (ret)
+ 		return ret;
+ 
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac.h b/drivers/net/ethernet/stmicro/stmmac/stmmac.h
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac.h
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac.h
+@@ -403,6 +403,7 @@ void stmmac_xdp_release(struct net_device *dev);
+ int stmmac_resume(struct device *dev);
+ int stmmac_suspend(struct device *dev);
+ void stmmac_dvr_remove(struct device *dev);
++void stmmac_global_err(struct stmmac_priv *priv);
+ int stmmac_dvr_probe(struct device *device,
+ 		     struct plat_stmmacenet_data *plat_dat,
+ 		     struct stmmac_resources *res);
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+@@ -276,12 +276,13 @@ static void stmmac_service_event_schedule(struct stmmac_priv *priv)
+ 		queue_work(priv->wq, &priv->service_task);
+ }
+ 
+-static void stmmac_global_err(struct stmmac_priv *priv)
++void stmmac_global_err(struct stmmac_priv *priv)
+ {
+ 	netif_carrier_off(priv->dev);
+ 	set_bit(STMMAC_RESET_REQUESTED, &priv->state);
+ 	stmmac_service_event_schedule(priv);
+ }
++EXPORT_SYMBOL_GPL(stmmac_global_err);
+ 
+ static void print_pkt(unsigned char *buf, int len)
+ {
