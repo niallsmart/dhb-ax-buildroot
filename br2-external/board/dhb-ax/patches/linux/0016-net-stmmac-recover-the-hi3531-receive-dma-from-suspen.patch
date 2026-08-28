@@ -28,11 +28,20 @@ also renegotiates the PHY, which is most of the 3.5 s each recovery took.
 
 stmmac_dma_reset_subtask() is the suspend and resume pair with the parts
 that release memory or touch the PHY left out.  The descriptor rings and
-their pages stay in place and the link is never dropped.  The one thing
-that does not survive is GMAC1's control register, which the three-channel
-reset clears along with the DMA; phylink would normally program speed and
-duplex back on link-up and is not called here, so hi3531_dma_reset()
-carries those bits across itself.
+their pages stay in place and the link is never dropped.  It stops in the
+order __stmmac_release() uses -- napi_disable, then the transmit timers,
+then netif_tx_disable, with priv->lock held only across the rebuild.
+Taking the transmit queue first instead hangs the board a few wedges in,
+with no stall reported and a console that stops answering even a serial
+break.
+
+GMAC1's control register does not survive the reset, and getting it back
+takes two steps.  The three-channel reset clears it along with the DMA, so
+hi3531_dma_reset() carries the port select, speed and duplex bits across.
+GMAC_CORE_INIT then re-asserts port select, which selects MII, so
+hi3531_core_init() puts the same three bits back afterwards.  With only the
+first step the register came back 0x0061880c and the interface stayed deaf
+against a gigabit link.
 
 The counters this makes visible are the existing ethtool -S
 rx_buf_unav_irq and rx_process_stopped_irq.
