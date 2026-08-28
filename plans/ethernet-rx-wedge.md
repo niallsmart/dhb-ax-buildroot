@@ -128,18 +128,36 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
   the register came back `0x0061880c` and receive stayed dead against a
   1000 Mb/s link.  0016 overrides `core_init` to put the three bits back
   afterwards.
+- The ring is emptied by an occasional stall, not by a rising steady load.
+  Sampling `rx_desc_low_water` once a second across 96 to 422 Mbit/s received
+  at rings of 256, 512 and 1024 puts the median backlog at 52 to 80
+  descriptors below 300 Mbit/s, and at the same value for all three ring
+  sizes.  Raising the ring does not lower the steady depth, because arrival
+  rate alone sets it.  What grows with rate is the worst second: at 374
+  Mbit/s and 31k pps on a 1024 ring the backlog reaches 551 in one second out
+  of thirty while the other twenty-nine sit near 72.  That is 18 ms of
+  arrivals during which nothing was handed back to the DMA.
+- Ring size buys headroom against that stall and nothing else.  At 370
+  Mbit/s received, 256 wedges four times in 30 s, 512 once and 1024 not at
+  all; with the sender unthrottled, eight, three and none.  A ring smaller
+  than the excursion truncates the measurement, because the wedge is what
+  happens when the excursion runs out of ring.  1024 is not immune, only
+  rare: an earlier run read 525 of 1024.
+- `rx_overflow_irq` and CSR8 read zero in every run at every rate and every
+  ring size, so nothing is lost ahead of the DMA.
+- `stmmac_reset_rx_queue()` reinitialises `rx_desc_low_water`, so a run that
+  wedges reports only the interval after its last recovery.  Sample the
+  statistic once a second and take the minimum across samples.
 - Ruled out as contributors: L2 cache (wedge reproduced with `L2_CTRL` both
   ways, `L2_RINT` clear), RPS, CPU frequency scaling (no `cpufreq` driver),
   TCP buffer sizing.
 
 ## Open
 
-1. Whether the ring approaches exhaustion smoothly as offered rate rises, or
-   is emptied by an occasional long stall.  These need different fixes.  One
-   run each of the same four-stream test read a low-water mark of 126 of 512
-   and 525 of 1024: the ring drains by about 390 descriptors either way,
-   which is a fixed backlog rather than a capacity that scales with the
-   ring.  Two runs is not a result; step 3 is the measurement.
+1. What stops the refill path for 10 to 18 ms.  That stall is the fault;
+   ring size only decides whether it is survivable.  A steady per-packet cost
+   such as software checksumming would raise the median backlog and does not,
+   so the comment in patch 0014 blaming it has the wrong shape.
 2. Whether the vendor driver avoids the wedge, or has simply never been driven
    to the received packet rate that triggers it.  Its 256-entry ring survives
    only workloads that were also survivable on mainline.
@@ -171,23 +189,18 @@ the expectation recorded here: received pps is capped near 38k, so smaller
 frames lower the bit rate and move the ring away from exhaustion.  Keep full
 MTU for every run that has to wedge.
 
-### 3. Characterise the approach to exhaustion
+### 3. Characterise the approach to exhaustion — done
 
-Mainline only.  At fixed received pps, sweep the ring across 256, 512 and
-1024, and record the low-water mark and whether RU fires.
-
-- A watermark that falls smoothly with rate is a capacity problem, and the
-  next question is what consumes the refill budget.
-- A watermark that sits high until a single run empties it is a latency
-  problem, and the next question is what blocks the refill path for 10 ms.
-
-Record CSR8 alongside, to keep drops before the DMA out of the reading.
+Five offered rates from 100 Mbit/s to unthrottled, 30 s each, at rings of
+256, 512 and 1024.  The answer is the latency case: the watermark sits high
+and is emptied by one second in thirty.  Results in the progress log.
 
 ### 4. Vendor comparison
 
-Only if step 3 leaves the question open.  One question: at the received pps
-where mainline with a 256-entry ring wedges, does the vendor with its 256-entry
-ring wedge?
+One question: at the received pps where mainline with a 256-entry ring
+wedges, does the vendor with its 256-entry ring wedge?  Step 3 supplies the
+rate -- mainline at 256 wedges four times in 30 s at 370 Mbit/s received and
+31k pps, and eight times unthrottled.
 
 The vendor is also worth one boot to dump live DMA and MAC configuration for
 comparison against mainline: bus mode, operation mode, PBL, thresholds,
@@ -324,8 +337,45 @@ disabling NAPI, and holding `priv->lock` across it, which no upstream path
 does; reordering it to match `__stmmac_release()` fixed it.  Six 45 s runs
 then took 15 wedges and recovered from every one.
 
+### 2026-08-28 — step 3: the ring is emptied by a stall
+
+Five offered rates by three ring sizes, 30 s each, full MTU, four streams,
+`rx_desc_low_water` sampled once a second so the series survives a recovery
+resetting the latch.  Median and minimum free descriptors, and wedges:
+
+| received | pps | 256 | 512 | 1024 |
+| --- | --- | --- | --- | --- |
+| 96 Mbit/s | 7.9k | 204 / 194 / 0 | 459 / 428 / 0 | 969 / 953 / 0 |
+| 190 Mbit/s | 15.7k | 201 / 175 / 0 | 454 / 426 / 0 | 963 / 916 / 0 |
+| 283 Mbit/s | 23.5k | 182 / 102 / 0 | 450 / 387 / 0 | 955 / 903 / 0 |
+| 370 Mbit/s | 30.8k | 181 / 70 / 4 | 431 / 101 / 1 | 952 / 473 / 0 |
+| unthrottled | 33k | 177 / 4 / 8 | 384 / 67 / 3 | 874 / 533 / 0 |
+
+The medians barely move.  Across a 4.4x rise in rate the steady backlog goes
+from 52 to 128 descriptors, and at a given rate it is the same at all three
+ring sizes.  The minima collapse instead, and the per-second series says why:
+at 370 Mbit/s on a 512 ring, twenty-eight seconds read 365 to 452 free and
+one reads 101.  Nothing is filling the ring up.  Something empties it.
+
+The largest excursion visible is on the 1024 ring, where the ring is big
+enough not to truncate it: 551 descriptors of backlog against a median of 72,
+which at 31k pps is 18 ms in which the refill path returned nothing.
+
+`rx_overflow_irq` and CSR8 were zero in all fifteen runs, so no frame was
+lost ahead of the DMA at any rate.
+
+Throughput follows the wedge count rather than the ring: 362 Mbit/s
+unthrottled at 256 with eight wedges, 417 at 512 with three, 422 at 1024
+with none.  Recovery is cheap now but not free.
+
+One boot at ring 256 hung at `eth0: Register MEM_TYPE_PAGE_POOL RxQ-0` with
+a console that would not answer a serial break.  The same image and command
+line booted on the retry after a power cycle, so it is not a bring-up failure
+at that ring size.
+
 ### Next
 
-Step 3: at fixed received pps, sweep the ring across 256, 512 and 1024 and
-record the low-water mark and whether RU fires.  Use full MTU; the frame
-size sweep showed nothing else reaches the rate that wedges.
+Step 4: boot the vendor kernel and put the same four-stream load through it
+at 370 Mbit/s received, where mainline on the vendor's own 256-entry ring
+wedges four times in 30 s.  Batch the live DMA and MAC register dump into the
+same boot.
