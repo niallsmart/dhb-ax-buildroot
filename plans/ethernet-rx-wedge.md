@@ -107,11 +107,17 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
   across five events, not the `0x00000220` recorded on 2026-08-28.
 - Recovery in place works and is much cheaper than closing and reopening.
   0016 rebuilds the DMA around the rings it already has, so the page pool
-  survives and the link is never dropped.  A 45 s four-stream run at 512
-  wedged 0.8 s in, recovered, and finished at 472 Mbit/s received and 39k
-  pps, against 319-360 Mbit/s when each recovery cost a PHY renegotiation.
-  Six wedges recovered this way across three runs with no page-pool message
-  and no RCU stall, where close-and-reopen stalled on the third.
+  survives and the link is never dropped.  Six 45 s four-stream runs at 512
+  took 15 wedges and recovered from all of them, at 463-489 Mbit/s received
+  and 38-40k pps, against 319-360 Mbit/s when each recovery cost a PHY
+  renegotiation.  Three of those wedges fell inside 105 ms of each other.
+  No RCU stall, no page-pool message, memory flat across the six runs.
+- The in-place reset has to stop in the order `__stmmac_release()` uses:
+  `napi_disable`, then the transmit timers, then `netif_tx_disable`, with
+  `priv->lock` held only across the rebuild.  Taking the transmit queue
+  first hangs the board a few wedges in, between `rtnl_lock()` and
+  `stmmac_hw_setup()`, with no stall reported and a console that stops
+  answering even a serial break.
 - The three-channel reset clears GMAC1's control register along with the
   DMA: a 1000/full interface reads `0x0061080c` there and reads zero
   afterwards.  Opening the interface does not care, because phylink
@@ -139,15 +145,6 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
    only workloads that were also survivable on mainline.
 3. Whether a receive process in state 4 can be restarted by anything short of
    the three-channel reset.  Every documented DWMAC1000 mechanism has failed.
-4. What blocks the in-place reset on the wedge that eventually hangs the
-   board.  `Reset DMA.` printed and `stmmac_hw_setup()` never did, so it
-   stops between taking `rtnl` and rebuilding.  No RCU stall was reported
-   and the console stopped responding, including to sysrq over a serial
-   break, which points at a sleeping deadlock rather than a spin.  The
-   teardown has since been reordered to match `__stmmac_release()` --
-   `napi_disable` first, then the transmit timers, then `netif_tx_disable`,
-   with `priv->lock` held only across the rebuild.  That ordering is
-   untested: the board needs a power cycle to boot the kernel carrying it.
 
 ## Plan
 
@@ -321,15 +318,14 @@ link bits have to be carried across the reset and put back again after
 `core_init` -- the first attempt did only the former and brought the MAC up
 in MII mode against a gigabit link.
 
-The sixth wedge still hung the board between `rtnl_lock()` and
-`stmmac_hw_setup()`, with no stall report and an unresponsive console.
+The sixth wedge hung the board between `rtnl_lock()` and
+`stmmac_hw_setup()`.  The teardown was taking the transmit queue before
+disabling NAPI, and holding `priv->lock` across it, which no upstream path
+does; reordering it to match `__stmmac_release()` fixed it.  Six 45 s runs
+then took 15 wedges and recovered from every one.
 
 ### Next
 
-Boot the kernel with the reordered teardown and repeat the stress run: three
-45 s runs at 512, watching for a wedge that does not come back.  The board is
-hung and needs a power cycle first.
-
-Then step 3: at fixed received pps, sweep the ring across 256, 512 and 1024
-and record the low-water mark and whether RU fires.  Use full MTU; the frame
+Step 3: at fixed received pps, sweep the ring across 256, 512 and 1024 and
+record the low-water mark and whether RU fires.  Use full MTU; the frame
 size sweep showed nothing else reaches the rate that wedges.
