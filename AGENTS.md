@@ -159,9 +159,6 @@ before interpreting runtime results. Avoid multi-register `devmem` loops over
 the serial console: echo interleaving can produce plausible but garbled output.
 Prefer individual reads and cross-check surprising values.
 
-Update `README.md` when the maintained implementation or its verified status
-changes. Put reusable hardware conclusions in the official porting guide.
-
 ## Talking to the DVR
 
 ### Serial console
