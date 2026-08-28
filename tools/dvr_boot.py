@@ -136,8 +136,12 @@ def preflight(profile, settings: LocalSettings):
             fail(f"not readable beneath /srv/tftp: {target}", 3)
 
 
-CSI = r"(?:\x1b\[[0-?]*[ -/]*[@-~])*"
-LINE_START = rf"(?m)^\r*{CSI}"
+CSI_SEQ = r"\x1b\[[0-?]*[ -/]*[@-~]"
+CSI = rf"(?:{CSI_SEQ})*"
+# A prompt can be preceded by carriage returns and escape sequences in any
+# order: bash emits the bracketed-paste pair around a bare CR before redrawing
+# the prompt, so the two cannot be matched as separate runs.
+LINE_START = rf"(?m)^(?:\r|{CSI_SEQ})*"
 UBOOT_PROMPT = rf"{LINE_START}hisilicon # *{CSI}\r*$"
 SHELL_PROMPT = (
     rf"{LINE_START}(?:(?:~|/) |root@[^:\r\n]+:[^#\r\n]*)?# *{CSI}\r*$"
