@@ -531,6 +531,41 @@ def boot(profile, settings: LocalSettings, console):
     if profile.boot.action == "prompt":
         print("U-Boot prompt reached successfully.")
         return
+    if profile.boot.action == "vendor":
+        print("Resuming the vendor boot path...")
+        console.send(" reset\r")
+        state, _ = console.wait(
+            (
+                ("kernel", r"Starting kernel"),
+                ("login", r"(?m)^\r*\(none\) login: *\r$"),
+            ),
+            90,
+        )
+        if state == "login":
+            print("Vendor Linux login prompt reached successfully.")
+            return
+        if state != "kernel":
+            fail("vendor kernel did not start before the timeout", 9)
+
+        print("Waiting for the vendor boot console to settle...")
+        state, _ = console.wait(
+            (("login", r"(?m)^\r*\(none\) login: *\r$"),), 60
+        )
+        if state == "login":
+            print("Vendor Linux login prompt reached successfully.")
+            return
+
+        deadline = time.monotonic() + LOGIN_TIMEOUT
+        while time.monotonic() < deadline:
+            console.send("\r")
+            state, _ = console.wait(
+                (("login", r"(?m)^\r*\(none\) login: *\r$"),), 10
+            )
+            if state == "login":
+                print("Vendor Linux login prompt reached successfully.")
+                return
+
+        fail("vendor Linux login prompt did not appear before the timeout", 9)
 
     if profile.kernel.source == "tftp" or profile.rootfs.source == "tftp":
         configure_uboot_network(settings, console)

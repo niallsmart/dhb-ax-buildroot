@@ -103,7 +103,8 @@ tools/dvr-boot.sh buildroot-tftp
 
 The production profiles are `buildroot-usb-hdd`, `buildroot-tftp`,
 `debian-usb-hdd`, and `debian-tftp`. The recovery profiles are
-`minimal-tftp` and `minimal-usb`; `uboot` leaves the board at the prompt.
+`minimal-tftp` and `minimal-usb`; `uboot` leaves the board at the prompt and
+`vendor` resumes the factory boot path without changing saved U-Boot state.
 Use `dvr-boot --status` to identify the current console state and `--check` for
 a non-mutating preflight. `dvr-stage --kernel-only` skips an external root
 filesystem.
