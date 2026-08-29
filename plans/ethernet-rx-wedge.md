@@ -137,7 +137,7 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
   Mbit/s and 31k pps on a 1024 ring the backlog reaches 551 in one second out
   of thirty while the other twenty-nine sit near 72.  That is 18 ms of
   arrivals during which nothing was handed back to the DMA.
-- Ring size buys headroom against that stall and nothing else.  At 370
+- Ring size buys headroom against that excursion and nothing else.  At 370
   Mbit/s received, 256 wedges four times in 30 s, 512 once and 1024 not at
   all; with the sender unthrottled, eight, three and none.  A ring smaller
   than the excursion truncates the measurement, because the wedge is what
@@ -148,16 +148,56 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
 - `stmmac_reset_rx_queue()` reinitialises `rx_desc_low_water`, so a run that
   wedges reports only the interval after its last recovery.  Sample the
   statistic once a second and take the minimum across samples.
+- The receive poll is never starved.  Tracing `irq:softirq_entry`,
+  `irq:softirq_exit`, `irq:irq_handler_entry` and `sched:sched_switch` through
+  a 10 s run at 399 Mbit/s offered gives 11,107 windows between one NET_RX
+  softirq leaving and the next entering.  Thirty-three exceed 4 ms, and in
+  every one of them the only eth0 interrupt is the one that ends the window:
+  both CPUs sit in `swapper`, taking the 10 ms timer tick and going back to
+  idle.  The long windows are the sender pausing, not the receiver being held
+  off.
+- The poll interval at the moment the ring is emptiest is 1.5 to 3 ms, the
+  ordinary cadence.  `rx_poll_gap_us` reads 1551 us at a backlog of 441 on a
+  1024 ring and 1705 us at a backlog of 882.  The ring drains while NAPI is
+  polling normally, so the excursion is a burst that outruns the drain rate
+  rather than a gap in service.
+- The page pool never comes up short.  `rx_refill_starved` counts refills that
+  end early for want of a page and stays at zero through every run.
+- NET_RX costs 71% of one CPU at 364 Mbit/s received and 30k pps, or about
+  24 us of softirq per packet.  That puts the drain ceiling near 42k pps
+  against a burst arrival rate of 81k pps at line rate with full frames, which
+  is why a burst empties the ring and why received throughput saturates near
+  420 Mbit/s.
+- The MAC implements receive checksum offload and the port turns it off.
+  `plat->rx_coe = STMMAC_RX_COE_NONE` in the glue, on the stated grounds that
+  CSR58 is unusable.  CSR58 reads `0x016DEF37` at both `0x101c1058` and
+  `0x101c1158`, which decodes to tx_coe and rx_coe_type2 present, and setting
+  IPC in `GMAC_CONTROL` sticks.  The vendor runs with RX checksum offload on.
+- Receive checksum offload halves the cost and halves the wedge count.  With
+  `plat->rx_coe = STMMAC_RX_COE_TYPE2` the NET_RX softirq falls from 71% of a
+  CPU to 36% at the same load, TCP `InCsumErrors` stays at zero and no receive
+  error counter moves.  Wedges in 30 s go from 4 to 2 at ring 256 and 400
+  Mbit/s offered, 8 to 5 unthrottled, and 3 to 1 at ring 512 unthrottled.  On
+  a 1024 ring the worst second goes from 142 descriptors left to 659.  It is a
+  mitigation: 256 and 512 still wedge.
+- Two measurements of the same excursion disagree and one of them is being
+  read wrongly.  `rx_poll_gap_us` puts a 4.5 to 13 ms interval before the poll
+  that records the emptiest ring, while the trace finds no NET_RX window over
+  3 ms with an eth0 interrupt waiting inside it.  A window with no arrivals
+  cannot drain the ring.  The likely error is treating `rx_desc_low_water` and
+  `rx_poll_gap_us` as a matched pair when they are latched independently over
+  the same one-second interval.
 - Ruled out as contributors: L2 cache (wedge reproduced with `L2_CTRL` both
   ways, `L2_RINT` clear), RPS, CPU frequency scaling (no `cpufreq` driver),
   TCP buffer sizing.
 
 ## Open
 
-1. What stops the refill path for 10 to 18 ms.  That stall is the fault;
-   ring size only decides whether it is survivable.  A steady per-packet cost
-   such as software checksumming would raise the median backlog and does not,
-   so the comment in patch 0014 blaming it has the wrong shape.
+1. What the excursion actually is.  Nothing holds the receive poll off and
+   the page pool never fails, so the ring empties either because arrivals
+   outrun the drain rate or because of something the two counters above are
+   not describing correctly.  Halving the per-packet cost halved the wedge
+   count, which fits the first reading without establishing it.
 2. Whether the vendor driver avoids the wedge, or has simply never been driven
    to the received packet rate that triggers it.  Its 256-entry ring survives
    only workloads that were also survivable on mainline.
@@ -218,16 +258,9 @@ comparison is cheap and needs no source reading.
 
 ### Deliberately deferred
 
-- **RX checksum offload.** A throughput item, tracked in
-  [optimizing-network-throughput.md](optimizing-network-throughput.md).  It is
-  expensive to validate — wrong descriptor semantics accept corrupt frames
-  silently — and the measurements so far show the ring full of DMA-owned
-  descriptors with neither core saturated, so CPU cost is not yet implicated
-  in the wedge.  The claim in patch 0014 that software checksumming is what
-  delays the refill is an assertion, not a measurement.
 - **GRO, interrupt coalescing, flow control.**  All change per-packet CPU cost
-  or arrival smoothing rather than descriptor demand.  Revisit only if step 3
-  identifies a capacity problem.
+  or arrival smoothing rather than descriptor demand.  Step 3 found a capacity
+  problem, so these are in scope behind receive checksum offload.
 
 ## Working practices
 
@@ -373,9 +406,95 @@ a console that would not answer a serial break.  The same image and command
 line booted on the retry after a power cycle, so it is not a bring-up failure
 at that ring size.
 
+### 2026-08-28 — nothing stalls the refill; the drain rate is the ceiling
+
+Patch 0017 adds two reset-on-read statistics beside `rx_desc_low_water`:
+`rx_poll_gap_us`, the interval between the poll that recorded the low-water
+reading and the one before it, and `rx_poll_max_gap_us`, the largest such
+interval.  It also adds `rx_refill_starved`, counting refills that end early
+because the page pool has nothing to give.  Together they separate a poll that
+never ran from one that ran and could not refill from one that ran slowly.
+
+The answer is none of the three.  At 364 Mbit/s received on a 1024 ring the
+worst second reads 583 free after a 1551 us poll gap, and unthrottled it reads
+142 free after 1705 us.  Both are the ordinary cadence.  `rx_refill_starved`
+stays at zero.
+
+Tracing confirmed it from outside the driver.  A 10 s capture of
+`irq:softirq_entry`, `irq:softirq_exit`, `irq:irq_handler_entry`,
+`irq:irq_handler_exit` and `sched:sched_switch` gives 11,107 windows between
+NET_RX softirqs; 33 exceed 4 ms and every one of them is idle, with both CPUs
+in `swapper` and no eth0 interrupt waiting.  The longest, 34 ms, has the timer
+tick arriving three times into an idle machine.  Those windows are the sender
+pausing.
+
+What the same capture does show is cost: NET_RX is executing for 71% of one
+CPU, about 24 us per packet at 30k pps.  That caps the drain near 42k pps
+while a burst after a sender pause arrives at up to 81k pps with full frames,
+so the backlog grows at 39k descriptors per second and 1024 of them last 26 ms.
+It also explains why received throughput saturates near 420 Mbit/s however the
+sender is driven.
+
+`ethtool -k eth0` reports `rx-checksumming: off [requested on]`, which the glue
+sets deliberately: `plat->rx_coe = STMMAC_RX_COE_NONE`, because CSR58 is held
+to be unusable.  CSR58 reads `0x016DEF37` at `0x101c1058` and `0x101c1158`,
+decoding to tx_coe and rx_coe_type2 present, and setting IPC in `GMAC_CONTROL`
+by hand sticks and reads back.  The vendor defaults captured earlier have RX
+checksum offload on and fixed.  So the silicon has it and the port is paying
+for a software checksum over every 1500-byte frame.
+
+The build with `plat->rx_coe = STMMAC_RX_COE_TYPE2` hung on the way up at
+`eth0: Register MEM_TYPE_PAGE_POOL RxQ-0`, the same intermittent bring-up hang
+seen once before at ring 256 with an image that booted on retry.  It is
+unmeasured.
+
+### 2026-08-28 — receive checksum offload
+
+The MAC computes receive checksums and the port was not asking it to.
+`ethtool -k eth0` reported `rx-checksumming: off [requested on]` because the
+glue sets `plat->rx_coe = STMMAC_RX_COE_NONE`, on the stated grounds that
+CSR58 is unusable.  CSR58 reads `0x016DEF37` at `0x101c1058` and `0x101c1158`,
+which decodes to tx_coe and rx_coe_type2 present; setting IPC in
+`GMAC_CONTROL` by hand sticks and reads back; and the vendor defaults captured
+earlier have RX checksum offload on and fixed.
+
+With `STMMAC_RX_COE_TYPE2` the NET_RX softirq falls from 71% of a CPU to 36%
+at 30k pps, from about 24 us of softirq per packet to about 12.  TCP
+`InCsumErrors` is zero and no receive error counter moves, so the checksum
+engine is giving correct answers.
+
+Wedges in 30 s, and Mbit/s received, before and after:
+
+    ring  offered      before            after
+    256   400 Mbit/s   4 wedges, 364     2 wedges, 400
+    256   unthrottled  8 wedges, 362     5 wedges, 405
+    512   400 Mbit/s   1 wedge           1 wedge
+    512   unthrottled  3 wedges          1 wedge
+    1024  400 Mbit/s   0, worst 583/1024 0, worst 765/1024
+    1024  unthrottled  0, worst 142/1024 0, worst 659/1024
+
+The board also reaches the 400 Mbit/s it is offered, where before it fell
+short.  A second trace at ring 512 with offload on repeats the earlier
+result: of 110 NET_RX windows over 3 ms, none has an eth0 interrupt waiting
+inside it, and both CPUs sit in `swapper` taking the timer tick.  That still
+does not square with the 4.5 to 13 ms `rx_poll_gap_us` readings at the
+emptiest moment.
+
+One boot hung at `eth0: Register MEM_TYPE_PAGE_POOL RxQ-0` and needed a power
+cycle.  That is the second time, after one at ring 256 with an image that
+booted on retry, and it is not tied to a ring size or to this change.
+
 ### Next
 
-Step 4: boot the vendor kernel and put the same four-stream load through it
-at 370 Mbit/s received, where mainline on the vendor's own 256-entry ring
-wedges four times in 30 s.  Batch the live DMA and MAC register dump into the
-same boot.
+Settle the disagreement between `rx_poll_gap_us` and the trace before step 4.
+A tracepoint fired from `stmmac_rx_low_water()` when the backlog crosses a
+threshold, carrying the backlog and the interval, anchors the exact poll in
+the ftrace timeline, so the window before it can be read from the same capture
+as the interrupt and softirq events instead of inferred from two counters
+sampled a second apart.
+
+Then step 4, with a sharper question than the one recorded there: the vendor
+runs a 256-entry ring with checksum offload on and does not wedge, and
+mainline now runs the same ring with the same offload and wedges five times in
+30 s unthrottled.  What remains is the live DMA and MAC configuration --
+bus mode, PBL, thresholds, store-and-forward, RIWT, interrupt-on-completion.
