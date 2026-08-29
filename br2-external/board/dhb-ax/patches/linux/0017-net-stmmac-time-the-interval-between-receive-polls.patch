@@ -1,0 +1,223 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] net: stmmac: time the interval between receive polls
+
+The receive ring is emptied by an occasional stall rather than by a rate
+the driver cannot sustain: the backlog sits at a few dozen descriptors
+whatever the ring size, and once in about thirty seconds it reaches five
+hundred.  rx_desc_low_water reports that excursion but not its cause, and
+three causes produce it -- the poll did not run, it ran and could not
+obtain pages to hand back, or it ran and was slow.
+
+Time the interval between consecutive receive polls and report the one
+that produced the low-water reading, along with the largest interval seen.
+An interval near the excursion means the poll did not run and the question
+becomes what held the CPU; a short interval means it ran, and the ring
+drained under it.
+
+Separate the second cause from the third by counting the refills that end
+early because the page pool has nothing to give, which is the only way a
+poll that runs still returns no descriptors.
+
+Both intervals are reset on read, alongside the low-water mark they
+qualify.  An interval is offered only where the preceding poll also had
+descriptors outstanding, so that the gap across idle traffic is not
+reported as refill latency.
+diff --git a/drivers/net/ethernet/stmicro/stmmac/common.h b/drivers/net/ethernet/stmicro/stmmac/common.h
+--- a/drivers/net/ethernet/stmicro/stmmac/common.h
++++ b/drivers/net/ethernet/stmicro/stmmac/common.h
+@@ -142,12 +142,15 @@ struct stmmac_extra_stats {
+ 	unsigned long rx_missed_cntr;
+ 	unsigned long rx_overflow_cntr;
+ 	unsigned long rx_vlan;
+ 	unsigned long rx_split_hdr_pkt_n;
+ 	/* Rx descriptor ring pressure, reset on read */
+ 	unsigned long rx_desc_low_water;
++	unsigned long rx_poll_gap_us;
++	unsigned long rx_poll_max_gap_us;
++	unsigned long rx_refill_starved;
+ 	/* Tx/Rx IRQ error info */
+ 	unsigned long tx_undeflow_irq;
+ 	unsigned long tx_process_stopped_irq;
+ 	unsigned long tx_jabber_irq;
+ 	unsigned long rx_overflow_irq;
+ 	unsigned long rx_buf_unav_irq;
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac.h b/drivers/net/ethernet/stmicro/stmmac/stmmac.h
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac.h
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac.h
+@@ -127,12 +127,13 @@ struct stmmac_rx_queue {
+ 	unsigned int cur_rx;
+ 	unsigned int dirty_rx;
+ 	unsigned int buf_alloc_num;
+ 	unsigned int napi_skb_frag_size;
+ 	dma_addr_t dma_rx_phy;
+ 	u32 rx_tail_addr;
++	u64 rx_poll_last;
+ 	unsigned int state_saved;
+ 	struct {
+ 		struct sk_buff *skb;
+ 		unsigned int len;
+ 		unsigned int error;
+ 	} state;
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+@@ -76,12 +76,15 @@ static const struct stmmac_stats stmmac_gstrings_stats[] = {
+ 	STMMAC_STAT(rx_missed_cntr),
+ 	STMMAC_STAT(rx_overflow_cntr),
+ 	STMMAC_STAT(rx_vlan),
+ 	STMMAC_STAT(rx_split_hdr_pkt_n),
+ 	/* Rx descriptor ring pressure */
+ 	STMMAC_STAT(rx_desc_low_water),
++	STMMAC_STAT(rx_poll_gap_us),
++	STMMAC_STAT(rx_poll_max_gap_us),
++	STMMAC_STAT(rx_refill_starved),
+ 	/* Tx/Rx IRQ error info */
+ 	STMMAC_STAT(tx_undeflow_irq),
+ 	STMMAC_STAT(tx_process_stopped_irq),
+ 	STMMAC_STAT(tx_jabber_irq),
+ 	STMMAC_STAT(rx_overflow_irq),
+ 	STMMAC_STAT(rx_buf_unav_irq),
+@@ -573,16 +576,19 @@ static void stmmac_get_ethtool_stats(struct net_device *dev,
+ 	for (i = 0; i < STMMAC_STATS_LEN; i++) {
+ 		char *p = (char *)priv + stmmac_gstrings_stats[i].stat_offset;
+ 		data[j++] = (stmmac_gstrings_stats[i].sizeof_stat ==
+ 			     sizeof(u64)) ? (*(u64 *)p) : (*(u32 *)p);
+ 	}
+ 
+-	/* rx_desc_low_water covers the interval between two reads, so the
+-	 * value just reported ends one interval and starts the next.
++	/* rx_desc_low_water and the two poll intervals cover the interval
++	 * between two reads, so the values just reported end one interval
++	 * and start the next.
+ 	 */
+ 	priv->xstats.rx_desc_low_water = priv->dma_conf.dma_rx_size;
++	priv->xstats.rx_poll_gap_us = 0;
++	priv->xstats.rx_poll_max_gap_us = 0;
+ 
+ 	pos = j;
+ 	for (i = 0; i < rx_queues_count; i++) {
+ 		struct stmmac_rxq_stats *rxq_stats = &priv->xstats.rxq_stats[i];
+ 		struct stmmac_napi_rx_stats snapshot;
+ 		u64 n_irq;
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+@@ -28,12 +28,14 @@
+ #include <linux/if_vlan.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/slab.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/pm_wakeirq.h>
+ #include <linux/prefetch.h>
++#include <linux/math64.h>
++#include <linux/sched/clock.h>
+ #include <linux/pinctrl/consumer.h>
+ #ifdef CONFIG_DEBUG_FS
+ #include <linux/debugfs.h>
+ #include <linux/seq_file.h>
+ #endif /* CONFIG_DEBUG_FS */
+ #include <linux/net_tstamp.h>
+@@ -345,23 +347,35 @@ static inline u32 stmmac_rx_dirty(struct stmmac_priv *priv, u32 queue)
+  * between them.  The minimum is latched here rather than sampled from
+  * outside because at 30k packets per second a 256-entry ring empties in
+  * under nine milliseconds.  Call this before refilling, so that the
+  * descriptor at dirty_rx is one the DMA does not own and a current
+  * descriptor that has reached it means an empty ring rather than a full
+  * one.
++ *
++ * The interval since the previous poll is recorded alongside, because a
++ * backlog says only that descriptors were not returned and not whether
++ * the poll that returns them was late or merely slow.  An interval is
++ * offered only where the previous poll also had descriptors outstanding,
++ * so that a gap spanning idle traffic is not read as refill latency.
+  */
+ static void stmmac_rx_low_water(struct stmmac_priv *priv, u32 queue)
+ {
+ 	struct stmmac_rx_queue *rx_q = &priv->dma_conf.rx_queue[queue];
+ 	u32 size = priv->dma_conf.dma_rx_size;
++	u64 now = local_clock(), last;
+ 	unsigned int desc_size;
+ 	dma_addr_t addr, offset;
+-	u32 avail, head;
++	u32 avail, head, gap;
+ 
+-	if (rx_q->dirty_rx == rx_q->cur_rx)
++	if (rx_q->dirty_rx == rx_q->cur_rx) {
++		rx_q->rx_poll_last = 0;
+ 		return;
++	}
++
++	last = rx_q->rx_poll_last;
++	rx_q->rx_poll_last = now;
+ 
+ 	if (stmmac_rx_desc_ptr(priv, priv->dmaaddr, queue, &addr))
+ 		return;
+ 
+ 	desc_size = priv->extend_desc ? sizeof(struct dma_extended_desc) :
+ 					sizeof(struct dma_desc);
+@@ -374,14 +388,20 @@ static void stmmac_rx_low_water(struct stmmac_priv *priv, u32 queue)
+ 	offset = addr - rx_q->dma_rx_phy;
+ 	if (offset >= (dma_addr_t)size * desc_size)
+ 		return;
+ 
+ 	head = (u32)offset / desc_size;
+ 	avail = (rx_q->dirty_rx + size - head) % size;
+-	if (avail < priv->xstats.rx_desc_low_water)
++	gap = last ? div_u64(now - last, NSEC_PER_USEC) : 0;
++
++	if (avail < priv->xstats.rx_desc_low_water) {
+ 		priv->xstats.rx_desc_low_water = avail;
++		priv->xstats.rx_poll_gap_us = gap;
++	}
++	if (gap > priv->xstats.rx_poll_max_gap_us)
++		priv->xstats.rx_poll_max_gap_us = gap;
+ }
+ 
+ static bool stmmac_eee_tx_busy(struct stmmac_priv *priv)
+ {
+ 	u32 tx_cnt = priv->plat->tx_queues_to_use;
+ 	u32 queue;
+@@ -4811,20 +4831,24 @@ static inline void stmmac_rx_refill(struct stmmac_priv *priv, u32 queue)
+ 			p = (struct dma_desc *)(rx_q->dma_erx + entry);
+ 		else
+ 			p = rx_q->dma_rx + entry;
+ 
+ 		if (!buf->page) {
+ 			buf->page = page_pool_alloc_pages(rx_q->page_pool, gfp);
+-			if (!buf->page)
++			if (!buf->page) {
++				priv->xstats.rx_refill_starved++;
+ 				break;
++			}
+ 		}
+ 
+ 		if (priv->sph && !buf->sec_page) {
+ 			buf->sec_page = page_pool_alloc_pages(rx_q->page_pool, gfp);
+-			if (!buf->sec_page)
++			if (!buf->sec_page) {
++				priv->xstats.rx_refill_starved++;
+ 				break;
++			}
+ 
+ 			buf->sec_addr = page_pool_get_dma_addr(buf->sec_page);
+ 		}
+ 
+ 		buf->addr = page_pool_get_dma_addr(buf->page) + buf->page_offset;
+ 
+@@ -7938,13 +7962,16 @@ EXPORT_SYMBOL_GPL(stmmac_suspend);
+ static void stmmac_reset_rx_queue(struct stmmac_priv *priv, u32 queue)
+ {
+ 	struct stmmac_rx_queue *rx_q = &priv->dma_conf.rx_queue[queue];
+ 
+ 	rx_q->cur_rx = 0;
+ 	rx_q->dirty_rx = 0;
++	rx_q->rx_poll_last = 0;
+ 	priv->xstats.rx_desc_low_water = priv->dma_conf.dma_rx_size;
++	priv->xstats.rx_poll_gap_us = 0;
++	priv->xstats.rx_poll_max_gap_us = 0;
+ }
+ 
+ static void stmmac_reset_tx_queue(struct stmmac_priv *priv, u32 queue)
+ {
+ 	struct stmmac_tx_queue *tx_q = &priv->dma_conf.tx_queue[queue];
+ 
