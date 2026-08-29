@@ -189,12 +189,38 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
   further poll before the softirq exits to `ksoftirqd/0`.  The next driver
   poll comes 4.8 to 8.4 ms after the last one.  That stretch is the batch
   going up the stack, outside `stmmac_rx()`.
-- Descriptors are returned to the DMA only at the end of a poll, so the ring
-  drains for the whole of that stretch.  At 30k pps a 4 ms window costs about
-  120 descriptors and an 8 ms window about 250, on top of the 64 the poll
-  holds.  That is the excursion, and it is why a larger ring survives, why
-  halving the per-packet cost halved the wedge rate, and why nothing looks
-  starved from outside.
+- The steady state is interrupt-paced and healthy.  Over 15 s the receive
+  NAPI polled 32,469 times and took 416,332 packets, a median of 13 per poll
+  and 2165 polls per second, which at `rx-usecs 264` is the coalescing timer
+  setting the cadence.  Only 27 of those polls reached the full budget of 64.
+  The full-budget poll is what an excursion looks like from inside, not what
+  causes one.
+- Each cycle returns 64 descriptors, so what matters is cycle time.  At the
+  ordinary 1.5 ms that is 42k descriptors per second against 30k arriving.
+  At the 4 to 12 ms seen during an excursion it is 5 to 16k, and the ring
+  loses about 50 descriptors per cycle until it is empty.  Raising the budget
+  does not help, because cycle time scales with batch size and the rate is
+  roughly one over the per-packet cost either way -- which is why halving that
+  cost with checksum offload moved the wedge rate.
+- Refill is not what holds the ring.  `stmmac_rx_refill()` runs at the end of
+  `stmmac_rx()`, before the poll returns and before the expensive part of
+  delivery, so the descriptors a poll consumed are back with the DMA before
+  the slow stretch begins.
+- The slow stretch is not scheduling latency.  Threaded NAPI, which gives the
+  poll its own kernel thread, made it worse at ring 256: nine wedges in 30 s
+  as `SCHED_OTHER` and ten at `SCHED_FIFO` 50, against three for the default
+  softirq poll.  `time_squeeze` reads zero on both CPUs, so `net_rx_action`
+  never hits its budget or time ceiling either.
+- Where the stretch has to be: `gro_flush_normal()` runs in `napi_poll()`
+  after `__napi_poll()` has returned, so after the `napi:napi_poll`
+  tracepoint fires and after `stmmac_rx()` has returned.  It is outside both
+  driver timers and after the anchor, which is exactly where the unaccounted
+  4.4 ms sits in every capture.  Unconfirmed.
+- `net:netif_receive_skb_list_entry` cannot see it.  That tracepoint is in
+  `netif_receive_skb_list()`, the external API; the GRO flush calls
+  `netif_receive_skb_list_internal()` directly.  Filtered function tracing on
+  the internal name can see it, and costs little: with ten functions filtered
+  the board still ran at 434 Mbit/s.
 - Ruled out as contributors: L2 cache (wedge reproduced with `L2_CTRL` both
   ways, `L2_RINT` clear), RPS, CPU frequency scaling (no `cpufreq` driver),
   TCP buffer sizing.
@@ -525,13 +551,43 @@ wedge count varies enough between runs that this settles nothing.
 Throughput with offload has been between 405 and 462 Mbit/s across these runs,
 against 422 before it.
 
+### 2026-08-28 — the excursion is the backlogged mode, and refill is not the problem
+
+Two claims from earlier today were wrong and are corrected above.  Descriptors
+are not held across the stack work: `stmmac_rx_refill()` runs before
+`stmmac_rx()` returns, so a poll's descriptors are back with the DMA before
+the slow stretch starts.  Refilling inside the receive loop, recommended in
+the previous entry, would therefore buy nothing.
+
+The poll-work histogram reframes it.  Over 15 s: 32,469 polls, 416,332
+packets, median 13 per poll, and 27 polls at the full budget of 64.  The
+ordinary cadence is the coalescing timer, and it keeps up comfortably.  The
+excursion is the rare backlogged mode, where a poll fills its budget and the
+next one arrives 4 to 12 ms later instead of immediately.
+
+Two candidates for that delay are now out.  Threaded NAPI at ring 256 gave
+nine wedges in 30 s as `SCHED_OTHER` and ten at `SCHED_FIFO` 50, against
+three for the default softirq poll, so it is not the poll waiting for CPU.
+`time_squeeze` reads zero, so `net_rx_action` is not being cut off at its
+budget or time limit.
+
+What remains is `gro_flush_normal()`, which runs in `napi_poll()` after the
+tracepoint and after `stmmac_rx()` returns, in the one place none of the
+instrumentation covers.
+
+The board ended the session with networking dead after a run of recoveries,
+and `reboot` hung as well, which is the stall already recorded above.  It
+needed a power cycle.
+
 ### Next
 
-Return descriptors during the receive loop instead of only at its end.  The
-ring drains because the driver holds every descriptor it has consumed until
-the poll finishes and the batch has been through the stack.  Refilling every
-sixteen entries would hand them back while that is still running, and it is a
-small change to `stmmac_rx()` measurable against the same reproducer.
+Run `ethtool -K eth0 gro off` against the ring-256 reproducer.  If the slow
+stretch is the GRO flush then turning GRO off removes it, because packets go
+up during the receive loop instead of in a batch after the poll returns.  It
+is one command and it needs no rebuild.  If that is inconclusive, a filtered
+function trace including `netif_receive_skb_list_internal` during an excursion
+shows the same thing directly; the runs that carried the filter did not happen
+to contain an excursion, which ring 256 fixes.
 
 Then step 4, with a sharper question than the one recorded there: the vendor
 runs a 256-entry ring with checksum offload on and does not wedge, and
