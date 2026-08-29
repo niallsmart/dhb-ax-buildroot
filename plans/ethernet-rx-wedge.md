@@ -180,28 +180,40 @@ Verified on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1.
   Mbit/s offered, 8 to 5 unthrottled, and 3 to 1 at ring 512 unthrottled.  On
   a 1024 ring the worst second goes from 142 descriptors left to 659.  It is a
   mitigation: 256 and 512 still wedge.
-- Two measurements of the same excursion disagree and one of them is being
-  read wrongly.  `rx_poll_gap_us` puts a 4.5 to 13 ms interval before the poll
-  that records the emptiest ring, while the trace finds no NET_RX window over
-  3 ms with an eth0 interrupt waiting inside it.  A window with no arrivals
-  cannot drain the ring.  The likely error is treating `rx_desc_low_water` and
-  `rx_poll_gap_us` as a matched pair when they are latched independently over
-  the same one-second interval.
+- The interval before the emptiest poll is spent delivering the previous
+  batch, not waiting.  Timing the receive loop and the refill separately puts
+  both under 1 ms in every large interval, so the time is neither.  Anchoring
+  the reading in the trace and adding `napi:napi_poll` shows what it is: the
+  driver poll returns work 64 against a budget of 64, NAPI is therefore not
+  completed, and `net_rx_action` then runs for 2.9 to 4.0 ms without a single
+  further poll before the softirq exits to `ksoftirqd/0`.  The next driver
+  poll comes 4.8 to 8.4 ms after the last one.  That stretch is the batch
+  going up the stack, outside `stmmac_rx()`.
+- Descriptors are returned to the DMA only at the end of a poll, so the ring
+  drains for the whole of that stretch.  At 30k pps a 4 ms window costs about
+  120 descriptors and an 8 ms window about 250, on top of the 64 the poll
+  holds.  That is the excursion, and it is why a larger ring survives, why
+  halving the per-packet cost halved the wedge rate, and why nothing looks
+  starved from outside.
 - Ruled out as contributors: L2 cache (wedge reproduced with `L2_CTRL` both
   ways, `L2_RINT` clear), RPS, CPU frequency scaling (no `cpufreq` driver),
   TCP buffer sizing.
 
 ## Open
 
-1. What the excursion actually is.  Nothing holds the receive poll off and
-   the page pool never fails, so the ring empties either because arrivals
-   outrun the drain rate or because of something the two counters above are
-   not describing correctly.  Halving the per-packet cost halved the wedge
-   count, which fits the first reading without establishing it.
-2. Whether the vendor driver avoids the wedge, or has simply never been driven
+1. Which part of the batch-delivery path takes the 3 to 4 ms.  The events
+   available place it inside the NET_RX softirq, after the driver poll
+   returns and outside `stmmac_rx()`, which covers the GRO flush, the list
+   receive and the TCP stack including the cross-CPU wakeups.  Narrowing it
+   further needs either a tracer this kernel does not carry or more driver
+   timing.
+2. Whether returning descriptors during the receive loop rather than only at
+   its end removes the excursion.  The ring drains because the driver holds
+   what it has consumed until the poll ends.
+3. Whether the vendor driver avoids the wedge, or has simply never been driven
    to the received packet rate that triggers it.  Its 256-entry ring survives
    only workloads that were also survivable on mainline.
-3. Whether a receive process in state 4 can be restarted by anything short of
+4. Whether a receive process in state 4 can be restarted by anything short of
    the three-channel reset.  Every documented DWMAC1000 mechanism has failed.
 
 ## Plan
@@ -484,14 +496,42 @@ One boot hung at `eth0: Register MEM_TYPE_PAGE_POOL RxQ-0` and needed a power
 cycle.  That is the second time, after one at ring 256 with an image that
 booted on retry, and it is not tied to a ring size or to this change.
 
+### 2026-08-28 — the interval is batch delivery, not a stall
+
+Patch 0018 emits the low-water reading into the ftrace buffer as it is taken
+and splits the interval it carries into the previous poll's refill, this
+poll's receive loop, and what is left.  Refill and receive loop came in under
+1 ms for every interval over 2 ms, so the time is in neither.
+
+Adding `napi:napi_poll` named it.  Every large interval has the same shape:
+the driver poll returns work 64 against a budget of 64, so NAPI is not
+completed and goes back on the repoll list; `net_rx_action` then runs 2.9 to
+4.0 ms without another poll of any kind before the softirq exits and hands to
+`ksoftirqd/0`; the driver is polled again 4.8 to 8.4 ms after the previous
+poll.  The unaccounted stretch is the batch going up the stack, outside
+`stmmac_rx()` and so outside the split.
+
+Descriptors go back to the DMA only at the end of a poll, so the ring drains
+through the whole of it.  Two 30 s runs at ring 512 with the anchor in place:
+worst second 108 free after a 3696 us interval, and 66 free after 4792 us.
+
+The two sysctls that change the round are `net.core.netdev_budget`, 300, and
+`net.core.netdev_budget_usecs`, which will not go below 20000 on this board
+because HZ is 100, so the time limit never binds.  One 20 s run at ring 512
+unthrottled with the budget cut to 64: 462 Mbit/s against 448, worst second
+184 free against 108, but two wedges against none.  Single runs, and the
+wedge count varies enough between runs that this settles nothing.
+
+Throughput with offload has been between 405 and 462 Mbit/s across these runs,
+against 422 before it.
+
 ### Next
 
-Settle the disagreement between `rx_poll_gap_us` and the trace before step 4.
-A tracepoint fired from `stmmac_rx_low_water()` when the backlog crosses a
-threshold, carrying the backlog and the interval, anchors the exact poll in
-the ftrace timeline, so the window before it can be read from the same capture
-as the interrupt and softirq events instead of inferred from two counters
-sampled a second apart.
+Return descriptors during the receive loop instead of only at its end.  The
+ring drains because the driver holds every descriptor it has consumed until
+the poll finishes and the batch has been through the stack.  Refilling every
+sixteen entries would hand them back while that is still running, and it is a
+small change to `stmmac_rx()` measurable against the same reproducer.
 
 Then step 4, with a sharper question than the one recorded there: the vendor
 runs a 256-entry ring with checksum offload on and does not wedge, and
