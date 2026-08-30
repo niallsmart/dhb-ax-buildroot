@@ -1,0 +1,140 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] net: stmmac: poll the Hi3531 receive DMA like the vendor
+
+The vendor 3.0 driver runs a 50 ms timer, stmmac_poll_func(), that writes
+both poll demand registers whenever the DMA state machine is not idle.  It
+is a HiSilicon addition: stock 3.0 has no such timer, and its
+CONFIG_STMMAC_TIMER external timer schedules NAPI rather than poking the
+DMA.  The vendor receive process reaches state 4 constantly at the stock
+ring size and resumes from every episode.
+
+A poll demand issued by hand to an already wedged channel does nothing:
+CSR5 and CSR19 do not move, with the vendor's own register and write value,
+with descriptors confirmed DMA-owned in physical memory, and with inbound
+traffic present.  So this does not test whether a poll demand cures the
+wedge.  It tests whether a channel polled every 50 ms ever reaches it.
+
+Arm the two interrupt sources hi3531_rx_suspended() masks, so a wedge is
+reported once per period rather than once per interface open.
+
+Diagnostic only.  Remove with the rest of the receive-wedge instrumentation
+when plans/ethernet-rx-wedge.md closes.
+---
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+@@ -24,6 +24,7 @@
+  * acceleration engine is not used.
+  */
+ 
++#include <linux/bitfield.h>
+ #include <linux/bitops.h>
+ #include <linux/if_ether.h>
+ #include <linux/io.h>
+@@ -44,6 +45,7 @@
+ #define HI3531_DMA_CHAN_STRIDE		0x0100
+ #define HI3531_DMA_CHANNELS		3
+ #define HI3531_DMA_BUS_MODE_SWR		BIT(0)
++#define HI3531_DMA_RS_SUSPENDED		4
+ #define HI3531_TNK_INTR_STAT		0x9000
+ #define HI3531_TNK_INTR_EN		0x9004
+ #define HI3531_TNK_ID			0x900c
+@@ -81,10 +83,29 @@
+ MODULE_PARM_DESC(rx_ring_size,
+ 		 "receive descriptors per ring, 64 to 1024 (default 1024)");
+ 
++/*
++ * The vendor driver kicks the transmit and receive poll demands from a 50 ms
++ * timer whenever the DMA state machine is not idle, and its receive process
++ * resumes from every suspension on this silicon.  Upstream issues no poll
++ * demand at all: a suspended receive process is left to resume when the
++ * refill path returns descriptors to it.
++ *
++ * Zero leaves the timer running and issues no poll demand, so the two
++ * arrangements can be compared without a reboot.
++ *
++ * Diagnostic only.  Remove with the rest of the receive-wedge
++ * instrumentation when plans/ethernet-rx-wedge.md closes.
++ */
++static unsigned int rx_poll_ms = 50;
++module_param(rx_poll_ms, uint, 0644);
++MODULE_PARM_DESC(rx_poll_ms,
++		 "receive poll demand period in ms, 0 to poll no descriptors (default 50)");
++
+ struct hi3531_dwmac {
+ 	struct device *dev;
+ 	void __iomem *gmac;
+ 	void __iomem *syscfg;
++	struct timer_list poll_timer;
+ };
+ 
+ /*
+@@ -336,6 +357,42 @@
+ 
+ 	dev_info(dwmac->dev, "GMAC1 RGMII speed %d, syscfg %08x -> %08x\n",
+ 		 speed, old, val);
++}
++
++/*
++ * GMAC1 owns DMA channel 1, whose registers this reaches through the same
++ * per-instance base the DMA operations are given, so the channel argument to
++ * the register macros is zero.
++ *
++ * A receive process that has stopped reports state 0 and is left alone, which
++ * keeps the poll demand off an interface that is down.  Every other state
++ * from suspended upwards is polled, including the state 7 an idle interface
++ * on this SoC reports.
++ *
++ * hi3531_rx_suspended() masks its two interrupt sources to stop the channel
++ * re-interrupting while the condition stands.  Arming them here bounds a
++ * wedge to one report per period rather than one per interface open.
++ */
++static void hi3531_poll_timer(struct timer_list *timer)
++{
++	struct hi3531_dwmac *dwmac = timer_container_of(dwmac, timer,
++							poll_timer);
++	void __iomem *dma = dwmac->gmac + HI3531_GMAC1_DMA_OFFSET;
++	unsigned int period = rx_poll_ms ? rx_poll_ms : 50;
++	u32 status = readl(dma + DMA_CHAN_STATUS(0));
++
++	if (rx_poll_ms && FIELD_GET(DMA_STATUS_RS_MASK, status) >=
++			  HI3531_DMA_RS_SUSPENDED) {
++		u32 value;
++
++		writel(1, dma + DMA_CHAN_RCV_POLL_DEMAND(0));
++
++		value = readl(dma + DMA_CHAN_INTR_ENA(0));
++		writel(value | DMA_INTR_ENA_RUE | DMA_INTR_ENA_RSE,
++		       dma + DMA_CHAN_INTR_ENA(0));
++	}
++
++	mod_timer(&dwmac->poll_timer, jiffies + msecs_to_jiffies(period));
+ }
+ 
+ static int hi3531_dwmac_init(struct platform_device *pdev, void *arg)
+@@ -387,6 +444,8 @@
+ 	dev_info(&pdev->dev, "TNK interrupt enable %08x -> %08x\n",
+ 		 intr_en, new_intr_en);
+ 
++	mod_timer(&dwmac->poll_timer, jiffies + msecs_to_jiffies(50));
++
+ 	return 0;
+ }
+ 
+@@ -394,6 +453,7 @@
+ {
+ 	struct hi3531_dwmac *dwmac = arg;
+ 
++	timer_delete_sync(&dwmac->poll_timer);
+ 	writel(0, dwmac->gmac + HI3531_TNK_INTR_EN);
+ }
+ 
+@@ -429,6 +489,8 @@
+ 	if (IS_ERR(dwmac->syscfg))
+ 		return PTR_ERR(dwmac->syscfg);
+ 
++	timer_setup(&dwmac->poll_timer, hi3531_poll_timer, 0);
++
+ 	plat->bsp_priv = dwmac;
+ 	plat->setup = hi3531_dwmac_setup;
+ 	plat->fix_mac_speed = hi3531_fix_mac_speed;
