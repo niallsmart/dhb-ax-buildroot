@@ -1,8 +1,20 @@
 # Hi3531 RX wedge
 
-`eth0` stops receiving permanently under sustained inbound load.  The link
-stays up at 1000 Mb/s, transmit keeps working, and no counter or log message
-moves.
+**Resolved.**  `eth0` stopped receiving permanently under sustained inbound
+load: the link stayed up at 1000 Mb/s, transmit kept working, and no counter
+or log message moved.
+
+The cause is CSR6 bit 24, DFF.  Clear, as upstream leaves it, the receive DMA
+flushes a frame it has no descriptor for, and on this silicon the flush
+desynchronises the MTL receive FIFO and the receive process never fetches
+again.  Set, as the vendor sets it, the frame waits in the FIFO instead and
+the channel resumes.  Setting the bit takes a 45 s four-stream run from
+5.12 MB and a wedge to 3.75 GB with none.
+
+The same fault was found independently on Altera SoCFPGA and fixed upstream in
+`45d100ee0d6e`, first released in Linux 6.19.  This port targets 6.18 LTS,
+which is the last release without it, and the fix was never backported to
+6.18.y.
 
 The detailed record — measurements, dead ends, traps — is in
 [ethernet-rx-wedge-log.md](ethernet-rx-wedge-log.md).  Read the dead-end list
@@ -34,14 +46,26 @@ So the fault is not that the ring empties, and not that the SoC cannot recover
 from an empty ring.  It is that this receive process, once suspended, stops
 fetching descriptors and cannot be made to start again.
 
+That model held, and the missing piece sits one step earlier than any of it.
+The difference between the two kernels is what the DMA does with the frame it
+could not place.  Upstream lets it flush; the vendor does not.  A flush on
+this silicon leaves the MTL receive FIFO out of sync with the DMA, and it is
+that desynchronised channel, not the suspension, that never fetches again.
+Suspension is ordinary and both kernels do it constantly.
+
 Patch 0015 reports the condition: RU and receive-process-stopped unmasked,
 and the registers the wedge is diagnosed from latched into the log.  Patch
-0016 mirrors the vendor's 50 ms poll timer, and patch 0017 its refill-path
-poll demand.  None of them recovers the interface and none is meant to;
-`ip link set eth0 down` and up does, through the three-channel reset installed
-as the instance's `dma_ops->reset`.
+0016 mirrors the vendor's 50 ms poll timer, patch 0017 its refill-path poll
+demand, and patch 0019 sets DFF.  Only the last of those fixes anything, and
+0017 is required alongside it: with DFF set the DMA suspends rather than
+flushing, so software has to poll-demand after refilling to resume it.  That
+pairing is what upstream's own fix does.
 
-## What any explanation has to satisfy
+## What the answer had to satisfy
+
+The evidence the wedge was diagnosed from.  Every item is consistent with a
+receive FIFO desynchronised by a flush: the descriptors and pointers are all
+correct, which is why nothing about them ever explained the failure.
 
 - Every descriptor in the ring carries OWN in physical memory at the wedge,
   read through `/dev/mem` rather than the driver's mapping.  The DMA is not
@@ -67,90 +91,115 @@ as the instance's `dma_ops->reset`.
 - State 4 is the wedge.  State 7 is what a healthy idle interface reports on
   this integration, so it is not a fault signature.
 
-## The open question
+## The answer
 
-**Both kernels suspend the receive process in state 4 under load.  The
-vendor's resumes every time; mainline's never attempts another descriptor
-fetch, and nothing short of resetting all three DMA channels makes it try
-again.  What accounts for the difference?**
+**CSR6 bit 24, DFF, Disable Flushing of Received Frames.**  The vendor sets
+it whenever receive store-and-forward is on.  Upstream defines
+`DMA_CONTROL_DFF` in `dwmac1000.h` and never writes it, so on 6.18 the bit
+stays at its reset value.
 
-Everything the hardware needs in order to resume is present and correct:
-descriptors available in physical memory, a pointer inside the ring, no bus
-error, and an explicit poll demand telling it to go.  It stays suspended
-anyway, and it stops asking.
+With the bit clear, a receive DMA that has no descriptor for an arriving
+frame flushes it.  On this silicon that flush leaves the MTL receive FIFO out
+of sync with the DMA, and the receive process never transfers again.  With
+the bit set the frame waits in the FIFO until a descriptor appears, and the
+channel resumes.
 
-That closes the two candidates this section used to hold.  The DMA is not
-re-fetching from a wrong address, because CSR19 is in bounds.  The hardware
-is not being denied the OWN bits, because they are set in physical memory and
-disabling the outer cache changes nothing.
+Measured on one boot, ring 256, four-stream inbound TCP, 45 s, the parameter
+toggled live between runs:
 
-It also closes the poll-demand line of attack entirely, in all three
-placements: by hand at a wedged channel, from a 50 ms timer, and from the
-refill path itself with the vendor's barrier, counted as it fired.  Poll
-demand was worth trying while the failure looked like a channel waiting to be
-told to re-read a descriptor.  It is not: the channel has stopped fetching,
-and telling it to fetch does not restart it.
+    rx_dff   CSR6         transferred   outcome
+    Y        0x03002902      3.75 GB    no wedge
+    Y        0x03002902      3.71 GB    no wedge
+    N        0x02002902      5.12 MB    wedged, state 4
 
-Mainline does omit something the vendor does, and it is not the answer.  On a
-DWMAC1000 its refill path notifies the DMA by no mechanism at all: the tail
-pointer register it writes to exists only on DWMAC4 and later, and
-`DMA_RCV_POLL_DEMAND` is declared in `dwmac_dma.h` and written nowhere in the
-driver.  Patch 0017 supplies that notification and the wedge is unchanged.
+The successful runs still suspend.  One logged `CSR5 006884c4` — the exact
+wedge signature — at t=138 s and carried on to 3.75 GB; RUE and RSE are
+masked after the first report, so later episodes went unrecorded.  That is
+the vendor's behaviour, which was measured at 310 suspend episodes in 45 s
+with recovery from every one.  Descriptor exhaustion was never the fault.
 
-What is left is the setup the channel is running under rather than anything
-done to it afterwards.  The vendor suspends in state 4 as readily as mainline
-does — 310 episodes in a 45 s run at ring 256 — and resumes from every one.
-Suspension is not the fault; failing to leave it is.  So the difference is in
-what makes resuming possible, and since nothing applied to a suspended channel
-restarts it, that points at how the channel was configured before it stalled.
-Compare the two configurations register by register: CSR0 for ATDS and
-descriptor size, CSR6 for operating mode and thresholds, CSR10 for the
-AXI/AHB bus settings, and the burst length.  Read the vendor's values on the
-3.0 kernel and mainline's on the same board, and account for every
-difference.
+Throughput rose with it, by more than the absence of wedges accounts for:
+706-714 Mbit/s four-stream, against 468 Mbit/s recorded as the previous best
+in [optimizing-network-throughput.md](optimizing-network-throughput.md).
+CSR8 stayed at zero and `rx_errors` at zero across 2.78M packets.
 
-## Next experiments, cheapest first
+This also explains why nothing applied to a suspended channel ever helped.
+Poll demand, SR toggling, MAC receiver disable and a channel software reset
+all arrive after the flush has already desynchronised the FIFO.  Only the
+three-channel reset reaches far enough to clear it.
 
-1. **Compare the DMA configuration register by register.**  Both kernels
-   suspend in state 4; only the vendor's channel resumes.  With poll demand
-   now closed in every placement, this is the remaining line of attack.  Read
-   CSR0, CSR6, CSR9 and CSR10 under the vendor 3.0 kernel and under mainline
-   on the same board, and account for every difference.  Known already:
-   mainline sets ATDS and runs 32-byte enhanced descriptors where the vendor
-   runs 16-byte with ATDS clear, and mainline's CSR9 is `0xa0` where the
-   vendor's is zero.  Neither has been changed and tested.
-2. **Clear ATDS and run 16-byte descriptors.**  This changes the stride the
-   DMA uses to walk the ring, which is the most structural of the known
-   differences.  `plat->enh_desc` and `dma_cfg->atds` both have to go, and
-   mainline forces `priv->extend_desc` for cores at 3.50 and above in
-   `stmmac_dwmac1_quirks()`, so that quirk has to be worked around as well.
-3. **Disable the receive interrupt watchdog.**  Mainline defaults CSR9 to
-   `DEF_DMA_RIWT`, `0xa0`, about 264 us on the 155 MHz `stmmaceth` clock,
-   against the vendor's zero.  That delay is dead time in which the hardware
-   consumes descriptors and the driver is not running to return any.
-   `ethtool -C eth0 rx-usecs` floors at about 27 us because it rejects
-   anything below `MIN_DMA_RIWT`; that much is a live toggle.  A true zero
-   needs `riwt_off` in the platform data or a direct CSR9 write.
+### Independently found and fixed upstream
+
+`45d100ee0d6e`, "net: stmmac: dwmac: Disable flushing frames on Rx Buffer
+Unavailable", by Rohan G Thomas, merged to net-next 2025-11-27 and first
+released in Linux 6.19.  It was reported on SoCFPGA platforms carrying the
+same DWMAC1000 IP — Arria 10, Cyclone V, Agilex 7 — where it presents as
+latency rather than a permanent stop: frames sit in the FIFO until the next
+packet arrives, so a ping returns one ping interval late.
+
+Upstream sets DFF beside RSF in `dwmac1000_dma_operation_mode_rx()` and adds
+`dwmac_enable_dma_reception()`, called from the refill path, for the same
+reason patch 0017 exists: with DFF set the DMA suspends instead of flushing
+and needs a poll demand to resume.
+
+It was never backported to 6.18.y and will not be, having gone to net-next
+with no `Fixes:` tag and no `Cc: stable`.  6.18 LTS is therefore the last
+release that needs this carried locally.
+
+### What the vendor knew
+
+HiSilicon ships two drivers for this MAC, `stmmac` and `higmacv300`.  Their
+`dwmac1000_dma.c` files are identical apart from an include, a Kconfig symbol
+and one comment.  The stmmac copy attributes DFF to the TNK offload engine;
+`higmacv300`, which contains no offload code at all, sets the same bit and
+calls it required by the GMAC.  The requirement is the MAC's, and the TNK
+attribution is a fork artifact.
+
+## Follow-up work
+
+1. **Replace patches 0017 and 0019 with a backport of `45d100ee0d6e`.**
+   Upstream sets DFF beside RSF in `dwmac1000_dma.c`, which is where the bit
+   belongs, rather than wrapping `dma_rx_mode` per platform as 0019 does.
+   The backport then disappears on its own at any move past 6.19.
+2. **Retire the mitigations this fault justified.**  `rx_ring_size` defaults
+   to 1024 (patch 0014) to make an empty ring rare; the ring can go back to
+   the upstream default once wedge-free operation is confirmed at it.  The
+   three-channel `dma_ops->reset` in 0015 was the only known recovery and is
+   no longer needed for that, though it is still needed at probe, where a
+   warm restart otherwise inherits a running DMA.  The 0016 poll timer has no
+   remaining purpose.
+3. **Confirm 0017 is still required.**  Upstream's reasoning says it is, and
+   every successful run had `rx_kick_on_refill=Y`, but the pairing has not
+   been falsified on this hardware.  One run with DFF set and the kick off
+   settles it.
+4. **Re-measure throughput.**  706-714 Mbit/s four-stream is well above the
+   468 Mbit/s that [optimizing-network-throughput.md](optimizing-network-throughput.md)
+   records as the ceiling, so that document's conclusions were taken against
+   a MAC that was flushing frames and need revisiting.
+
+Independent of the above, and unresolved: which part of the batch-delivery
+path takes the 3 to 4 ms that empties the ring in the first place.  It sits
+inside the NET_RX softirq, after the driver poll returns and outside
+`stmmac_rx()`.  `gro_flush_normal()` is the suspect, unconfirmed.  Test with
+`ethtool -K eth0 gro off` against the ring-256 reproducer, then filtered
+function tracing on `netif_receive_skb_list_internal`.  This is now a
+throughput question rather than a correctness one.
 
 Closed, and not worth revisiting without new evidence:
 
 - **CSR19 outside the ring.**  Measured in bounds at the wedge.
 - **Descriptor coherency.**  OWN confirmed set in physical memory through
   `/dev/mem`, and disabling the outer cache changes nothing.
-- **Receive poll demand, however issued.**  By hand at CSR2 with the vendor's
-  write value and with traffic present; from a 50 ms timer mirroring the
-  vendor's `stmmac_poll_func`, with the outer cache on and at full link speed;
-  and from the end of `stmmac_rx_refill()` where the vendor issues it, with
-  the vendor's `isb(); dsb(); dmb()` ahead of the write and a counter
-  confirming 54 of them reached the hardware in a run that wedged anyway.  It
-  neither clears the wedge nor prevents it.
-
-Independent of the above, and unresolved: which part of the batch-delivery
-path takes the 3 to 4 ms that creates the excursion in the first place.  It
-sits inside the NET_RX softirq, after the driver poll returns and outside
-`stmmac_rx()`.  `gro_flush_normal()` is the suspect, unconfirmed.  Test with
-`ethtool -K eth0 gro off` against the ring-256 reproducer, then filtered
-function tracing on `netif_receive_skb_list_internal`.
+- **Receive poll demand as the difference.**  By hand at CSR2 with the
+  vendor's write value and with traffic present; from a 50 ms timer mirroring
+  the vendor's `stmmac_poll_func`; and from the end of `stmmac_rx_refill()`
+  with the vendor's barrier and a counter confirming 54 of them reached the
+  hardware in a run that wedged anyway.  Necessary alongside DFF, but not
+  sufficient and not the cause.
+- **Descriptor format.**  16-byte descriptors with ATDS clear wedge exactly
+  as 32-byte ones do, which also brought CSR0 to functional parity with the
+  vendor: `0x00A01000` against `0x00201000`, differing only in USP, which
+  selects between an RPBL and a PBL that both read 16.
 
 ## Running an experiment
 
@@ -175,10 +224,15 @@ out of 3.  Keep full MTU — smaller frames move the fault away.
   descriptor and pointer questions without the driver in the way.  Ring 256
   and 32-byte descriptors while ATDS is set.  Run it detached with output to
   a file: SSH dies mid-command when receive stops.
-- `rx_poll_ms`, `rx_kick_on_refill` and `rx_kicks` are all writable at
-  runtime, so the poll timer and the refill-path kick can be toggled between
-  runs on one boot and the kick counter reset before each.  Set `rx_poll_ms`
-  to 0 when testing the refill kick, or the two cannot be told apart.
+- `rx_dff`, `rx_poll_ms`, `rx_kick_on_refill` and `rx_kicks` are all writable
+  at runtime, so DFF, the poll timer and the refill-path kick can be toggled
+  between runs on one boot and the kick counter reset before each.  Set
+  `rx_poll_ms` to 0 when testing the refill kick, or the two cannot be told
+  apart.  `rx_dff` takes effect on the next interface open, because
+  `dma_rx_mode` runs from `stmmac_hw_setup()`, so bounce the interface after
+  writing it and confirm CSR6 bit 24 before trusting a run.
+- `extend_desc` is read at probe and is therefore a command-line knob:
+  `dwmac_hi3531.extend_desc=0` for 16-byte descriptors with ATDS clear.
 - A diagnostic that can read zero needs a counter proving its code path ran.
   `rx_kicks` exists because a wedge with the kick enabled looks identical to
   a wedge with the call site never reached.

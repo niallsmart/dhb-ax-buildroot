@@ -4,6 +4,10 @@ Supporting record for [ethernet-rx-wedge.md](ethernet-rx-wedge.md).  Verified
 on kernel 6.18.42, Debian initramfs, GMAC1 on DMA channel 1, against the
 vendor Linux 3.0.8 with Hisilicon `stmmac` build 201206191703.
 
+The cause was CSR6 bit 24, DFF.  The dead ends below are kept because they
+are what the search actually cost, and because several of them stay true:
+poll demand is necessary alongside DFF without being the cause of anything.
+
 ## Dead ends
 
 Do not spend time on these again.
@@ -65,6 +69,15 @@ Do not spend time on these again.
   `stmmac_rx_refill()`, and reproduces the vendor's barrier sequence ahead of
   the write.  Confirmed firing by its own counter, 54 times in a run that
   wedged at 3.75 MB.  This was the last untested placement of a poll demand.
+  A dead end as a fix on its own, but not discardable: with DFF set the DMA
+  suspends instead of flushing and needs exactly this to resume, which is why
+  upstream's fix carries both halves.
+- **16-byte descriptors with ATDS clear.**  Patch 0018.  Wedges exactly as
+  32-byte descriptors do, at 3.12 MB against 3.75 MB, with CSR19 in bounds of
+  a ring 4096 bytes long.  It also brought CSR0 to functional parity with the
+  vendor — `0x00A01000` against `0x00201000`, differing only in USP, which
+  chooses between an RPBL and a PBL that both hold 16 — so CSR0 accounts for
+  nothing.
 - **Disabling the L2 cache in the device tree.**  Reproduced the wedge
   unchanged, and re-confirms by a second route what `L2_CTRL` already showed.
   It also costs an order of magnitude of throughput, which changes the shape
@@ -327,6 +340,34 @@ is live in steady state and not only under load.  Read the three transferred
 figures as time to first wedge on a noisy reproducer, not as throughput —
 the spread between them carries no signal.
 
+**DFF against the wedge**, four-stream TCP, ring 256, L2 on, 45 s,
+`rx_poll_ms` 0 and `rx_kick_on_refill` on throughout.  All three runs are one
+boot with `rx_dff` toggled live and the interface bounced between them.
+
+    rx_dff   CSR6         transferred   receiver   outcome
+    Y        0x03002902      3.75 GB    714 Mbit/s  no wedge
+    Y        0x03002902      3.71 GB    706 Mbit/s  no wedge
+    N        0x02002902      5.12 MB      0         wedged, state 4
+
+The successful runs suspend and recover.  The first logged
+`CSR5 006884c4 CSR19 822f2ac0 CSR21 823b6040 GMAC debug 00000137` at t=138 s
+— the wedge signature exactly — and went on to 3.75 GB.  CSR7 read
+`0x0001A061` afterwards, so RUE and RSE were masked after that one report and
+later episodes were not recorded.  Across the pair: CSR8 zero, `rx_errors`
+zero, `rx_dropped` 24, 2.78M packets, 4.21 GB.
+
+The failing run's state matches every earlier wedge: CSR5 `0x00680404`,
+CSR6 back to `0x02002902`.
+
+**Vendor and mainline CSR6**, channel 1:
+
+    vendor    0x03202002   RSF, DFF, TSF
+    mainline  0x02002902   RSF, EFC, RFD
+    with 0019 0x03002902   RSF, DFF, EFC, RFD
+
+TSF and the DMA flow control fields still differ and account for nothing
+known.
+
 ## History
 
 - **2026-08-28** — Fault characterised.  Wedge reproduced with four-stream
@@ -402,3 +443,24 @@ the spread between them carries no signal.
   the call site fires — 54 kicks in the failing run — so the null result is
   the poll demand's and not dead code's.  That was the last untried placement,
   and it closes poll demand as the difference between the two drivers.
+- **2026-08-30** — Solved.  CSR6 bit 24, DFF, is the difference: clear, the
+  receive DMA flushes a frame it has no descriptor for and the MTL receive
+  FIFO goes out of sync with it; set, the frame waits in the FIFO and the
+  channel resumes.  One boot, toggled live, 3.75 GB and 3.71 GB with the bit
+  against 5.12 MB and a wedge without it, and 706-714 Mbit/s where 468 was
+  the recorded ceiling.  The successful runs still suspend in state 4 and
+  recover, as the vendor's do.  Found by comparing CSR6 register by register
+  after CSR0 had been brought to parity and accounted for nothing.
+- **2026-08-30** — Already fixed upstream, one release out of reach.
+  `45d100ee0d6e` by Rohan G Thomas, merged to net-next 2025-11-27, first
+  released in 6.19, reported on SoCFPGA parts with the same DWMAC1000 IP
+  where it shows as one-ping-interval latency rather than a permanent stop.
+  It pairs DFF with a refill-path poll demand for the same reason patch 0017
+  exists.  Never backported to 6.18.y and will not be: net-next, no `Fixes:`
+  tag, no `Cc: stable`.  This port targets 6.18 LTS, the last release without
+  it.
+- **2026-08-30** — The TNK attribution corrected.  HiSilicon ships two
+  drivers for this MAC whose `dwmac1000_dma.c` differ only in an include, a
+  Kconfig symbol and one comment: the stmmac fork credits DFF to the TNK
+  offload engine, `higmacv300` carries no offload code and calls the same bit
+  required by the GMAC.  The requirement is the MAC's.
