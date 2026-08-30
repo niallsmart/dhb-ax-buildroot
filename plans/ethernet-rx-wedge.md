@@ -36,9 +36,10 @@ fetching descriptors and cannot be made to start again.
 
 Patch 0015 reports the condition: RU and receive-process-stopped unmasked,
 and the registers the wedge is diagnosed from latched into the log.  Patch
-0016 mirrors the vendor's 50 ms poll timer.  Neither recovers the interface
-and neither is meant to; `ip link set eth0 down` and up does, through the
-three-channel reset installed as the instance's `dma_ops->reset`.
+0016 mirrors the vendor's 50 ms poll timer, and patch 0017 its refill-path
+poll demand.  None of them recovers the interface and none is meant to;
+`ip link set eth0 down` and up does, through the three-channel reset installed
+as the instance's `dma_ops->reset`.
 
 ## What any explanation has to satisfy
 
@@ -55,7 +56,9 @@ three-channel reset installed as the instance's `dma_ops->reset`.
   channel software reset.  A three-channel reset works, so what is wrong is
   not confined to channel 1's own state.
 - Polling every 50 ms as the vendor does neither prevents the wedge nor
-  clears it, with the outer cache enabled and at full link speed.
+  clears it, with the outer cache enabled and at full link speed.  Nor does
+  polling from the refill path where the vendor polls, with the vendor's
+  barrier ahead of the write and a counter proving the write happened.
 - One RU interrupt is raised per run, with the source re-armed every 50 ms.
   RU asserts on a failed descriptor fetch, so a channel that was retrying
   and failing would re-assert it.  The channel is not retrying.
@@ -81,10 +84,18 @@ re-fetching from a wrong address, because CSR19 is in bounds.  The hardware
 is not being denied the OWN bits, because they are set in physical memory and
 disabling the outer cache changes nothing.
 
-It also closes the poll-demand line of attack entirely.  Poll demand was
-worth trying while the failure looked like a channel waiting to be told to
-re-read a descriptor.  It is not: the channel has stopped fetching, and
-telling it to fetch does not restart it.
+It also closes the poll-demand line of attack entirely, in all three
+placements: by hand at a wedged channel, from a 50 ms timer, and from the
+refill path itself with the vendor's barrier, counted as it fired.  Poll
+demand was worth trying while the failure looked like a channel waiting to be
+told to re-read a descriptor.  It is not: the channel has stopped fetching,
+and telling it to fetch does not restart it.
+
+Mainline does omit something the vendor does, and it is not the answer.  On a
+DWMAC1000 its refill path notifies the DMA by no mechanism at all: the tail
+pointer register it writes to exists only on DWMAC4 and later, and
+`DMA_RCV_POLL_DEMAND` is declared in `dwmac_dma.h` and written nowhere in the
+driver.  Patch 0017 supplies that notification and the wedge is unchanged.
 
 What is left is the setup the channel is running under rather than anything
 done to it afterwards.  The vendor suspends in state 4 as readily as mainline
@@ -101,11 +112,13 @@ difference.
 ## Next experiments, cheapest first
 
 1. **Compare the DMA configuration register by register.**  Both kernels
-   suspend in state 4; only the vendor's channel resumes.  Read CSR0, CSR6, CSR9 and CSR10 under the vendor 3.0 kernel and under
-   mainline on the same board, and account for every difference.  Known
-   already: mainline sets ATDS and runs 32-byte enhanced descriptors where the
-   vendor runs 16-byte with ATDS clear, and mainline's CSR9 is `0xa0` where
-   the vendor's is zero.  Neither has been changed and tested.
+   suspend in state 4; only the vendor's channel resumes.  With poll demand
+   now closed in every placement, this is the remaining line of attack.  Read
+   CSR0, CSR6, CSR9 and CSR10 under the vendor 3.0 kernel and under mainline
+   on the same board, and account for every difference.  Known already:
+   mainline sets ATDS and runs 32-byte enhanced descriptors where the vendor
+   runs 16-byte with ATDS clear, and mainline's CSR9 is `0xa0` where the
+   vendor's is zero.  Neither has been changed and tested.
 2. **Clear ATDS and run 16-byte descriptors.**  This changes the stride the
    DMA uses to walk the ring, which is the most structural of the known
    differences.  `plat->enh_desc` and `dma_cfg->atds` both have to go, and
@@ -125,9 +138,12 @@ Closed, and not worth revisiting without new evidence:
 - **Descriptor coherency.**  OWN confirmed set in physical memory through
   `/dev/mem`, and disabling the outer cache changes nothing.
 - **Receive poll demand, however issued.**  By hand at CSR2 with the vendor's
-  write value and with traffic present, and from a 50 ms timer mirroring the
-  vendor's `stmmac_poll_func`, with the outer cache on and at full link speed.
-  It neither clears the wedge nor prevents it.
+  write value and with traffic present; from a 50 ms timer mirroring the
+  vendor's `stmmac_poll_func`, with the outer cache on and at full link speed;
+  and from the end of `stmmac_rx_refill()` where the vendor issues it, with
+  the vendor's `isb(); dsb(); dmb()` ahead of the write and a counter
+  confirming 54 of them reached the hardware in a run that wedged anyway.  It
+  neither clears the wedge nor prevents it.
 
 Independent of the above, and unresolved: which part of the batch-delivery
 path takes the 3 to 4 ms that creates the excursion in the first place.  It
@@ -159,8 +175,13 @@ out of 3.  Keep full MTU — smaller frames move the fault away.
   descriptor and pointer questions without the driver in the way.  Ring 256
   and 32-byte descriptors while ATDS is set.  Run it detached with output to
   a file: SSH dies mid-command when receive stops.
-- `rx_poll_ms` is writable at runtime, so the poll timer can be toggled
-  between runs on one boot.
+- `rx_poll_ms`, `rx_kick_on_refill` and `rx_kicks` are all writable at
+  runtime, so the poll timer and the refill-path kick can be toggled between
+  runs on one boot and the kick counter reset before each.  Set `rx_poll_ms`
+  to 0 when testing the refill kick, or the two cannot be told apart.
+- A diagnostic that can read zero needs a counter proving its code path ran.
+  `rx_kicks` exists because a wedge with the kick enabled looks identical to
+  a wedge with the call site never reached.
 - Per run record: transferred bytes, frame size, flow count, duration, ring
   size, wedge count, CSR8, and CSR3/CSR5/CSR19 at the wedge.
 - Register addresses are `0x101c1100` plus the CSR index times four, so
