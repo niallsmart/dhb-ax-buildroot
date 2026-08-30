@@ -32,7 +32,12 @@ Do not spend time on these again.
   descriptor return rate is roughly unchanged.
 - **Refilling inside the receive loop.**  `stmmac_rx_refill()` already runs
   before `stmmac_rx()` returns, so a poll's descriptors are back with the DMA
-  before the slow stretch starts.  There is nothing to move.
+  before the slow stretch starts.  There is nothing to move.  What upstream
+  omits on this DMA is the notification rather than the refill: the tail
+  pointer register it publishes to belongs to DWMAC4 and later, so
+  `stmmac_set_rx_tail_ptr()` is a no-op here, and `DMA_RCV_POLL_DEMAND` is
+  declared in `dwmac_dma.h` and written nowhere in the driver.  Supplying that
+  notification is patch 0017, and it does not help.
 - **Closing and reopening the interface to recover.**  Works, but leaks a
   poolful of RX pages per cycle — `dev_close` cannot reclaim pages the wedged
   DMA still holds — and the board stalls in `stmmac_napi_poll_rx` after a few
@@ -46,10 +51,20 @@ Do not spend time on these again.
   present, and with all 256 descriptors confirmed DMA-owned in physical
   memory: CSR5 and CSR19 do not move.  Issued from a 50 ms timer mirroring the
   vendor's `stmmac_poll_func()`, with the outer cache enabled and at full link
-  speed: the wedge arrives on schedule anyway.
+  speed: the wedge arrives on schedule anyway.  Issued from the refill path
+  itself, where the vendor issues it, preceded by the vendor's own
+  `isb(); dsb(); dmb()` barrier: 54 poll demands during the failing run, and
+  the wedge arrives anyway.  The counter is what makes that last reading
+  usable — without it a null result cannot be told from a call site that never
+  fired.
 - **Mirroring the vendor's poll timer as a fix.**  Patch 0016 reproduces it
   faithfully and changes nothing.  Whatever keeps the vendor's receive process
   alive, this is not it.
+- **Mirroring the vendor's refill-path kick as a fix.**  Patch 0017 adds
+  `enable_dma_receive` to `stmmac_dma_ops`, calls it at the end of
+  `stmmac_rx_refill()`, and reproduces the vendor's barrier sequence ahead of
+  the write.  Confirmed firing by its own counter, 54 times in a run that
+  wedged at 3.75 MB.  This was the last untested placement of a poll demand.
 - **Disabling the L2 cache in the device tree.**  Reproduced the wedge
   unchanged, and re-confirms by a second route what `L2_CTRL` already showed.
   It also costs an order of magnitude of throughput, which changes the shape
@@ -296,6 +311,22 @@ figure is time to first wedge rather than throughput.  `rx_buf_unav_irq` reads
 1 in each, with the interrupt source re-armed every 50 ms — RU asserts on a
 failed descriptor fetch, so a channel still retrying would raise it again.
 
+**Refill-path poll demand against the wedge**, four-stream TCP, ring 256, L2
+on, 45 s, `rx_poll_ms` 0 throughout so the timer cannot confound it.
+
+    rx_kick_on_refill   kicks issued   transferred   outcome
+    (baseline, off)          --           5.00 MB    wedged, state 4
+    on, no counter           --           3.50 MB    wedged, state 4
+    on, counted              54           3.75 MB    wedged, state 4
+
+Wedge signature `CSR5 006884c4`, unchanged from every earlier run.  The
+counted run is the one that matters: 54 poll demands reached the hardware,
+each preceded by the vendor's barrier, and the receive process wedged all the
+same.  After `ip link` down and up the counter resumes climbing, so the path
+is live in steady state and not only under load.  Read the three transferred
+figures as time to first wedge on a noisy reproducer, not as throughput —
+the spread between them carries no signal.
+
 ## History
 
 - **2026-08-28** — Fault characterised.  Wedge reproduced with four-stream
@@ -362,3 +393,12 @@ failed descriptor fetch, so a channel still retrying would raise it again.
   it has stopped fetching.  Nothing done to a suspended channel restarts it,
   which moves the question from what the vendor does at runtime to how the
   vendor's channel is configured.
+- **2026-08-29** — The vendor's refill-path kick found and reproduced.  Its
+  `stmmac_rx_refill()` ends with a barrier and a receive poll demand on every
+  pass that handed a descriptor back; upstream ends with a tail pointer write
+  that no DWMAC1000 implements, so mainline notifies the DMA of a refill by no
+  means at all.  Patch 0017 supplies the notification, with the vendor's exact
+  barrier.  It does not prevent the wedge.  A counter added afterwards proved
+  the call site fires — 54 kicks in the failing run — so the null result is
+  the poll demand's and not dead code's.  That was the last untried placement,
+  and it closes poll demand as the difference between the two drivers.
