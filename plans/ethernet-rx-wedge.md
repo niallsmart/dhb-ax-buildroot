@@ -166,12 +166,16 @@ attribution is a fork artifact.
    the upstream default once wedge-free operation is confirmed at it.  The
    three-channel `dma_ops->reset` in 0015 was the only known recovery and is
    no longer needed for that, though it is still needed at probe, where a
-   warm restart otherwise inherits a running DMA.  The 0016 poll timer has no
-   remaining purpose.
-3. **Confirm 0017 is still required.**  Upstream's reasoning says it is, and
-   every successful run had `rx_kick_on_refill=Y`, but the pairing has not
-   been falsified on this hardware.  One run with DFF set and the kick off
-   settles it.
+   warm restart otherwise inherits a running DMA.  The 0016 poll timer works
+   as a poll demand source in its own right — 2.40 GB at 452 Mbit/s with the
+   refill kick off — but is strictly worse than 0017 beside it, because a
+   50 ms period leaves each suspension standing for 30 ms on average against
+   the kick's 3.2 ms.  It has no purpose alongside 0017.
+3. ~~**Confirm 0017 is still required.**~~  Done, and it is.  With DFF set,
+   the kick off and the timer off, the channel entered state 4 at 6.74 s and
+   was still there 43 s later: one episode, 86.6% of the run, 2.3 MB
+   transferred.  DFF decides whether a suspended channel can be resumed; a
+   poll demand is what resumes it.
 4. **Re-measure throughput.**  706-714 Mbit/s four-stream is well above the
    468 Mbit/s that [optimizing-network-throughput.md](optimizing-network-throughput.md)
    records as the ceiling, so that document's conclusions were taken against
@@ -207,6 +211,12 @@ The reproducer is four-stream inbound TCP against `iperf3 -s` on the board,
 full MTU, 30 to 45 s.  At ring 256 it wedges reliably; at 512 it wedged 3 runs
 out of 3.  Keep full MTU — smaller frames move the fault away.
 
+Drive it with `tools/ethernet-rx-stress.pl dvr 4 45`, which runs on the
+development host and stops as soon as the board stops taking data, reporting
+where that happened.  It exits 2 on a stall and 0 on a clean run, so a wedged
+run costs about five seconds instead of the full duration.  It has to run on
+the host: a stall takes SSH with it, so nothing on the board can report one.
+
 - Select the ring at probe with `dwmac_hi3531.rx_ring_size=`, 64 to 1024.
   Never with `ethtool -G`, which wedges receive by an unrelated route.
 - A device-tree change needs `linux-dirclean` before the rebuild, or the old
@@ -236,6 +246,12 @@ out of 3.  Keep full MTU — smaller frames move the fault away.
 - A diagnostic that can read zero needs a counter proving its code path ran.
   `rx_kicks` exists because a wedge with the kick enabled looks identical to
   a wedge with the call site never reached.
+- Put the console loglevel down before reading anything from a run that logs
+  per episode.  `ignore_loglevel` is on the boot line, so `dmesg -n 1` alone
+  does nothing; clear `/sys/module/printk/parameters/ignore_loglevel` first.
+  A 50 ms timer re-arming RUE and RSE against a report-and-mask handler
+  produces 20 lines a second onto a synchronous 115200 console, which cost a
+  factor of four in throughput on one measurement.
 - Per run record: transferred bytes, frame size, flow count, duration, ring
   size, wedge count, CSR8, and CSR3/CSR5/CSR19 at the wedge.
 - Register addresses are `0x101c1100` plus the CSR index times four, so

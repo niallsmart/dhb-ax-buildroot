@@ -359,6 +359,52 @@ zero, `rx_dropped` 24, 2.78M packets, 4.21 GB.
 The failing run's state matches every earlier wedge: CSR5 `0x00680404`,
 CSR6 back to `0x02002902`.
 
+**What resumes the channel**, CSR5 sampled at 1 ms for 50 s by
+`tools/ethernet-rx-ring-watch.c`, four-stream TCP for 45 s, ring 256, DFF set
+throughout, console quiet.  An episode is a run of consecutive samples in
+state 4.
+
+    kick  timer   episodes   longest      mean   state 4   received   rate
+    off   off            1   43283 ms         -    86.6%     2.3 MB   terminal
+    off   50 ms        677      61 ms   30.4 ms    41.2%    2.40 GB   452 Mbit/s
+    on    off         4881      83 ms    3.2 ms    31.7%    3.77 GB   719 Mbit/s
+
+The first row is the clearest evidence that a poll demand is needed alongside
+DFF: one episode, entered at 6.74 s and still running when the window closed
+43 s later.  DFF leaves the channel in a state it can be brought out of, and
+with nothing to bring it out the run ends there.
+
+The mean episode lengths say which source is better and why.  The timer's
+30.4 ms is half its 50 ms period, which is what periodic polling of a
+uniformly distributed suspension gives.  The refill kick's 3.2 ms is bounded
+by NAPI refill latency instead, and throughput follows: 719 against
+452 Mbit/s.  Either source keeps the interface alive; only the kick keeps it
+fast.
+
+Sampling at 1 ms merges or misses episodes shorter than the interval, so the
+counts are lower bounds and the percentages estimates.
+
+**Time to the first suspend**, one boot, `rx_kick_on_refill` on, uptime
+recorded at run start and taken from the report's dmesg timestamp:
+
+    rx_dff   first suspend   outcome
+    Y             6.0 s      recovered, 3.75 GB
+    N             4.2 s      terminal, 5.50 MB
+
+Exhaustion arrives at the same point either way.  DFF changes only what
+follows it, not how soon or how often the ring empties.  One sample each, and
+both figures overstate time into the transfer by the second or two between
+starting the server and the client connecting.
+
+**An earlier attempt at the middle row was void.**  It ran with
+`ignore_loglevel` on the boot line and the 50 ms timer re-arming RUE and RSE
+every tick, so each tick logged a suspend report to a 115200 serial console
+synchronously — 547 of them, in the same path that refills descriptors.  It
+measured 598 MB and a 1200 ms longest episode.  Quieting the console with
+`ignore_loglevel=0` and `dmesg -n 1` moved the same configuration to 2.40 GB
+and 61 ms.  Diagnostics that log per episode need the console off the serial
+port before anything is read from the run.
+
 **Vendor and mainline CSR6**, channel 1:
 
     vendor    0x03202002   RSF, DFF, TSF
@@ -464,3 +510,17 @@ known.
   Kconfig symbol and one comment: the stmmac fork credits DFF to the TNK
   offload engine, `higmacv300` carries no offload code and calls the same bit
   required by the GMAC.  The requirement is the MAC's.
+- **2026-08-30** — The poll demand's role established by measurement.  DFF
+  alone leaves the channel suspended indefinitely: one episode, entered at
+  6.74 s and unbroken 43 s later, 2.3 MB transferred.  Either poll demand
+  source revives it, and the two differ only in latency — the 50 ms timer
+  averages 30 ms per episode for 452 Mbit/s, the refill kick 3.2 ms for
+  719 Mbit/s.  So 0017 is necessary and 0016 is a worse substitute for it
+  rather than an addition to it.  Exhaustion itself is unchanged by DFF,
+  arriving 4 to 6 s into a run either way.
+- **2026-08-30** — A measurement lost to its own instrumentation.  The 50 ms
+  timer re-arms RUE and RSE each tick against a handler that reports and
+  masks, which put 20 `netdev_err` lines a second onto a synchronous serial
+  console because `ignore_loglevel` is on the boot line.  It cost a factor of
+  four: the same configuration read 598 MB with the console noisy and 2.40 GB
+  with it quiet.
