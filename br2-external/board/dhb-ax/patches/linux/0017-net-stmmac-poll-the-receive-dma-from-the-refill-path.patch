@@ -1,0 +1,231 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] net: stmmac: poll the receive DMA from the refill path
+
+stmmac_rx_refill() ends by publishing the ring's tail address through
+stmmac_set_rx_tail_ptr().  Only dwmac4 and dwxgmac2 implement that
+callback, so on a DWMAC1000 it is a no-op, and DMA_RCV_POLL_DEMAND is
+declared in dwmac_dma.h and written nowhere in the driver.  Descriptors go
+back to the receive DMA and nothing tells it they arrived.
+
+The vendor 3.0 driver ends its own refill with a barrier and a write to
+that register:
+
+	if (refilled) {
+		STMMAC_SYNC_BARRIER();
+		priv->hw->dma->enable_dma_receive(priv->dma_ioaddr,
+						  priv->dma_channel);
+	}
+
+dwmac_enable_dma_receive() is writel(1, ioaddr + chan * 0x100 + 0x1008),
+and STMMAC_SYNC_BARRIER() is isb(); dsb(); dmb().  The 50 ms
+stmmac_poll_func() timer runs behind this, not instead of it.
+
+Add enable_dma_receive to stmmac_dma_ops as the receive counterpart of the
+existing enable_dma_transmission, implement it in dwmac_lib.c, and call it
+at the end of stmmac_rx_refill() on any pass that returned a descriptor.
+The callback is left out of dwmac1000_dma_ops and installed by the Hi3531
+glue alone, so no other integration changes behaviour.  The glue reproduces
+the vendor's barrier sequence ahead of the write, which keeps the
+architecture-specific part out of stmmac_main.c.
+
+A poll demand issued to an already wedged channel does nothing, by hand and
+from the 50 ms timer, so this is a candidate for keeping the receive
+process out of the unrecoverable state rather than for leaving it.  The
+rx_kick_on_refill parameter is writable at runtime for an A/B on one boot,
+and clearing it restores the upstream refill path exactly.
+
+rx_kicks counts the poll demands actually issued, so a run that wedges can
+be told apart from a call site that never fired.
+
+Diagnostic and unverified.  Revisit with the rest of the receive-wedge
+instrumentation when plans/ethernet-rx-wedge.md closes.
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+index 127d712..aa78cca 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+@@ -33,6 +33,8 @@
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
+ 
++#include <asm/barrier.h>
++
+ #include "common.h"
+ #include "dwmac1000.h"
+ #include "dwmac_dma.h"
+@@ -87,8 +89,8 @@ MODULE_PARM_DESC(rx_ring_size,
+  * The vendor driver kicks the transmit and receive poll demands from a 50 ms
+  * timer whenever the DMA state machine is not idle, and its receive process
+  * resumes from every suspension on this silicon.  Upstream issues no poll
+- * demand at all: a suspended receive process is left to resume when the
+- * refill path returns descriptors to it.
++ * demand at all on a DWMAC1000: the refill path notifies the DMA through a
++ * tail pointer register that this generation does not have.
+  *
+  * Zero leaves the timer running and issues no poll demand, so the two
+  * arrangements can be compared without a reboot.
+@@ -101,6 +103,32 @@ module_param(rx_poll_ms, uint, 0644);
+ MODULE_PARM_DESC(rx_poll_ms,
+ 		 "receive poll demand period in ms, 0 to poll no descriptors (default 50)");
+ 
++/*
++ * The vendor issues a receive poll demand from the refill path itself, on
++ * every pass that handed a descriptor back, and reaches the timer above only
++ * for what that misses.  Clearing this leaves the refill path silent, as
++ * upstream is.
++ *
++ * Diagnostic only.  Remove with the rest of the receive-wedge
++ * instrumentation when plans/ethernet-rx-wedge.md closes.
++ */
++static bool rx_kick_on_refill = true;
++module_param(rx_kick_on_refill, bool, 0644);
++MODULE_PARM_DESC(rx_kick_on_refill,
++		 "issue a receive poll demand from the refill path (default on)");
++
++/*
++ * Poll demands issued, so that a run can tell a poll demand that did not help
++ * from a call site that never fired.  Writable to reset it between runs.
++ *
++ * Diagnostic only.  Remove with the rest of the receive-wedge
++ * instrumentation when plans/ethernet-rx-wedge.md closes.
++ */
++static unsigned int rx_kicks;
++module_param(rx_kicks, uint, 0644);
++MODULE_PARM_DESC(rx_kicks,
++		 "receive poll demands issued from the refill path");
++
+ struct hi3531_dwmac {
+ 	struct device *dev;
+ 	void __iomem *gmac;
+@@ -260,6 +288,38 @@ static int hi3531_get_hw_feature(void __iomem *ioaddr,
+ 	return -EOPNOTSUPP;
+ }
+ 
++/*
++ * The vendor precedes both poll demands with STMMAC_SYNC_BARRIER(), its own
++ * isb/dsb/dmb sequence, and whether a barrier here matters is part of what
++ * this patch is testing.  Reproduce the sequence rather than reason about
++ * it: writel() already carries a write barrier of its own on ARM, so the
++ * two together are stronger than the descriptor handoff needs.
++ */
++#ifdef CONFIG_ARM
++#define HI3531_SYNC_BARRIER()	do { isb(); dsb(); dmb(); } while (0)
++#else
++#define HI3531_SYNC_BARRIER()	mb()
++#endif
++
++/*
++ * stmmac_rx_refill() calls this once per pass that returned descriptors to
++ * the DMA.  ioaddr is priv->dmaaddr, the base of the channel this instance
++ * owns, so the channel argument is the queue index and is zero.
++ *
++ * Clearing rx_kick_on_refill skips the barrier with the write, leaving the
++ * refill path exactly as upstream has it.
++ */
++static void hi3531_enable_dma_receive(void __iomem *ioaddr, u32 chan)
++{
++	if (!rx_kick_on_refill)
++		return;
++
++	rx_kicks++;
++
++	HI3531_SYNC_BARRIER();
++	dwmac_enable_dma_receive(ioaddr, chan);
++}
++
+ static struct mac_device_info *hi3531_dwmac_setup(void *arg)
+ {
+ 	struct stmmac_priv *priv = arg;
+@@ -280,6 +340,7 @@ static struct mac_device_info *hi3531_dwmac_setup(void *arg)
+ 	dma_ops->reset = hi3531_dma_reset;
+ 	dma_ops->init_chan = hi3531_dma_init_chan;
+ 	dma_ops->dma_interrupt = hi3531_dma_interrupt;
++	dma_ops->enable_dma_receive = hi3531_enable_dma_receive;
+ 
+ 	mac_ops = devm_kmemdup(priv->device, &dwmac1000_ops,
+ 			       sizeof(*mac_ops), GFP_KERNEL);
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac_dma.h b/drivers/net/ethernet/stmicro/stmmac/dwmac_dma.h
+index 6fbe3d7..09cdf1a 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac_dma.h
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac_dma.h
+@@ -173,6 +173,7 @@ static inline u32 dma_chan_base_addr(u32 base, u32 chan)
+ #define NUM_DWMAC4_DMA_REGS	27
+ 
+ void dwmac_enable_dma_transmission(void __iomem *ioaddr, u32 chan);
++void dwmac_enable_dma_receive(void __iomem *ioaddr, u32 chan);
+ void dwmac_enable_dma_irq(struct stmmac_priv *priv, void __iomem *ioaddr,
+ 			  u32 chan, bool rx, bool tx);
+ void dwmac_disable_dma_irq(struct stmmac_priv *priv, void __iomem *ioaddr,
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac_lib.c b/drivers/net/ethernet/stmicro/stmmac/dwmac_lib.c
+index 2e979f0..2382ecf 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac_lib.c
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac_lib.c
+@@ -33,6 +33,12 @@ void dwmac_enable_dma_transmission(void __iomem *ioaddr, u32 chan)
+ 	writel(1, ioaddr + DMA_CHAN_XMT_POLL_DEMAND(chan));
+ }
+ 
++/* CSR2 enables the receive DMA to check for new descriptor */
++void dwmac_enable_dma_receive(void __iomem *ioaddr, u32 chan)
++{
++	writel(1, ioaddr + DMA_CHAN_RCV_POLL_DEMAND(chan));
++}
++
+ void dwmac_enable_dma_irq(struct stmmac_priv *priv, void __iomem *ioaddr,
+ 			  u32 chan, bool rx, bool tx)
+ {
+diff --git a/drivers/net/ethernet/stmicro/stmmac/hwif.h b/drivers/net/ethernet/stmicro/stmmac/hwif.h
+index 14dbe06..cd7cbad 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/hwif.h
++++ b/drivers/net/ethernet/stmicro/stmmac/hwif.h
+@@ -201,6 +201,7 @@ struct stmmac_dma_ops {
+ 	void (*dma_diagnostic_fr)(struct stmmac_extra_stats *x,
+ 				  void __iomem *ioaddr);
+ 	void (*enable_dma_transmission)(void __iomem *ioaddr, u32 chan);
++	void (*enable_dma_receive)(void __iomem *ioaddr, u32 chan);
+ 	void (*enable_dma_irq)(struct stmmac_priv *priv, void __iomem *ioaddr,
+ 			       u32 chan, bool rx, bool tx);
+ 	void (*disable_dma_irq)(struct stmmac_priv *priv, void __iomem *ioaddr,
+@@ -261,6 +262,8 @@ struct stmmac_dma_ops {
+ 	stmmac_do_void_callback(__priv, dma, dma_diagnostic_fr, __args)
+ #define stmmac_enable_dma_transmission(__priv, __args...) \
+ 	stmmac_do_void_callback(__priv, dma, enable_dma_transmission, __args)
++#define stmmac_enable_dma_receive(__priv, __args...) \
++	stmmac_do_void_callback(__priv, dma, enable_dma_receive, __args)
+ #define stmmac_enable_dma_irq(__priv, __args...) \
+ 	stmmac_do_void_callback(__priv, dma, enable_dma_irq, __priv, __args)
+ #define stmmac_disable_dma_irq(__priv, __args...) \
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+index 0c02e6c..bc0c6be 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+@@ -4737,6 +4737,7 @@ static inline void stmmac_rx_refill(struct stmmac_priv *priv, u32 queue)
+ 	int dirty = stmmac_rx_dirty(priv, queue);
+ 	unsigned int entry = rx_q->dirty_rx;
+ 	gfp_t gfp = (GFP_ATOMIC | __GFP_NOWARN);
++	bool refilled;
+ 
+ 	if (priv->dma_cap.host_dma_width <= 32)
+ 		gfp |= GFP_DMA32;
+@@ -4789,10 +4790,22 @@ static inline void stmmac_rx_refill(struct stmmac_priv *priv, u32 queue)
+ 
+ 		entry = STMMAC_NEXT_ENTRY(entry, priv->dma_conf.dma_rx_size);
+ 	}
++	refilled = entry != rx_q->dirty_rx;
+ 	rx_q->dirty_rx = entry;
+ 	rx_q->rx_tail_addr = rx_q->dma_rx_phy +
+ 			    (rx_q->dirty_rx * sizeof(struct dma_desc));
+ 	stmmac_set_rx_tail_ptr(priv, priv->dmaaddr, rx_q->rx_tail_addr, queue);
++
++	/*
++	 * A receive process that emptied the ring suspends, and on a DMA
++	 * without a tail pointer register nothing above tells it that these
++	 * descriptors came back: stmmac_set_rx_tail_ptr() is implemented by
++	 * DWMAC4 and later only.  Poll demand is how the older DMA is told,
++	 * and writel() orders itself after the descriptor writes, so the
++	 * refetch finds an entry the DMA owns.
++	 */
++	if (refilled)
++		stmmac_enable_dma_receive(priv, priv->dmaaddr, queue);
+ }
+ 
+ static unsigned int stmmac_rx_buf1_len(struct stmmac_priv *priv,
