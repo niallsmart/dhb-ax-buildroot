@@ -1,0 +1,86 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] net: stmmac: allow 16-byte descriptors on the Hi3531
+
+The vendor and mainline configure the same DMA differently.  Channel 1 under
+the vendor 3.0 kernel reads CSR0 0x00201000, ATDS clear, so it walks the ring
+with a 16-byte stride.  Mainline reads 0x00A01080 with ATDS set and 32-byte
+extended descriptors, because stmmac_dwmac1_quirks() turns extend_desc on for
+any core at 3.50 or above and stmmac_init_dma_engine() derives atds from it.
+
+Descriptor stride is the most structural of the known differences between the
+two configurations, and the receive wedge is a failure to walk the ring.
+
+Add STMMAC_FLAG_NO_EXTEND_DESC so a platform can keep enhanced descriptor
+semantics, which the vendor also uses, while declining the 32-byte extended
+form.  plat->enh_desc stays set: it selects enh_desc_ops rather than the
+descriptor size.  The Hi3531 glue raises the flag from an extend_desc module
+parameter, read at probe.
+
+Diagnostic and unverified.  Revisit with the rest of the receive-wedge
+instrumentation when plans/ethernet-rx-wedge.md closes.
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+index aa78cca..2f81b76 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+@@ -129,6 +129,23 @@ module_param(rx_kicks, uint, 0644);
+ MODULE_PARM_DESC(rx_kicks,
+ 		 "receive poll demands issued from the refill path");
+ 
++/*
++ * Upstream runs 32-byte extended descriptors on this core because it is 3.50
++ * or newer; the vendor runs 16-byte with ATDS clear, measured as CSR0
++ * 0x00201000 against mainline's 0x00A01080.  That changes the stride the DMA
++ * walks the ring with, which is the most structural of the differences
++ * between the two configurations.
++ *
++ * Read at probe, so this is a kernel command line knob and not a live toggle.
++ *
++ * Diagnostic only.  Remove with the rest of the receive-wedge
++ * instrumentation when plans/ethernet-rx-wedge.md closes.
++ */
++static bool extend_desc = true;
++module_param(extend_desc, bool, 0444);
++MODULE_PARM_DESC(extend_desc,
++		 "use 32-byte extended descriptors with ATDS set (default on)");
++
+ struct hi3531_dwmac {
+ 	struct device *dev;
+ 	void __iomem *gmac;
+@@ -565,6 +582,8 @@ static int hi3531_dwmac_probe(struct platform_device *pdev)
+ 	 * PMT/WOL, TX checksum offload and forced TX store-and-forward are not.
+ 	 */
+ 	plat->enh_desc = 1;
++	if (!extend_desc)
++		plat->flags |= STMMAC_FLAG_NO_EXTEND_DESC;
+ 	plat->tx_coe = 0;
+ 	plat->rx_coe = STMMAC_RX_COE_TYPE2;
+ 	plat->bugged_jumbo = 0;
+diff --git a/drivers/net/ethernet/stmicro/stmmac/hwif.c b/drivers/net/ethernet/stmicro/stmmac/hwif.c
+index d1ca544..51c0599 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/hwif.c
++++ b/drivers/net/ethernet/stmicro/stmmac/hwif.c
+@@ -63,7 +63,10 @@ static int stmmac_dwmac1_quirks(struct stmmac_priv *priv)
+ 		dev_info(priv->device, "Enhanced/Alternate descriptors\n");
+ 
+ 		/* GMAC older than 3.50 has no extended descriptors */
+-		if (priv->synopsys_id >= DWMAC_CORE_3_50) {
++		if (priv->plat->flags & STMMAC_FLAG_NO_EXTEND_DESC) {
++			dev_info(priv->device,
++				 "Extended descriptors disabled by platform\n");
++		} else if (priv->synopsys_id >= DWMAC_CORE_3_50) {
+ 			dev_info(priv->device, "Enabled extended descriptors\n");
+ 			priv->extend_desc = 1;
+ 		} else {
+diff --git a/include/linux/stmmac.h b/include/linux/stmmac.h
+index 7e989d0..575b36d 100644
+--- a/include/linux/stmmac.h
++++ b/include/linux/stmmac.h
+@@ -191,6 +191,7 @@ enum dwmac_core_type {
+ #define STMMAC_FLAG_EN_TX_LPI_CLOCKGATING	BIT(11)
+ #define STMMAC_FLAG_EN_TX_LPI_CLK_PHY_CAP	BIT(12)
+ #define STMMAC_FLAG_HWTSTAMP_CORRECT_LATENCY	BIT(13)
++#define STMMAC_FLAG_NO_EXTEND_DESC		BIT(14)
+ 
+ struct plat_stmmacenet_data {
+ 	enum dwmac_core_type core_type;
