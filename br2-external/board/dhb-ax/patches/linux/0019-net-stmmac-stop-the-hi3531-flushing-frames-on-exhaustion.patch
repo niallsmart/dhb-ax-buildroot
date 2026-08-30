@@ -1,0 +1,85 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] net: stmmac: stop the Hi3531 flushing frames on exhaustion
+
+CSR6 bit 24, DFF, decides what the receive DMA does with a frame it has no
+descriptor for: flush it when the bit is clear, or hold it in the receive
+FIFO until a descriptor appears when it is set.
+
+The vendor sets it whenever receive store-and-forward is on.  Upstream
+defines DMA_CONTROL_DFF in dwmac1000.h and never writes it, so the bit stays
+at its reset value.  Channel 1 reads CSR6 0x03202002 under the vendor and
+0x02002902 under mainline: both carry RSF, only the vendor carries DFF.
+
+Descriptor exhaustion is the moment this integration's receive process
+suspends and fails to resume, so this bit governs behaviour at exactly the
+failing event, unlike the poll demand and descriptor stride already ruled
+out.  The vendor sets it in both of the drivers it ships for this MAC.  The
+stmmac fork's comment blames the TNK offload engine, but higmacv300, which
+carries no offload code at all, sets the same bit and calls it required by
+the GMAC; the two files are otherwise identical apart from an include and a
+Kconfig symbol.
+
+Wrap dma_rx_mode in the glue rather than changing dwmac1000_dma.c, so no
+other integration is affected.  dma_rx_mode runs on every interface open, so
+rx_dff is a live toggle: write it, then take the interface down and up.
+
+Diagnostic and unverified.  Revisit with the rest of the receive-wedge
+instrumentation when plans/ethernet-rx-wedge.md closes.
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+index 2f81b76..67da4f8 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
+@@ -146,6 +146,25 @@ module_param(extend_desc, bool, 0444);
+ MODULE_PARM_DESC(extend_desc,
+ 		 "use 32-byte extended descriptors with ATDS set (default on)");
+ 
++/*
++ * CSR6 bit 24 decides what the receive DMA does with a frame it has no
++ * descriptor for.  Clear, which is the only state upstream ever leaves it in,
++ * the DMA flushes the frame.  Set, as the vendor sets it whenever receive
++ * store-and-forward is on, the frame waits in the receive FIFO until a
++ * descriptor appears.  Descriptor exhaustion is where this integration's
++ * receive process stops, so the bit governs behaviour at the failing moment.
++ *
++ * dma_rx_mode runs on every interface open, so this is a live toggle: write
++ * the parameter, then take the interface down and up.
++ *
++ * Diagnostic only.  Remove with the rest of the receive-wedge
++ * instrumentation when plans/ethernet-rx-wedge.md closes.
++ */
++static bool rx_dff;
++module_param(rx_dff, bool, 0644);
++MODULE_PARM_DESC(rx_dff,
++		 "hold received frames in the FIFO instead of flushing them when descriptors run out (default off)");
++
+ struct hi3531_dwmac {
+ 	struct device *dev;
+ 	void __iomem *gmac;
+@@ -337,6 +356,18 @@ static void hi3531_enable_dma_receive(void __iomem *ioaddr, u32 chan)
+ 	dwmac_enable_dma_receive(ioaddr, chan);
+ }
+ 
++static void hi3531_dma_rx_mode(struct stmmac_priv *priv, void __iomem *ioaddr,
++			       int mode, u32 channel, int fifosz, u8 qmode)
++{
++	void __iomem *ctrl = ioaddr + DMA_CHAN_CONTROL(channel);
++
++	dwmac1000_dma_ops.dma_rx_mode(priv, ioaddr, mode, channel, fifosz,
++				      qmode);
++
++	if (rx_dff)
++		writel(readl(ctrl) | DMA_CONTROL_DFF, ctrl);
++}
++
+ static struct mac_device_info *hi3531_dwmac_setup(void *arg)
+ {
+ 	struct stmmac_priv *priv = arg;
+@@ -358,6 +389,7 @@ static struct mac_device_info *hi3531_dwmac_setup(void *arg)
+ 	dma_ops->init_chan = hi3531_dma_init_chan;
+ 	dma_ops->dma_interrupt = hi3531_dma_interrupt;
+ 	dma_ops->enable_dma_receive = hi3531_enable_dma_receive;
++	dma_ops->dma_rx_mode = hi3531_dma_rx_mode;
+ 
+ 	mac_ops = devm_kmemdup(priv->device, &dwmac1000_ops,
+ 			       sizeof(*mac_ops), GFP_KERNEL);
