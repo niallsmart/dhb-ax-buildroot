@@ -157,9 +157,14 @@ verification.
 The board can run the vendor 3.0.8 kernel or the mainline port. Run `uname -r`
 before interpreting runtime results.
 
-When performing diagnostics, debugging or benchmarking on the Debian image, you
-can install any `apt` package that would help. This is preferable to rolling
-your own tools.
+## Diagnostics, debugging or benchmarking tools.
+
+Prefer proven debugging tools, installed via the methods below. Only hand-roll your
+own tools when there is clear reason or unique need.
+
+* Debian: Install the `apt` packages
+* Buildroot: Add to the appropriate Buildroot config
+* Vendor Linux: Cross-compile statically linked binaries in Docker using the Buildroot SDK
 
 ## Talking to the DVR
 
