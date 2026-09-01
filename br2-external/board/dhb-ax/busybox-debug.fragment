@@ -1,0 +1,2 @@
+# devmem reaches SoC registers through an mmap of /dev/mem
+CONFIG_DEVMEM=y
