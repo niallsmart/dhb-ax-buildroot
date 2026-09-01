@@ -8,3 +8,9 @@ RequiredForOnline=no
 DHCP=yes
 IPv6AcceptRA=yes
 KeepConfiguration=static
+
+[DHCPv4]
+# The initramfs root has no persistent machine ID, so its default DUID changes
+# on each boot.  Use the factory MAC installed by 10-dhb-ax.link to identify
+# this board to the DHCP server consistently across initramfs and HDD roots.
+ClientIdentifier=mac
