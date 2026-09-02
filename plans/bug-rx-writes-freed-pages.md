@@ -40,6 +40,53 @@ The corruption followed the interface reopen and link flap: link down at 81 s,
 up at 86 s, down at 110 s, up at 114 s, corruption reported at 122 s and
 128 s.
 
+## Thesis: the ring is freed before the receive process stops
+
+`__stmmac_release()` stops the DMA and frees the ring in consecutive
+statements:
+
+```c
+	/* Stop TX/RX DMA and clear the descriptors */
+	stmmac_stop_all_dma(priv);
+
+	/* Release and free the Rx/Tx resources */
+	free_dma_desc_resources(priv, &priv->dma_conf);
+```
+
+`dwmac_dma_stop_rx()` clears the start-receive bit and returns at once:
+
+```c
+	value &= ~DMA_CONTROL_SR;
+	writel(value, ioaddr + DMA_CHAN_CONTROL(chan));
+```
+
+Clearing SR asks the receive process to stop when it finishes the descriptor
+it is working on, so the state machine can still be transferring data or
+closing a descriptor when the write returns.  Nothing between the two
+statements waits for CSR5 to report the receive process stopped, and the
+pages go back to the allocator immediately.  A descriptor writeback landing
+in that window writes into memory the kernel has already reclaimed, which is
+the observed corruption.
+
+The same window predicts the wedge: a channel interrupted mid-descriptor
+keeps stale addresses, and the reopened interface finds nothing the DMA owns.
+
+This is a thesis.  What supports it is the code path above, the
+descriptor-shaped value, the 32-byte spacing and the timing after a reopen.
+What is missing is any observation of the receive process still running at
+the moment the ring is freed.
+
+If it holds, the fix is to poll CSR5 for the stopped receive state with a
+timeout after clearing SR and before freeing, or to soft-reset the channel at
+release as `stmmac_init_dma_engine()` already does at open.  The race is in
+mainline `dwmac_lib.c`, not in this port's glue, so the hand-rolled
+three-channel reset is not implicated.
+
+Testing it needs driver instrumentation rather than a console read: the stop
+and the free happen inside one syscall, so userspace cannot sample CSR5
+between them.  Log the receive process state inside `__stmmac_release()`
+after `stmmac_stop_all_dma()` and again after `free_dma_desc_resources()`.
+
 ## Reproduction
 
 Not deterministic.  Two full runs at a 64-entry ring passed before this one
