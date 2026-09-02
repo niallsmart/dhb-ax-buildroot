@@ -100,6 +100,9 @@ BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y
 BR2_PACKAGE_ETHTOOL=y
 BR2_PACKAGE_I2C_TOOLS=y
 
+# The Ethernet receive regression test drives an iperf3 server on the board.
+BR2_PACKAGE_IPERF3=y
+
 # Provisioning needs partitioning, filesystem and checking tools for the
 # approved SATA and USB devices.
 BR2_PACKAGE_UTIL_LINUX=y
