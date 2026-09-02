@@ -87,6 +87,33 @@ and the free happen inside one syscall, so userspace cannot sample CSR5
 between them.  Log the receive process state inside `__stmmac_release()`
 after `stmmac_stop_all_dma()` and again after `free_dma_desc_resources()`.
 
+## Thesis: outer cache maintenance around DMA
+
+`linux.config` carries `CONFIG_OUTER_CACHE`, `CONFIG_OUTER_CACHE_SYNC`,
+`CONFIG_CACHE_HIL2V200` and `CONFIG_CACHE_L2X0`, from the L2 work of
+2026-08-27.  With an outer cache present, every DMA map and unmap depends on
+outer maintenance being correct: an invalidate that misses leaves the CPU
+reading stale data, and a dirty line that survives past a free is written back
+over whatever occupies the page next.  Wrong maintenance under a correct API
+call also explains why `DMA_API_DEBUG` reports nothing, since it checks the
+calls rather than the cache behaviour beneath them.
+
+Two outer cache implementations are enabled at once, the Hisilicon v200 driver
+and the generic L2X0.  Which one binds, and whether both attempt to, is worth
+establishing before anything else here.
+
+Against the thesis: an evicted dirty line writes back the whole line, and the
+poison dump shows 4 corrupted bytes followed by 28 bytes of intact `0xaa`
+within the same 32 bytes.  A targeted small write fits that pattern better
+than a line writeback.  The L2 was also enabled on 2026-08-27, before the
+runs of 08-31 and 09-01 that passed, though those used a harness with no
+interface reopen.
+
+The cheap test is a boot argument: ARM accepts `nooutercache`, which disables
+the outer cache entirely.  If the corruption stops with it and returns
+without it, this thesis holds and the stmmac release race does not.  Expect a
+throughput drop, so it is a correctness run rather than a benchmark.
+
 ## Reproduction
 
 Not deterministic.  Two full runs at a 64-entry ring passed before this one
