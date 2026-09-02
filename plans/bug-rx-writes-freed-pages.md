@@ -132,6 +132,26 @@ An earlier suspicion of `tools/ethernet-rx-ring-watch.c` is displaced.  Every
 failure before this one happened in a boot where the poller had run, but this
 run had none and produced the same corruption.
 
+## Next steps
+
+Each thesis has a cheap discriminator.  Take them in this order.
+
+1. Establish which outer cache driver binds.  Both `CACHE_HIL2V200` and
+   `CACHE_L2X0` are enabled; read the boot log for which one claims the
+   controller, and whether either reports a line size and size that match the
+   hardware.
+2. Boot with `nooutercache` and run the debug kernel test.  No rebuild is
+   needed.  Corruption stopping with it and returning without it confirms the
+   outer cache thesis and rules out the release race.
+3. If corruption survives `nooutercache`, instrument `__stmmac_release()` to
+   log the receive process state after `stmmac_stop_all_dma()` and again after
+   `free_dma_desc_resources()`.  A receive process not yet stopped at the free
+   confirms the release race.  Diagnostic-only code, removed once the result
+   is established.
+4. Reboot between runs.  A board that has corrupted its own memory cannot be
+   trusted to produce a meaningful next result, and the root filesystem is
+   mounted read-write, so check it before treating the disk as sound.
+
 ## How to establish the cause
 
 Cheapest first.  The register offsets below are recalled rather than checked
