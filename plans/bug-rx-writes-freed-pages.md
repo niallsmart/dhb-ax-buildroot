@@ -40,6 +40,29 @@ The corruption followed the interface reopen and link flap: link down at 81 s,
 up at 86 s, down at 110 s, up at 114 s, corruption reported at 122 s and
 128 s.
 
+## The wedge is separable from the corruption
+
+A run on 2026-09-02 with `CACHE_HIL2V200` compiled out, page poisoning live
+and no poller wedged during `tcp-3`, the third steady TCP run:
+`20260902T231542Z-rx64`.
+
+```text
+CSR5 0x00680404   receive state 4
+eth0 interrupts   63435, frozen
+corruption        none reported
+```
+
+- The outer cache was disabled, so it does not explain this wedge.
+- `tcp-3` runs before the UDP, bidirectional, soak and reopen cases, so no
+  `stmmac_release()` ran and no ring was freed.  The release race does not
+  explain this wedge either.
+- Page poisoning was active and reported nothing, so this wedge came with no
+  corruption.  The two are not always the same fault.
+
+What it does match is the upstream stall: refill leaves no descriptor the DMA
+owns, NAPI exits and unmasks, and no interrupt arrives to schedule it again.
+Receive state 4 with a frozen interrupt count is that state.
+
 ## Thesis: the ring is freed before the receive process stops
 
 `__stmmac_release()` stops the DMA and frees the ring in consecutive
@@ -109,10 +132,15 @@ than a line writeback.  The L2 was also enabled on 2026-08-27, before the
 runs of 08-31 and 09-01 that passed, though those used a harness with no
 interface reopen.
 
-The cheap test is a boot argument: ARM accepts `nooutercache`, which disables
-the outer cache entirely.  If the corruption stops with it and returns
-without it, this thesis holds and the stmmac release race does not.  Expect a
-throughput drop, so it is a correctness run rather than a benchmark.
+The test is a build with `CONFIG_CACHE_HIL2V200=n`.  If the corruption stops
+without the outer cache and returns with it, this thesis holds and the stmmac
+release race does not.  Expect a throughput drop, so it is a correctness run
+rather than a benchmark.
+
+The driver binds as `hil2v200: enabled outer cache, 256 KB, 8 ways, 32-byte
+lines`, so the Hisilicon v200 driver claims the controller and L2X0 does not.
+Its line size matches the 32-byte spacing of the corrupted words, though
+enhanced descriptors are also 32 bytes, so the spacing does not discriminate.
 
 ## Reproduction
 
@@ -140,9 +168,12 @@ Each thesis has a cheap discriminator.  Take them in this order.
    `CACHE_L2X0` are enabled; read the boot log for which one claims the
    controller, and whether either reports a line size and size that match the
    hardware.
-2. Boot with `nooutercache` and run the debug kernel test.  No rebuild is
-   needed.  Corruption stopping with it and returning without it confirms the
-   outer cache thesis and rules out the release race.
+2. Build with `CONFIG_CACHE_HIL2V200=n` and run the debug kernel test.
+   `nooutercache` does not exist in this kernel and the driver has no
+   parameter of its own; `hil2v200_cache_init()` is called unconditionally
+   from `arch/arm/kernel/irq.c`.  Corruption stopping without the outer cache
+   and returning with it confirms the outer cache thesis and rules out the
+   release race.
 3. If corruption survives `nooutercache`, instrument `__stmmac_release()` to
    log the receive process state after `stmmac_stop_all_dma()` and again after
    `free_dma_desc_resources()`.  A receive process not yet stopped at the free
