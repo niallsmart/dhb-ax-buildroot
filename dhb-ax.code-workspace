@@ -15,7 +15,8 @@
 		"search.useIgnoreFiles": false,
 		"search.exclude": {
 			"buildroot/**/*": true,
-			"kernel/**/*": true,
+			"kernel/linux-6.18.42/**/*": true,
+			"kernel/linux-6.18.42-pristine/**/*": false,
 			"artifacts/**/*": true,
 			"Hi3531_V100R001C01SPC0D1/**/*": true,
 			"**/dist": true,
