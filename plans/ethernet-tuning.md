@@ -146,10 +146,11 @@ runtime resizing independently before advertising it as supported.
 
 ## 3. Retain and validate Type-2 receive checksum offload
 
-The glue supplies `STMMAC_RX_COE_TYPE2` because CSR58 reports the engine at
-both MAC instances, the IPC bit is writable, and the vendor uses the same
-descriptor result.  At 30,000 packets per second it reduced `NET_RX` from 71%
-to 36% of one CPU, approximately 24 to 12 microseconds per packet.
+The glue supplies `STMMAC_RX_COE_TYPE2` because CSR58 advertises the engine in
+the measured DMA channel 0 and channel 1 windows, the IPC bit is writable, and
+the vendor uses the same descriptor result.  At 30,000 packets per second it
+reduced `NET_RX` from 71% to 36% of one CPU, approximately 24 to 12 microseconds
+per packet.
 
 Keep receive checksum offload enabled and add a negative correctness test.
 Inject deliberately corrupted IPv4 header, TCP, and UDP checksums and verify
@@ -161,9 +162,8 @@ that the receiving stack rejects them.  Capture the normal cases as well:
 - fragmented IPv4 where supported by the engine; and
 - checksum and receive-error counters before and after each run.
 
-Update `../dhb-ax-guide/doc/06-ethernet.md`.  Its capability section still
-says that CSR58 is unusable and checksum offload is disabled, which
-contradicts the maintained glue and target measurements.
+`../dhb-ax-guide/doc/06-ethernet.md` records the CSR58 reads and the hardware
+validation of Type-2 receive checksum offload.
 
 ## 4. Establish a corrected performance baseline
 
@@ -198,7 +198,7 @@ and filtered kernel tracing to locate it before adding driver instrumentation.
 
 ## 5. Evaluate transmit checksum offload separately
 
-CSR58 reports transmit checksum insertion and the vendor pairs it with TX
+CSR58 advertises transmit checksum insertion and the vendor pairs it with TX
 store-and-forward.  It may reduce transmit CPU cost, but it must not be
 enabled as a simple platform-data bit.
 
