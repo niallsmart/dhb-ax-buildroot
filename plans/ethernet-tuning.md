@@ -80,9 +80,7 @@ to an Ethernet setting.
 
 The kernel options only expose the interfaces.  Include matching standard
 userspace tools such as `perf`, `trace-cmd` and, when selected, `dropwatch` in
-the diagnostic userspace.  Use `pktgen` on the load-generator host when a
-kernel packet source is required rather than spending target CPU on traffic
-generation.
+the diagnostic userspace.
 
 ## 1. Backport the receive descriptor-exhaustion fix
 
@@ -112,7 +110,7 @@ state inherited across a warm boot independently of the receive wedge.
 The regression test must force descriptor exhaustion.  Ordinary traffic that
 never raises Receive Buffer Unavailable does not test the repaired path.
 
-Run the sender on the development host because a receive failure also kills
+Run the sender on the macOS host because a receive failure also kills
 SSH to the board.  Exercise:
 
 - four inbound TCP streams with a 64- or 256-entry receive ring;
