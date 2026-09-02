@@ -30,13 +30,7 @@ result is established.
 
 ## Kernel instrumentation configuration
 
-The maintained and minimal kernel configurations enable `stmmac` but disable
-perf events, ftrace, kprobes, dynamic debug, debugfs, page-pool statistics and
-the stmmac self-tests.  Build a separate diagnostic configuration fragment so
-these facilities can be selected without changing the production baseline.
-Run `olddefconfig` and retain the resolved configuration with every result.
-
-The first diagnostic layer should provide standard profiling and tracing:
+Turn on these diagnostic aids in this branch as needed:
 
 ```text
 CONFIG_IKCONFIG=y
@@ -64,7 +58,7 @@ The device tree does not describe an ARM PMU, so verify the events exposed by
 Software events and tracepoints remain useful without a registered hardware
 PMU.  Add a PMU node only after its interrupt wiring has been established.
 
-Enable the following only for the question each one answers:
+Enable the following only when required to answer specific questions:
 
 - `CONFIG_IRQ_TIME_ACCOUNTING=y` for finer hardirq and softirq CPU accounting;
   it adds a timestamp read at interrupt-state transitions.
@@ -82,10 +76,7 @@ Enable the following only for the question each one answers:
 Do not enable lockdep, KASAN, UBSAN, KFENCE, debug page allocation or similar
 heavy correctness instrumentation for performance runs.  Do not compare
 throughput between different kernel configurations and attribute the result
-to an Ethernet setting.  Use the same diagnostic kernel for both sides of an
-A/B test, disable active tracing while collecting the throughput baseline,
-and measure the diagnostic configuration once against the production kernel
-to quantify its own overhead.
+to an Ethernet setting.
 
 The kernel options only expose the interfaces.  Include matching standard
 userspace tools such as `perf`, `trace-cmd` and, when selected, `dropwatch` in
@@ -132,13 +123,31 @@ SSH to the board.  Exercise:
 - interface down/up, link flap, and warm reboot; and
 - CSR6 bit 24 after each interface reopen.
 
+Exhaustion has to be observed directly rather than through
+`rx_buf_unav_irq`.  `dwmac1000_dma.c` writes `DMA_INTR_DEFAULT_MASK` to CSR7,
+which carries NIE, RIE, TIE, AIE, FBE and UNE and leaves RUE masked; the board
+reads back `0x0001A061`.  `dwmac_dma_interrupt` increments the counter inside
+the abnormal-interrupt summary, and the summary bit is the OR of the enabled
+abnormal sources, so a Receive Buffer Unavailable event sets CSR5 bit 7,
+raises no interrupt and leaves the counter at zero however often the ring runs
+dry.
+
+Poll the receive-process state in CSR5 instead and record entries into
+state 4 and the time spent there.  `tools/ethernet-rx-ring-watch.c` is the
+scoped instrument for that one observation, which no standard interface
+exposes.  Unmasking RUE would make the counter real, but it adds an interrupt
+per exhaustion event to the path under test and so cannot be carried into the
+throughput baseline.
+
 Record transferred bytes, throughput, packet rate, ring size, CPU use,
 `NET_RX`, interrupt counts, retransmits, drops, checksum errors, CSR5 and the
 `rx_buf_unav_irq`/`rx_process_stopped_irq` counters.
 
-Descriptor exhaustion, an RU interrupt, or a temporary receive state 4 is not
-a failure.  The test passes when the driver refills the ring, poll demand
-resumes the DMA, traffic continues, and error counters remain clean.
+Descriptor exhaustion, an RU event, or a temporary receive state 4 is not a
+failure.  The test passes when the driver refills the ring, poll demand
+resumes the DMA, traffic continues, and error counters remain clean.  It is
+inconclusive, not passing, when the poller records no state 4.
+
 
 Use `ethtool -G` for ring-size experiments if the operation is verified safe
 on the port.  Otherwise provide a validated boot-time driver option and test
