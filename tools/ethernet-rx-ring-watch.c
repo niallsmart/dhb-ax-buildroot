@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* Poll the Hi3531 GMAC1 DMA receive-process state through /dev/mem. */
+/* Poll the Hi3531 GMAC1 DMA receive-process state through /dev/mem.
+ *
+ * The interval trades resolution against the bus bandwidth the poll loop
+ * takes from the DMA it is watching.  Suspended episodes have measured from
+ * tens of microseconds to 26 milliseconds, so the default catches all but the
+ * shortest while costing a few thousand reads a second.  A zero interval
+ * busy-polls, which measurably slows the traffic under test.
+ *
+ * Sleeping below the timer tick needs CONFIG_HIGH_RES_TIMERS in the kernel;
+ * without it every interval rounds up to 1/CONFIG_HZ.
+ */
 
 #define _POSIX_C_SOURCE 200809L
 
@@ -21,6 +31,7 @@
 #define DMA_STATUS_RU UINT32_C(0x00000080)
 #define DMA_STATUS_RPS UINT32_C(0x00000100)
 #define DMA_RX_SUSPENDED 4
+#define DEFAULT_INTERVAL_NS 200000L
 
 static volatile sig_atomic_t stopping;
 
@@ -53,6 +64,22 @@ static unsigned long parse_seconds(const char *text)
 		exit(2);
 	}
 	return value;
+}
+
+static long parse_interval(const char *text)
+{
+	char *end;
+	unsigned long value;
+
+	errno = 0;
+	value = strtoul(text, &end, 0);
+	if (errno || *end || value > 1000000) {
+		fprintf(stderr,
+			"interval must be from 0 to 1000000 microseconds: %s\n",
+			text);
+		exit(2);
+	}
+	return (long)value * 1000L;
 }
 
 static timer_t arm_timer(unsigned long seconds)
@@ -95,6 +122,7 @@ int main(int argc, char **argv)
 	volatile uint32_t *dma_status;
 	uint64_t entries = 0, longest_ns = 0, polls = 0, state4_polls = 0;
 	uint64_t start_ns, state4_enter_ns = 0, state4_ns = 0, stop_ns;
+	struct timespec interval = { .tv_nsec = DEFAULT_INTERVAL_NS };
 	unsigned long page_offset, page_size, seconds;
 	struct sigaction action = { .sa_handler = stop };
 	unsigned int state;
@@ -104,11 +132,13 @@ int main(int argc, char **argv)
 	int fd;
 	int rps_seen = 0, ru_seen = 0, state4_active;
 
-	if (argc != 2) {
-		fprintf(stderr, "usage: %s SECONDS\n", argv[0]);
+	if (argc < 2 || argc > 3) {
+		fprintf(stderr, "usage: %s SECONDS [INTERVAL_US]\n", argv[0]);
 		return 2;
 	}
 	seconds = parse_seconds(argv[1]);
+	if (argc == 3)
+		interval.tv_nsec = parse_interval(argv[2]);
 
 	if (sigemptyset(&action.sa_mask) || sigaction(SIGALRM, &action, NULL) ||
 	    sigaction(SIGINT, &action, NULL) ||
@@ -146,6 +176,7 @@ int main(int argc, char **argv)
 	setvbuf(stdout, output_buffer, _IOFBF, sizeof(output_buffer));
 	printf("elapsed_s,event,rx_state,ru,rps,csr5\n");
 	printf("# requested_seconds=%lu\n", seconds);
+	printf("# interval_us=%ld\n", interval.tv_nsec / 1000);
 
 	start_ns = monotonic_ns();
 	timer = arm_timer(seconds);
@@ -163,6 +194,8 @@ int main(int argc, char **argv)
 	print_event(start_ns, monotonic_ns(), "initial", status);
 
 	while (!stopping) {
+		if (interval.tv_nsec)
+			nanosleep(&interval, NULL);
 		status = *dma_status;
 		polls++;
 		state = receive_state(status);
