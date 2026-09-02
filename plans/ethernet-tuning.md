@@ -310,10 +310,8 @@ happened in a boot where the poller had run, but this run had none, and the
 corruption is the same class.  It also explains the ext4 oops, the
 `rss-counter` complaints and the wedges as one fault rather than three.
 
-Next: establish whether the receive DMA is left running across the ring
-teardown in `stmmac_release`, which would put descriptor writes into freed
-pages exactly as observed.  A wedge is then the same fault seen from the other
-side, with the DMA following stale descriptors until it suspends.
+The evidence, the reproduction and the ways to establish the cause are kept
+in `plans/bug-rx-writes-freed-pages.md`.
 
 ### 2026-09-02, debug kernel
 
