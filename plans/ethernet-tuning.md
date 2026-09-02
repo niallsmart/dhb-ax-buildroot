@@ -275,9 +275,25 @@ hardware state the driver must recover from correctly.
 
 Newest entry first.
 
+### 2026-09-02, step 2 green
+
+Step 2 passes at a 64-entry ring, no poller running:
+`20260902T222228Z-rx64`.
+
+- Three 30 s four-stream TCP runs at 2.77 to 2.80 GB each, small-packet UDP
+  256 MB, bidirectional 182 MB, a 120 s soak at 11.08 GB, then 2.79 GB after
+  the interface reopen and 2.80 GB after the link flap.  About 23.5 GB through
+  64 descriptors with no stall.
+- `ethtool -r` is supported, so the link flap ran rather than being skipped.
+- DFF survived both recovery cases, CSR5 was never left suspended, and no CRC,
+  frame or length error counter moved.
+- Both recovery cases completed for the first time.  Every earlier failure
+  happened in a boot where `ethernet-rx-ring-watch` had been present; this run
+  had none.
+
 ### 2026-09-02
 
-Step 1 committed.  Step 2 built, not yet green.  Steps 3 to 5 untouched.
+Step 1 committed.  Steps 3 to 5 untouched.
 
 - The receive path corrupts kernel memory.  A run of four-stream inbound TCP
   at a 64-entry ring, followed by ten interface reopens, ended in
