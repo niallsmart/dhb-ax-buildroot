@@ -275,6 +275,56 @@ hardware state the driver must recover from correctly.
 
 Newest entry first.
 
+### 2026-09-02, the receive path writes to freed pages
+
+The debug kernel caught the corruption directly, at a 64-entry ring with no
+poller running: `20260902T224615Z-rx64`.  Three 30 s TCP runs and the UDP case
+passed, then the bidirectional case took the board off the network with CSR5
+`0x00680404`, receive state 4.
+
+`PAGE_POISONING` reported twice:
+
+```text
+pagealloc: memory corruption
+81ddf2a0: 80 03 4e 00 aa aa aa aa aa aa aa aa aa aa aa aa
+81ddf2b0: aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa
+81ddf2c0: 80 03 4e 00
+```
+
+- Two 4-byte writes of the same value into a page held free and poisoned,
+  32 bytes apart, which is one cache line and one receive descriptor stride.
+- Read little-endian the word is `0x004e0380`: as a receive descriptor status
+  that is OWN clear with a frame length of 78 bytes.  Descriptor writeback
+  into memory that is no longer the ring is the reading that fits, though it
+  is inference rather than an established fact.
+- One report surfaced in `stmmac_napi_poll_rx` allocating for the receive page
+  pool, the other in `copy_process` allocating a page table, so the damage is
+  not confined to the network path.
+- Both followed the interface reopen and link flap: link down at 81 s, up at
+  86 s, down at 110 s, up at 114 s, corruption reported at 122 s and 128 s.
+- `DMA_API_DEBUG` reported nothing, so the driver's own map and unmap calls
+  are consistent.  Whatever writes is doing so outside the DMA API's view.
+
+This displaces the earlier suspicion of the poller.  Every previous failure
+happened in a boot where the poller had run, but this run had none, and the
+corruption is the same class.  It also explains the ext4 oops, the
+`rss-counter` complaints and the wedges as one fault rather than three.
+
+### 2026-09-02, debug kernel
+
+`linux.config` gains `DEBUG_KERNEL`, `DEBUG_VM`, `DEBUG_LIST`, `DEBUG_SG`,
+`DEBUG_NET`, `DEBUG_PAGEALLOC`, `PAGE_POISONING` and `DMA_API_DEBUG`, to catch
+the memory corruption nearer to whatever writes it.  `SLUB_DEBUG` was already
+built in, so `slub_debug=FZP` needs only a boot argument.
+
+- These belong in a diagnostic configuration rather than the production one.
+  Page-alloc debugging and poisoning cost real throughput, so no number from
+  this kernel belongs in the step 4 baseline.
+- KASAN stays off: it instruments CPU accesses, so a device writing over
+  memory by DMA is invisible to it, and there is no IOMMU here to trap the
+  write itself.  These options shorten the distance between the write and the
+  complaint rather than catching it outright.
+
 ### 2026-09-02, step 2 green
 
 Step 2 passes at a 64-entry ring, no poller running:
