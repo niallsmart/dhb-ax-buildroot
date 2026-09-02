@@ -112,8 +112,10 @@ state inherited across a warm boot independently of the receive wedge.
 
 ## 2. Preserve a regression test
 
-The regression test must force descriptor exhaustion.  Ordinary traffic that
-never raises Receive Buffer Unavailable does not test the repaired path.
+The regression test must force descriptor exhaustion, with a small receive
+ring under sustained inbound traffic.  Ordinary traffic that never runs the
+ring dry does not test the repaired path.  Forcing it is required; observing
+each occurrence is not.
 
 Run the sender on the macOS host because a receive failure also kills
 SSH to the board.  Exercise:
@@ -123,34 +125,38 @@ SSH to the board.  Exercise:
 - small-packet UDP and full-MTU TCP;
 - simultaneous transmit and receive traffic;
 - ping latency during sustained receive load;
-- interface down/up, link flap, and warm reboot; and
+- interface down/up and link flap; and
 - CSR6 bit 24 after each interface reopen.
 
-Exhaustion has to be observed directly rather than through
-`rx_buf_unav_irq`.  `dwmac1000_dma.c` writes `DMA_INTR_DEFAULT_MASK` to CSR7,
-which carries NIE, RIE, TIE, AIE, FBE and UNE and leaves RUE masked; the board
-reads back `0x0001A061`.  `dwmac_dma_interrupt` increments the counter inside
-the abnormal-interrupt summary, and the summary bit is the OR of the enabled
+`rx_buf_unav_irq` cannot report exhaustion.  `dwmac1000_dma.c` writes
+`DMA_INTR_DEFAULT_MASK` to CSR7, which carries NIE, RIE, TIE, AIE, FBE and
+UNE and leaves RUE masked; the board reads back `0x0001A061`.
+`dwmac_dma_interrupt` increments the counter inside the abnormal-interrupt
+summary, and the summary bit is the OR of the enabled
 abnormal sources, so a Receive Buffer Unavailable event sets CSR5 bit 7,
 raises no interrupt and leaves the counter at zero however often the ring runs
 dry.
 
-Poll the receive-process state in CSR5 instead and record entries into
-state 4 and the time spent there.  `tools/ethernet-rx-ring-watch.c` is the
-scoped instrument for that one observation, which no standard interface
-exposes.  Unmasking RUE would make the counter real, but it adds an interrupt
-per exhaustion event to the path under test and so cannot be carried into the
-throughput baseline.
+The test does not have to observe exhaustion to be valid.  A ring that is not
+refilled suspends the DMA, and a suspended receive path takes the board off
+the network within seconds, so a run that carries its traffic through to the
+end has demonstrated the repair by completing.
+
+`tools/ethernet-rx-ring-watch.c` polls the receive-process state in CSR5 and
+reports entries into state 4 and the time spent there, which no standard
+interface exposes.  Use it when the question is how often or how long the
+ring runs dry, not as a precondition for the regression test.  Unmasking RUE
+would make the counter real, but it adds an interrupt per exhaustion event to
+the path under test and so cannot be carried into the throughput baseline.
 
 Record transferred bytes, throughput, packet rate, ring size, CPU use,
 `NET_RX`, interrupt counts, retransmits, drops, checksum errors, CSR5 and the
 `rx_buf_unav_irq`/`rx_process_stopped_irq` counters.
 
 Descriptor exhaustion, an RU event, or a temporary receive state 4 is not a
-failure.  The test passes when the driver refills the ring, poll demand
-resumes the DMA, traffic continues, and error counters remain clean.  It is
-inconclusive, not passing, when the poller records no state 4.
-
+failure.  The test passes when every case completes: traffic continues, the
+board stays reachable, the interface reopens, and the error counters remain
+clean.
 
 Use `ethtool -G` for ring-size experiments if the operation is verified safe
 on the port.  Otherwise provide a validated boot-time driver option and test
@@ -228,7 +234,7 @@ Before advertising TX checksum offload:
    generated IPv4, IPv6, TCP and UDP checksums.
 3. Repeat the large-ping size walk, NFS write, TCP, UDP and bidirectional
    tests that expose a transmit burst.
-4. Test checksum toggles, interface reopen, link flap and warm reboot.
+4. Test checksum toggles, interface reopen and link flap.
 5. Compare CPU time, throughput, latency and error counters with software
    checksumming.
 
@@ -273,25 +279,53 @@ Newest entry first.
 
 Step 1 committed.  Step 2 built, not yet green.  Steps 3 to 5 untouched.
 
+- The receive path corrupts kernel memory.  A run of four-stream inbound TCP
+  at a 64-entry ring, followed by ten interface reopens, ended in
+  `Unable to handle kernel paging request at virtual address 25242322` in
+  `ext4_read_folio`, preceded by `BUG: Bad rss-counter state`.  The faulting
+  registers held `0x25242322` and `0x19181717`, ascending byte sequences
+  rather than pointers, which is what a data payload written over a kernel
+  structure looks like.  Treat every other symptom below as downstream of
+  this until it is ruled out.
+- The first suspect is the ring-size patch, which sets
+  `dma_conf.dma_rx_size` at probe.  A descriptor array or buffer sized from a
+  different value than the DMA is programmed with would write past the end of
+  the ring.  Test the stock 512-entry ring with no `stmmac.rx_ring_size`
+  argument and see whether the corruption goes away.
 - Exhaustion recovery works.  Thirty seconds of four-stream inbound TCP at a
-  64-entry ring: 20100 entries into receive state 4, 16.6 s suspended of 40 s,
-  longest 26 ms, `rps_seen` 0, no error or drop counter moved.
+  64-entry ring, sampled by busy-polling at about 8 million reads a second:
+  20100 entries into receive state 4, 16.6 s suspended of 40 s, longest 26 ms,
+  `rps_seen` 0, no error or drop counter moved.
+- Five seconds of the same traffic at the 512-entry default, sampled every
+  200 us: 105 entries, 2.0 s suspended of 13 s, longest 100 ms, `rps_seen` 0.
+  Small-packet UDP produced none.
+- Entry counts and the longest episode only mean something against the
+  interval they were sampled at: an interval longer than an episode misses it
+  entirely and merges neighbours, which is why the counts above differ by two
+  orders of magnitude.  Suspended residency as a fraction of the window is the
+  figure that compares across intervals.  Every result carries its interval in
+  the poller's `# interval_us` line.
 - `rx_buf_unav_irq` stayed 0 through that run while the poller saw `ru_seen=1`.
   CSR7 reads `0x0001A061`, so RUE is masked.
-- A separate wedge exists.  After a reopen on a board that had passed several
-  gigabytes at a 64-entry ring: CSR5 `0x00680404`, receive state 4, eth0
-  interrupts frozen at 285237, `dmesg` clean.  Writing poll demand to
-  `0x101c1108` gave `0x00680484` and state 4 again, so the DMA was healthy and
-  the driver was not refilling.  Empty ring suspends the DMA, no frame raises
-  no interrupt, no interrupt schedules the refill.  `ip link` down/up cleared
-  it.  Upstream's poll demand cannot break this: it sits inside the refill.
-- No reliable trigger yet.  Ten reopen cycles on a fresh boot at the default
-  512-entry ring with no traffic stayed in state 7 with interrupts advancing.
-  Ring size and prior traffic are the untested variables.
+- The board also wedges outright: CSR5 `0x00680404`, receive state 4, eth0
+  interrupts frozen, `dmesg` clean.  Writing poll demand to `0x101c1108` gave
+  `0x00680484` and state 4 again, so the DMA was healthy and the driver was
+  not refilling.  Empty ring suspends the DMA, no frame raises no interrupt,
+  no interrupt schedules the refill.  Upstream's poll demand cannot break
+  this: it sits inside the refill.
+- `ip link set eth0 down`/`up` clears the wedge, once, on the first attempt in
+  every case so far.
+- Four runs of traffic plus ten reopens on one boot: runs 1 and 2 clean before
+  the poller had been copied to the board, run 3 wedged with the poller
+  running, run 4 oopsed after it.  Corruption surfaces when the damaged page
+  is next touched, so run 4 does not clear the poller.  Nothing went wrong in
+  that boot until it ran.
+- To separate them, run the repro two or three times from a fresh boot with
+  the poller never started.
 - Read CSR5 before calling the board wedged.  State 4 with frozen interrupts is
   the wedge; state 7 with interrupts advancing is a host path problem.
-- Throughput, four inbound TCP streams at a 64-entry ring: 730 Mbit/s clean,
-  528 Mbit/s with the poller, which holds a CPU at 5 to 8 million reads per
-  second.
+- Throughput, four inbound TCP streams at a 64-entry ring: 706 to 712 Mbit/s
+  clean, 534 Mbit/s with the poller, which holds a CPU at 5 to 8 million reads
+  per second.
 - `STMMAC_RX_COE_TYPE2` has been set since 2026-08-28, including through the
-  runs that did not wedge.  A/B it once the wedge reproduces on demand.
+  runs that did not wedge.  A/B it once the corruption is understood.
