@@ -1,0 +1,58 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] net: stmmac: add an RX ring-size module parameter
+
+The receive descriptor ring is allocated when the interface opens.
+Provide a read-only module parameter so a built-in stmmac driver can
+select its ring size from the kernel command line without reopening a
+running interface.
+
+Zero retains the driver default.  Reject sizes outside the range
+supported by the ethtool interface and sizes that are not powers of two.
+The parameter is global, matching the existing stmmac parameters; this
+port registers one stmmac instance.
+---
+ drivers/net/ethernet/stmicro/stmmac/stmmac_main.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+@@ -76,6 +76,11 @@ static int phyaddr = -1;
+ module_param(phyaddr, int, 0444);
+ MODULE_PARM_DESC(phyaddr, "Physical device address");
+ 
++static unsigned int rx_ring_size;
++module_param(rx_ring_size, uint, 0444);
++MODULE_PARM_DESC(rx_ring_size,
++		 "RX descriptor ring size (0: default, 64-1024 power of two)");
++
+ #define STMMAC_TX_THRESH(x)	((x)->dma_conf.dma_tx_size / 4)
+ 
+ /* Limit to make sure XDP TX and slow path can coexist */
+@@ -197,5 +202,14 @@ static void stmmac_verify_args(void)
+ 	if (flow_ctrl != 0xdead)
+ 		pr_warn("stmmac: module parameter 'flow_ctrl' is obsolete - please remove from your module configuration\n");
++
++	if (rx_ring_size &&
++	    (rx_ring_size < DMA_MIN_RX_SIZE ||
++	     rx_ring_size > DMA_MAX_RX_SIZE ||
++	     !is_power_of_2(rx_ring_size))) {
++		pr_warn("stmmac: invalid RX ring size %u; using the default %u\n",
++			rx_ring_size, DMA_DEFAULT_RX_SIZE);
++		rx_ring_size = 0;
++	}
+ }
+ 
+ static void __stmmac_disable_all_queues(struct stmmac_priv *priv)
+@@ -7427,6 +7442,9 @@ int stmmac_dvr_probe(struct device *device,
+ 	/* Verify driver arguments */
+ 	stmmac_verify_args();
+ 
++	if (rx_ring_size)
++		priv->dma_conf.dma_rx_size = rx_ring_size;
++
+ 	priv->af_xdp_zc_qps = bitmap_zalloc(MTL_MAX_TX_QUEUES, GFP_KERNEL);
+ 	if (!priv->af_xdp_zc_qps)
+ 		return -ENOMEM;
+-- 
+2.51.0
