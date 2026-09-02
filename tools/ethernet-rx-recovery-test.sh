@@ -159,8 +159,19 @@ resolve()
 	esac
 }
 
+# macOS ssh ignores ConnectTimeout while it waits for ARP, so a wedged board
+# blocks a single call for over a minute.  Probe first and give up at once.
+alive()
+{
+	ping -q -S "$source_address" -c 1 -t 1 "$target" > /dev/null 2>&1
+}
+
 remote()
 {
+	alive || {
+		echo "$target is not answering" >&2
+		return 1
+	}
 	ssh -o BatchMode=yes -o ConnectTimeout=5 -b "$source_address" \
 		"root@$target" "$@"
 }
@@ -170,9 +181,8 @@ remote()
 wait_for_target()
 {
 	waited=0
-	while [ "$waited" -lt 180 ]; do
-		ping -q -S "$source_address" -c 1 -t 2 "$target" > /dev/null 2>&1 &&
-			remote true > /dev/null 2>&1 && return 0
+	while [ "$waited" -lt 60 ]; do
+		alive && remote true > /dev/null 2>&1 && return 0
 		sleep 3
 		waited=$((waited + 3))
 	done
@@ -271,7 +281,11 @@ start_watch()
 collect_watch()
 {
 	waited=0
-	while [ "$waited" -lt 90 ]; do
+	while [ "$waited" -lt 30 ]; do
+		alive || {
+			echo "FAIL: $1: $target stopped answering; results: $output" >&2
+			exit 1
+		}
 		remote "grep -q '^# state4_entries=' /tmp/watch-$1.csv" \
 			2>/dev/null && break
 		sleep 2
@@ -399,6 +413,10 @@ run_case()
 	case_status=$?
 	wait "$ping_pid" || case_status=1
 	set -e
+	alive || {
+		echo "FAIL: $name wedged the board; results: $output" >&2
+		exit 1
+	}
 	snapshot "$name-after"
 	collect_watch "$name"
 
