@@ -28,6 +28,11 @@ only when the standard interfaces cannot answer the question, keep it scoped
 to the missing observation, and remove diagnostic-only driver code once the
 result is established.
 
+An experiment that can wedge the board has to notice and stop. Abandon the
+run at the first failed probe and ensure commands time out promptly, or run
+them asynchronously and wait on them. Note that `ssh` ignores `ConnectTimeout`
+while ARP resolution hangs.
+
 ## Kernel instrumentation configuration
 
 Turn on these diagnostic aids in this branch as needed:
@@ -259,3 +264,34 @@ Keep each result in a separate logical change:
 The first three steps establish a reliable maintained port.  Performance
 tuning follows from that stable baseline rather than being used to avoid a
 hardware state the driver must recover from correctly.
+
+## Log
+
+Newest entry first.
+
+### 2026-09-02
+
+Step 1 committed.  Step 2 built, not yet green.  Steps 3 to 5 untouched.
+
+- Exhaustion recovery works.  Thirty seconds of four-stream inbound TCP at a
+  64-entry ring: 20100 entries into receive state 4, 16.6 s suspended of 40 s,
+  longest 26 ms, `rps_seen` 0, no error or drop counter moved.
+- `rx_buf_unav_irq` stayed 0 through that run while the poller saw `ru_seen=1`.
+  CSR7 reads `0x0001A061`, so RUE is masked.
+- A separate wedge exists.  After a reopen on a board that had passed several
+  gigabytes at a 64-entry ring: CSR5 `0x00680404`, receive state 4, eth0
+  interrupts frozen at 285237, `dmesg` clean.  Writing poll demand to
+  `0x101c1108` gave `0x00680484` and state 4 again, so the DMA was healthy and
+  the driver was not refilling.  Empty ring suspends the DMA, no frame raises
+  no interrupt, no interrupt schedules the refill.  `ip link` down/up cleared
+  it.  Upstream's poll demand cannot break this: it sits inside the refill.
+- No reliable trigger yet.  Ten reopen cycles on a fresh boot at the default
+  512-entry ring with no traffic stayed in state 7 with interrupts advancing.
+  Ring size and prior traffic are the untested variables.
+- Read CSR5 before calling the board wedged.  State 4 with frozen interrupts is
+  the wedge; state 7 with interrupts advancing is a host path problem.
+- Throughput, four inbound TCP streams at a 64-entry ring: 730 Mbit/s clean,
+  528 Mbit/s with the poller, which holds a CPU at 5 to 8 million reads per
+  second.
+- `STMMAC_RX_COE_TYPE2` has been set since 2026-08-28, including through the
+  runs that did not wedge.  A/B it once the wedge reproduces on demand.
