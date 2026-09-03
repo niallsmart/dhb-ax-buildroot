@@ -6,9 +6,11 @@
 # away SSH.  A small receive ring forces the descriptor exhaustion that the
 # repaired Receive Buffer Unavailable path has to recover from.
 #
-# stmmac leaves RUE masked in CSR7, so rx_buf_unav_irq stays at zero however
-# often the ring runs dry.  Exhaustion is observed instead by polling the
-# receive-process state in CSR5 with ethernet-rx-ring-watch on the board.
+# stmmac leaves Receive Buffer Unavailable Interrupt Enable [RUE] masked in
+# the DMA Interrupt Enable Register [CSR7], so rx_buf_unav_irq stays at zero
+# however often the ring runs dry. Exhaustion is observed instead by polling
+# the receive-process state in the DMA Status Register [CSR5] with
+# ethernet-rx-ring-watch on the board.
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -31,7 +33,7 @@ Options:
   --soak SECONDS       optional final inbound TCP soak (default: disabled)
   --source ADDRESS     bind traffic to this local address (default: the
                        address of the wired interface)
-  --watch PATH         also run this CSR5 receive-state poller on the target
+  --watch PATH         also poll the DMA Status Register [CSR5] receive state
                        and report suspended residency per case
 EOF
 }
@@ -224,18 +226,19 @@ check_ring()
 	esac
 }
 
-# CSR6 bit 24 is DFF.  With it set the MAC holds a frame in the receive FIFO
-# when no descriptor is free instead of flushing it, so it has to survive every
-# reopen of the interface.
+# Bit 24 of the DMA Operation Mode Register [CSR6] is Disable Flushing of
+# Received Frames [DFF]. With it set the MAC holds a frame in the receive FIFO
+# when no descriptor is free instead of flushing it, so it has to survive
+# every reopen of the interface.
 check_dff()
 {
 	csr6=$(remote 'devmem 0x101c1118 32')
 	[ -z "$csr6" ] && {
-		echo "FAIL: could not read CSR6 after $1" >&2
+		echo "FAIL: could not read DMA Operation Mode Register [CSR6] after $1" >&2
 		exit 1
 	}
 	[ $((csr6 & 0x01000000)) -eq 0 ] && {
-		echo "FAIL: CSR6 DFF is clear after $1: $csr6" >&2
+		echo "FAIL: DMA Operation Mode Register [CSR6] Disable Flushing of Received Frames [DFF] is clear after $1: $csr6" >&2
 		exit 1
 	}
 	:
@@ -247,7 +250,7 @@ check_dma_running()
 {
 	csr5=$(remote 'devmem 0x101c1114 32')
 	[ -z "$csr5" ] && {
-		echo "FAIL: could not read CSR5 after $1" >&2
+		echo "FAIL: could not read DMA Status Register [CSR5] after $1" >&2
 		exit 1
 	}
 	[ $(( (csr5 & 0x000e0000) >> 17 )) -eq 4 ] && {
@@ -257,8 +260,9 @@ check_dma_running()
 	:
 }
 
-# The poller reads CSR5 through /dev/mem and reports how often and how long
-# the receive process sits suspended, which no standard interface exposes.
+# The poller reads the DMA Status Register [CSR5] through /dev/mem and reports
+# how often and how long the receive process sits suspended, which no standard
+# interface exposes.
 check_watch()
 {
 	remote "test -x $watch" || {
@@ -321,9 +325,9 @@ snapshot()
 		cat /proc/cmdline
 		ethtool -g eth0
 		ethtool -c eth0
-		printf "CSR5: "
+		printf "DMA Status Register [CSR5]: "
 		devmem 0x101c1114 32
-		printf "CSR6: "
+		printf "DMA Operation Mode Register [CSR6]: "
 		devmem 0x101c1118 32
 		for statistic in /sys/class/net/eth0/statistics/*; do
 			printf "%s: %s\n" "${statistic##*/}" "$(cat "$statistic")"
@@ -348,7 +352,7 @@ deltas()
 {
 	awk '
 		FNR == NR { before[$1] = $2; next }
-		$1 ~ /(err|drop|fifo|missed|overflow|unav|stopped|abnormal)/ &&
+		$1 ~ /(err|drop|fifo|missed|overflow|unav|stopped|abnormal|masked|rearm)/ &&
 		$2 ~ /^[0-9]+$/ && ($1 in before) && $2 != before[$1] {
 			printf "  %s %s -> %s\n", $1, before[$1], $2
 		}
@@ -503,7 +507,7 @@ output=$repo/artifacts/ethernet-tests/$(date -u +%Y%m%dT%H%M%SZ)-rx$ring_size
 mkdir -p "$output"
 
 echo "results: $output"
-record "target: $target ($target_address), RX ring: $ring_size ($ring_source), CSR6: $csr6"
+record "target: $target ($target_address), RX ring: $ring_size ($ring_source), DMA Operation Mode Register [CSR6]: $csr6"
 record "source: $source_address on $source_interface"
 record "cmdline: $cmdline"
 ping -q -S "$source_address" -c 3 "$target" > "$output/warmup-ping.txt"
