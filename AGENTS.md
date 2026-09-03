@@ -128,6 +128,13 @@ commentary about the search itself.
 
 * When a message is tagged `#q`, then just reply to the question without inferring an implied action. Prefer to answer from memory, but you can use tool calls when mmory is incomplete or stale.
 
+## Performance Benchmarking
+
+* Run long-running benchmark scripts in the background using the built-in monitor tool
+* Prefer existing proven tooling vs home-rolling your own. Install what you need.
+* If the benchmark can get wedged, detect that condition as soon as possible and exit early, so you don't keep the user waiting.
+* If capturing output, tee to stdout/stderr as appropriate, so the user can observe progress.
+
 ## Python and Shell Scripts
 
 ### Guards
