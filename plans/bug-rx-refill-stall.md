@@ -156,9 +156,10 @@ liveness result.
 ## Paths excluded
 
 - **Receive-refill allocation failure:** Patch 0016 recorded no page-allocation
-  failure and no pending dirty descriptors at repeated stalls. At the terminal
-  state, `cur_rx` equalled `dirty_rx` and all descriptors had already been
-  consumed by the CPU.
+  failures. At the last NAPI completion before each stall, `cur_rx` equalled
+  `dirty_rx` and the dirty count was zero, so no processed descriptors were
+  awaiting refill. Separately, the terminal ring dump showed all 64
+  descriptors CPU-owned and holding completed frames awaiting NAPI processing.
 - **The proposed upstream refill retry:** The March 2026 stmmac proposal at
   <https://lore.kernel.org/netdev/20260328192503.520689-3-CFSworks@gmail.com/>
   keeps NAPI polling after an allocation failure. Its retry branch never ran
