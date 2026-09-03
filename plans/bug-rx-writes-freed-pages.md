@@ -1,8 +1,10 @@
 # The receive path writes to freed pages
 
-The Hi3531 receive path writes into memory the kernel has already reclaimed.
-It surfaces as page poison corruption, as an oops in whatever touches the page
-next, and as a receive DMA left suspended with the board off the network.
+The Hi3531 receive path has written into memory the kernel already reclaimed.
+It surfaces as page poison corruption and as an oops in whatever touches the
+page next.  A separate receive stall can leave the DMA suspended with the
+board off the network.  Both faults occurred in the same run, but the wedge
+can occur without corruption and is treated separately here.
 
 ## What is established
 
@@ -63,6 +65,119 @@ What it does match is the upstream stall: refill leaves no descriptor the DMA
 owns, NAPI exits and unmasks, and no interrupt arrives to schedule it again.
 Receive state 4 with a frozen interrupt count is that state.
 
+### Live ring state after the wedge
+
+The still-wedged board from `20260902T231542Z-rx64` was read over the UART.
+The kernel was 6.18.42 with a 64-entry receive ring, page poisoning and DMA API
+debugging.  The link remained up at 1000/full, but the receive packet count,
+NAPI poll count and interrupt count did not move.
+
+```text
+DMA bus mode                  0x00a01080
+DMA transmit poll demand      0x00000000
+DMA receive poll demand       0x00000000
+DMA receive descriptor base   0x80da8000
+DMA transmit descriptor base  0x82014000
+DMA status                    0x00680404  receive state 4, transmit state 6
+DMA control                   0x03002902  SR remains set
+DMA interrupt enable          0x0001a061  RUE is masked
+current transmit descriptor   0x82014600
+current receive descriptor    0x80da8680  ring entry 52
+current transmit buffer       0x8280bc5e
+current receive buffer        0x81ee2040
+DMA hardware features         0x016def37
+GMAC1 configuration           0x00610c0c
+GMAC1 frame filter            0x00000404
+GMAC1 flow control            0xffff000e
+GMAC1 version                 0x00001036
+GMAC1 debug                   0x00000220  RX FIFO above threshold,
+                                           read controller in status state
+TNK status / enable           0x00000000 / 0x00000048
+eth0 interrupt count          63436, frozen
+rx packets / NAPI polls       3108532 / 63749, frozen
+```
+
+All eight words of all 64 enhanced descriptors were read.  Every descriptor
+was a clean, completed, full-size frame owned by the CPU:
+
+```text
+des0       0x05ee0320  OWN clear, first and last segment, no error,
+                       frame length 1518
+des1       0x80000600  interrupt disabled, buffer 1 length 1536
+des2       per-entry receive buffer address
+des3-des7  0
+```
+
+Entry 63 had `des1 = 0x80008600`, adding the correct end-of-ring bit.  The
+entries around the DMA cursor were:
+
+```text
+51  0x80da8660  0x05ee0320  0x80000600  0x8329b040
+52  0x80da8680  0x05ee0320  0x80000600  0x81ee2040
+53  0x80da86a0  0x05ee0320  0x80000600  0x82bb9040
+63  0x80da87e0  0x05ee0320  0x80008600  0x837e8040
+```
+
+The current receive-buffer register exactly matched entry 52's buffer, and
+the descriptor base and current pointers remained unchanged before and after
+the complete dump.  The ring was structurally sound and still programmed into
+the DMA.  Its failure state was that software had returned none of its 64
+descriptors to DMA ownership.
+
+The strongest explanation is the upstream refill stall:
+
+1. Sustained full-size traffic consumes the 64 DMA-owned descriptors.
+2. NAPI processes them, but a receive replacement-page allocation fails and
+   `stmmac_rx_refill()` leaves one or more dirty entries unrefilled.
+3. This 6.18.42 path returns fewer than the NAPI budget despite the dirty
+   entries, so NAPI completes and unmasks the normal receive interrupt.
+4. No descriptor remains DMA-owned.  The receive process suspends, while a
+   frame waits in the RX FIFO.  It cannot complete another descriptor and
+   therefore cannot raise the normal interrupt that would schedule NAPI.
+5. Receive-buffer-unavailable interrupts are masked in CSR7, so that event
+   cannot restart polling either.
+
+The snapshot establishes the final conditions described in steps 3 through 5,
+not the execution path that produced them.  It does not observe the allocation
+failure itself; those page-pool allocations are normally `__GFP_NOWARN`.  A
+lost NAPI scheduling transition from another cause could leave the same final
+state, but the upstream bug is an exact code and hardware-state match.
+Instrumenting failed page-pool allocations and `stmmac_rx_dirty()` at NAPI
+completion would distinguish them directly.
+
+### No interrupt source remains once polling stops
+
+Read from the same wedged board:
+
+```text
+CSR8 receive watchdog     0x000000a0   enabled at the driver default
+ch0 CSR3 / CSR5 / CSR6    0 / 0 / 0    quiescent
+ch1 CSR3 / CSR5 / CSR6    0x80da8000 / 0x00680404 / 0x03002902
+ch2 CSR3 / CSR5 / CSR6    0 / 0 / 0    quiescent
+```
+
+`enh_desc_init_rx_desc()` sets `ERDES1_DISABLE_IC` when its `disable_rx_ic`
+argument is true, and `stmmac_main.c:1381` passes `priv->use_riwt`.  Every
+descriptor in the dump carries `des1` bit 31, so per-descriptor receive
+completion interrupts are disabled and the watchdog timer is the only source
+of receive interrupts.
+
+That leaves the wedge with no way out.  The watchdog restarts on a newly
+completed frame, and the receive process is suspended so no frame can
+complete.  Per-descriptor completion interrupts are disabled.  Receive buffer
+unavailable is masked in CSR7.  Once software stops collecting with the ring
+full, nothing can schedule NAPI again.
+
+Both other DMA channels are quiescent with a zero descriptor base, so no
+second channel is running against stale memory.  The driver and the hardware
+also agreed on the ring throughout: 3108532 frames were received from the base
+still programmed in CSR3, which rules out a mismatched ring base as the cause
+of the stall.
+
+The upstream budget fix helps only while the driver is still inside
+`stmmac_rx()`.  Unmasking RUE would give this state a recovery path, at the
+cost of an interrupt per exhaustion event.
+
 ## Thesis: the ring is freed before the receive process stops
 
 `__stmmac_release()` stops the DMA and frees the ring in consecutive
@@ -91,8 +206,9 @@ pages go back to the allocator immediately.  A descriptor writeback landing
 in that window writes into memory the kernel has already reclaimed, which is
 the observed corruption.
 
-The same window predicts the wedge: a channel interrupted mid-descriptor
-keeps stale addresses, and the reopened interface finds nothing the DMA owns.
+This race does not explain the fresh-boot wedge above: no release had run and
+the live descriptor ring was still allocated and correctly programmed.  It
+remains a candidate for the corruption that follows an interface reopen.
 
 This is a thesis.  What supports it is the code path above, the
 descriptor-shaped value, the 32-byte spacing and the timing after a reopen.
@@ -142,6 +258,11 @@ lines`, so the Hisilicon v200 driver claims the controller and L2X0 does not.
 Its line size matches the 32-byte spacing of the corrupted words, though
 enhanced descriptors are also 32 bytes, so the spacing does not discriminate.
 
+The cache-disabled `20260902T231542Z-rx64` run wedged before it reached an
+interface reopen.  Its lack of corruption rules the cache out as the cause of
+that wedge, but it did not exercise the phase which has exposed corruption and
+therefore is not yet a negative test of the cache-corruption thesis.
+
 ## Reproduction
 
 Not deterministic.  Two full runs at a 64-entry ring passed before this one
@@ -162,24 +283,23 @@ run had none and produced the same corruption.
 
 ## Next steps
 
-Each thesis has a cheap discriminator.  Take them in this order.
+The independent wedge has to be removed before a corruption run can reliably
+reach the reopen phase.  Take the next steps in this order.
 
-1. Establish which outer cache driver binds.  Both `CACHE_HIL2V200` and
-   `CACHE_L2X0` are enabled; read the boot log for which one claims the
-   controller, and whether either reports a line size and size that match the
-   hardware.
-2. Build with `CONFIG_CACHE_HIL2V200=n` and run the debug kernel test.
-   `nooutercache` does not exist in this kernel and the driver has no
-   parameter of its own; `hil2v200_cache_init()` is called unconditionally
-   from `arch/arm/kernel/irq.c`.  Corruption stopping without the outer cache
-   and returning with it confirms the outer cache thesis and rules out the
-   release race.
-3. If corruption survives `nooutercache`, instrument `__stmmac_release()` to
-   log the receive process state after `stmmac_stop_all_dma()` and again after
-   `free_dma_desc_resources()`.  A receive process not yet stopped at the free
-   confirms the release race.  Diagnostic-only code, removed once the result
-   is established.
-4. Reboot between runs.  A board that has corrupted its own memory cannot be
+1. Backport the upstream `stmmac_rx_dirty()` NAPI-budget fix and repeat the
+   64-entry debug run.  Instrument page-pool allocation failure and dirty-ring
+   state if the fixed kernel can still wedge.
+2. With that fix, run through the reopen cases with
+   `CONFIG_CACHE_HIL2V200=n`.  Corruption here rules out outer-cache
+   maintenance and leaves teardown as the leading thesis.
+3. Repeat the same run with the Hisilicon outer cache enabled.  Corruption
+   appearing only in this configuration supports the cache thesis.  Because
+   the fault is intermittent, use repeated fresh boots on each side.
+4. If corruption survives without the outer cache, instrument
+   `__stmmac_release()` to log CSR5, CSR6 and CSR3 before the stop, after
+   `stmmac_stop_all_dma()` and immediately before freeing the descriptors.  A
+   receive process still active at the free confirms the release race.
+5. Reboot between runs.  A board that has corrupted its own memory cannot be
    trusted to produce a meaningful next result, and the root filesystem is
    mounted read-write, so check it before treating the disk as sound.
 
@@ -226,23 +346,28 @@ merged, and specific to 16K buffers in ring mode, so it does not apply at an
 MTU of 1500.  It stands as precedent that stale receive descriptors produce
 this corruption signature.
 
-## Are the wedge and the corruption one fault?
+## Relationship between the wedge and corruption
 
-Undecided.  Buffers released while the DMA still owns them would produce both:
-descriptor writes into reclaimed pages, and a ring holding nothing the DMA
-owns.  The upstream stall is a separate mechanism that needs only an
-allocation failure.
+The faults are separable.  The cache-disabled run wedged before any release,
+with an allocated, structurally valid ring and no poison report.  Corruption
+is not required to produce the wedge.
 
-Backporting the stall fix and rerunning on the debug kernel separates them.
-Wedges stopping while poison reports continue means two faults; both stopping
-means one.
+A causal sequence is still possible.  The refill bug can wedge the interface,
+the recovery harness can respond by reopening it, and a separate asynchronous
+DMA-stop race can then write back into the ring after it is freed.  In that
+model the wedge triggers the operation that exposes the corruption without
+being the memory-corruption mechanism itself.  Backporting the refill fix is
+therefore necessary both to test the known stall and to let cache-disabled
+corruption runs reach the reopen phase consistently.
 
 ## Open questions
 
 - Does `dwmac_dma_stop_rx` wait for the receive process to reach the stopped
   state, or clear the start bit and return?  If it does not wait, the race is
   in mainline rather than in this port's glue.
-- Does the wedge share this cause?  A DMA following stale descriptors until it
-  suspends would be the same fault seen from the other side.
+- Is a transient page-pool allocation failure the initial event in every
+  wedge, or can another NAPI exit path leave the same all-CPU-owned ring?
+- Does recovering from a refill wedge make the release race more likely by
+  entering teardown with a frame waiting in the MAC receive FIFO?
 - Is the three-channel reset at probe enough to clear a channel left running
   by the previous kernel, or does it need to run at teardown as well?
