@@ -87,7 +87,7 @@ The kernel options only expose the interfaces.  Include matching standard
 userspace tools such as `perf`, `trace-cmd` and, when selected, `dropwatch` in
 the diagnostic userspace.
 
-## 1. Backport the receive descriptor-exhaustion fix
+## 1. Fix receive descriptor-exhaustion recovery
 
 Backport upstream commit `45d100ee0d6e` ("net: stmmac: dwmac: Disable
 flushing frames on Rx Buffer Unavailable") to the Linux 6.18 patch queue:
@@ -101,14 +101,29 @@ The complete fix has two required parts:
    receive FIFO instead of being flushed and desynchronising the FIFO from the
    DMA.
 2. Write receive poll demand after returning descriptors to DMA ownership.
-   With DFF set, descriptor exhaustion suspends the receive process, and poll
-   demand resumes it after refill.
+   With Disable Flushing of Received Frames [DFF] set, descriptor exhaustion
+   suspends the receive process, and poll demand resumes it after refill.
 
 Use the upstream implementation directly.  The backport can be removed when
 the port moves to Linux 6.19 or later.
 
 Keep the existing three-channel DMA reset at probe.  It is needed to clear DMA
 state inherited across a warm boot independently of the receive wedge.
+
+Patch `0018-net-stmmac-preserve-masked-rx-interrupt-status.patch` fixes a
+second exhaustion path in the legacy shared DMA interrupt handler. A Transmit
+Interrupt [TI] can invoke the handler while RX NAPI has Receive Interrupt
+Enable [RIE] masked. The handler previously acknowledged a simultaneous
+Receive Interrupt [RI] without scheduling RX NAPI, allowing the descriptor
+ring to empty after the receive wakeup was destroyed. The patch omits masked
+Receive Interrupt [RI] from the write-one-to-clear value so it can trigger
+normally when NAPI re-enables Receive Interrupt Enable [RIE].
+
+The cache-disabled 64-entry test `20260903T111341Z-rx64` passed about 17.47 GB
+through TCP, UDP-small, bidirectional, soak, interface-reopen, and link-flap
+cases with normal receive moderation. It preserved 41,434 masked Receive
+Interrupt [RI] events; 41,301, or 99.7%, coincided with Transmit Interrupt
+[TI]. No refill allocation failure or dirty-ring retry occurred.
 
 ## 2. Preserve a regression test
 
@@ -126,14 +141,20 @@ SSH to the board.  Exercise:
 - simultaneous transmit and receive traffic;
 - ping latency during sustained receive load;
 - interface down/up and link flap; and
-- CSR6 bit 24 after each interface reopen.
+- Disable Flushing of Received Frames [DFF] in the DMA Operation Mode
+  Register [CSR6] after each interface reopen.
 
-`rx_buf_unav_irq` cannot report exhaustion.  `dwmac1000_dma.c` writes
-`DMA_INTR_DEFAULT_MASK` to CSR7, which carries NIE, RIE, TIE, AIE, FBE and
-UNE and leaves RUE masked; the board reads back `0x0001A061`.
+`rx_buf_unav_irq` cannot report exhaustion. `dwmac1000_dma.c` writes
+`DMA_INTR_DEFAULT_MASK` to the DMA Interrupt Enable Register [CSR7]. It sets
+Normal Interrupt Summary Enable [NIE], Receive Interrupt Enable [RIE],
+Transmit Interrupt Enable [TIE], Abnormal Interrupt Summary Enable [AIE],
+Fatal Bus Error Enable [FBE], and Transmit Underflow Enable [UNE], while
+leaving Receive Buffer Unavailable Enable [RUE] clear; the board reads back
+`0x0001A061`.
 `dwmac_dma_interrupt` increments the counter inside the abnormal-interrupt
 summary, and the summary bit is the OR of the enabled
-abnormal sources, so a Receive Buffer Unavailable event sets CSR5 bit 7,
+abnormal sources, so a Receive Buffer Unavailable [RU] event sets bit 7 of
+the DMA Status Register [CSR5],
 raises no interrupt and leaves the counter at zero however often the ring runs
 dry.
 
@@ -142,18 +163,22 @@ refilled suspends the DMA, and a suspended receive path takes the board off
 the network within seconds, so a run that carries its traffic through to the
 end has demonstrated the repair by completing.
 
-`tools/ethernet-rx-ring-watch.c` polls the receive-process state in CSR5 and
+`tools/ethernet-rx-ring-watch.c` polls the receive-process state in the DMA
+Status Register [CSR5] and
 reports entries into state 4 and the time spent there, which no standard
 interface exposes.  Use it when the question is how often or how long the
-ring runs dry, not as a precondition for the regression test.  Unmasking RUE
+ring runs dry, not as a precondition for the regression test. Unmasking
+Receive Buffer Unavailable Enable [RUE]
 would make the counter real, but it adds an interrupt per exhaustion event to
 the path under test and so cannot be carried into the throughput baseline.
 
 Record transferred bytes, throughput, packet rate, ring size, CPU use,
-`NET_RX`, interrupt counts, retransmits, drops, checksum errors, CSR5 and the
+`NET_RX`, interrupt counts, retransmits, drops, checksum errors, the DMA
+Status Register [CSR5], and the
 `rx_buf_unav_irq`/`rx_process_stopped_irq` counters.
 
-Descriptor exhaustion, an RU event, or a temporary receive state 4 is not a
+Descriptor exhaustion, a Receive Buffer Unavailable [RU] event, or a
+temporary receive state 4 is not a
 failure.  The test passes when every case completes: traffic continues, the
 board stays reachable, the interface reopens, and the error counters remain
 clean.
@@ -164,7 +189,8 @@ runtime resizing independently before advertising it as supported.
 
 ## 3. Retain and validate Type-2 receive checksum offload
 
-The glue supplies `STMMAC_RX_COE_TYPE2` because CSR58 advertises the engine in
+The glue supplies `STMMAC_RX_COE_TYPE2` because the DMA Hardware Feature
+Register [CSR58] advertises the engine in
 the measured DMA channel 0 and channel 1 windows, the IPC bit is writable, and
 the vendor uses the same descriptor result.  At 30,000 packets per second it
 reduced `NET_RX` from 71% to 36% of one CPU, approximately 24 to 12 microseconds
@@ -180,7 +206,8 @@ that the receiving stack rejects them.  Capture the normal cases as well:
 - fragmented IPv4 where supported by the engine; and
 - checksum and receive-error counters before and after each run.
 
-`../dhb-ax-guide/doc/06-ethernet.md` records the CSR58 reads and the hardware
+`../dhb-ax-guide/doc/06-ethernet.md` records the DMA Hardware Feature Register
+[CSR58] reads and the hardware
 validation of Type-2 receive checksum offload.
 
 ## 4. Establish a corrected performance baseline
@@ -216,7 +243,8 @@ and filtered kernel tracing to locate it before adding driver instrumentation.
 
 ## 5. Evaluate transmit checksum offload separately
 
-CSR58 advertises transmit checksum insertion and the vendor pairs it with TX
+The DMA Hardware Feature Register [CSR58] advertises transmit checksum
+insertion and the vendor pairs it with TX
 store-and-forward.  It may reduce transmit CPU cost, but it must not be
 enabled as a simple platform-data bit.
 
@@ -260,12 +288,15 @@ Do not include these in the first tuning series:
 
 Keep each result in a separate logical change:
 
-1. Backport the upstream DFF and receive-refill poll-demand fix.
-2. Automate the standard-tool receive regression test and record target
+1. Backport the upstream Disable Flushing of Received Frames [DFF] and
+   receive-refill poll-demand fix.
+2. Preserve masked Receive Interrupt [RI] status in the shared legacy DMA
+   handler.
+3. Automate the standard-tool receive regression test and record target
    results.
-3. Update the maintained README and the official Ethernet guide.
-4. Retune ring size, interrupt coalescing and GRO from the corrected baseline.
-5. Investigate TX checksum offload as an independent experimental series.
+4. Update the maintained README and the official Ethernet guide.
+5. Retune ring size, interrupt coalescing and GRO from the corrected baseline.
+6. Investigate TX checksum offload as an independent experimental series.
 
 The first three steps establish a reliable maintained port.  Performance
 tuning follows from that stable baseline rather than being used to avoid a
@@ -275,12 +306,28 @@ hardware state the driver must recover from correctly.
 
 Newest entry first.
 
+### 2026-09-03, preserve masked receive interrupt status
+
+The RX stall is a shared-interrupt acknowledgement race, not a refill
+allocation failure. The legacy DMA handler cleared Receive Interrupt [RI]
+while Receive Interrupt Enable [RIE] was masked during RX NAPI, usually when
+Transmit Interrupt [TI] invoked the shared handler. All 64 descriptors could
+then complete without leaving an event to schedule another poll.
+
+`20260903T111341Z-rx64` passed the full cache-disabled debug suite with the
+normal Receive Interrupt Watchdog Timer [RIWT], including interface reopen
+and link flap. Of 41,434 masked Receive Interrupt [RI] events preserved by the
+fix, 41,301 coincided with Transmit Interrupt [TI]. The refill diagnostics
+recorded no allocation failure and no dirty-ring retry. The complete terminal
+ring captures, falsified theories, candidate comparison, and final evidence
+are in `plans/bug-rx-refill-stall.md`.
+
 ### 2026-09-02, the receive path writes to freed pages
 
 The debug kernel caught the corruption directly, at a 64-entry ring with no
 poller running: `20260902T224615Z-rx64`.  Three 30 s TCP runs and the UDP case
-passed, then the bidirectional case took the board off the network with CSR5
-`0x00680404`, receive state 4.
+passed, then the bidirectional case took the board off the network with the
+DMA Status Register [CSR5] at `0x00680404`, receive state 4.
 
 `PAGE_POISONING` reported twice:
 
@@ -294,7 +341,8 @@ pagealloc: memory corruption
 - Two 4-byte writes of the same value into a page held free and poisoned,
   32 bytes apart, which is one cache line and one receive descriptor stride.
 - Read little-endian the word is `0x004e0380`: as a receive descriptor status
-  that is OWN clear with a frame length of 78 bytes.  Descriptor writeback
+  that has DMA Ownership [OWN] clear and a frame length of 78 bytes.
+  Descriptor writeback
   into memory that is no longer the ring is the reading that fits, though it
   is inference rather than an established fact.
 - One report surfaced in `stmmac_napi_poll_rx` allocating for the receive page
@@ -308,10 +356,13 @@ pagealloc: memory corruption
 This displaces the earlier suspicion of the poller.  Every previous failure
 happened in a boot where the poller had run, but this run had none, and the
 corruption is the same class.  It also explains the ext4 oops, the
-`rss-counter` complaints and the wedges as one fault rather than three.
+`rss-counter` complaints.  A later cache-disabled run wedged before any
+interface release, with no poison report and a structurally valid ring whose
+descriptors were all CPU-owned, so the receive stall is a separate fault.
 
-The evidence, the reproduction and the ways to establish the cause are kept
-in `plans/bug-rx-writes-freed-pages.md`.
+The corruption evidence and investigation remain in
+`plans/bug-rx-writes-freed-pages.md`.  The stall evidence, upstream match and
+fix plan are in `plans/bug-rx-refill-stall.md`.
 
 ### 2026-09-02, debug kernel
 
@@ -338,8 +389,9 @@ Step 2 passes at a 64-entry ring, no poller running:
   the interface reopen and 2.80 GB after the link flap.  About 23.5 GB through
   64 descriptors with no stall.
 - `ethtool -r` is supported, so the link flap ran rather than being skipped.
-- DFF survived both recovery cases, CSR5 was never left suspended, and no CRC,
-  frame or length error counter moved.
+- Disable Flushing of Received Frames [DFF] survived both recovery cases, the
+  DMA Status Register [CSR5] was never left suspended, and no CRC, frame, or
+  length error counter moved.
 - Both recovery cases completed for the first time.  Every earlier failure
   happened in a boot where `ethernet-rx-ring-watch` had been present; this run
   had none.
@@ -374,9 +426,11 @@ Step 1 committed.  Steps 3 to 5 untouched.
   orders of magnitude.  Suspended residency as a fraction of the window is the
   figure that compares across intervals.  Every result carries its interval in
   the poller's `# interval_us` line.
-- `rx_buf_unav_irq` stayed 0 through that run while the poller saw `ru_seen=1`.
-  CSR7 reads `0x0001A061`, so RUE is masked.
-- The board also wedges outright: CSR5 `0x00680404`, receive state 4, eth0
+- `rx_buf_unav_irq` stayed 0 through that run while the poller saw
+  `ru_seen=1`. The DMA Interrupt Enable Register [CSR7] reads `0x0001A061`,
+  so Receive Buffer Unavailable Enable [RUE] is clear.
+- The board also wedges outright: the DMA Status Register [CSR5] reads
+  `0x00680404`, receive state 4, with eth0
   interrupts frozen, `dmesg` clean.  Writing poll demand to `0x101c1108` gave
   `0x00680484` and state 4 again, so the DMA was healthy and the driver was
   not refilling.  Empty ring suspends the DMA, no frame raises no interrupt,
@@ -391,8 +445,9 @@ Step 1 committed.  Steps 3 to 5 untouched.
   that boot until it ran.
 - To separate them, run the repro two or three times from a fresh boot with
   the poller never started.
-- Read CSR5 before calling the board wedged.  State 4 with frozen interrupts is
-  the wedge; state 7 with interrupts advancing is a host path problem.
+- Read the DMA Status Register [CSR5] before calling the board wedged. State 4
+  with frozen interrupts is the wedge; state 7 with interrupts advancing is
+  a host path problem.
 - Throughput, four inbound TCP streams at a 64-entry ring: 706 to 712 Mbit/s
   clean, 534 Mbit/s with the poller, which holds a CPU at 5 to 8 million reads
   per second.
