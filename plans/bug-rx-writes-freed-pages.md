@@ -66,6 +66,59 @@ receive process state 7, and both `rx_refill_alloc_failed` and
 after the UART evidence was collected and reached the Linux login prompt.
 Post-reboot filesystem and kernel-log checks remain outstanding.
 
+## Controlled old-ring correlation after stall recovery
+
+A fresh-boot run on 2026-09-04 correlated both forms of corruption with exact
+pre-teardown receive-ring addresses:
+`artifacts/ethernet-tests/20260904T120226Z-focused-bidir-fresh-boot-recovery-3/`.
+The unfixed 64-entry debug kernel stalled after 15 seconds of four-stream
+bidirectional TCP. Returning one descriptor to DMA and writing DMA Receive
+Poll Demand Register [CSR2] restarted receive DMA and NAPI. Receive packets
+and refilled descriptors both advanced by 1,408, and Receive Process State
+[RS] changed from suspended state 4 to running state 7.
+
+Before cycling `eth0`, the complete ring dump recorded:
+
+```text
+Receive Descriptor List Address Register [CSR3] 0x81fb2000
+descriptor 7 address                             0x81fb20e0
+descriptor 7 status                              0x804e0380
+descriptor 7 receive buffer                      0x81ec0040
+descriptor 8 address                             0x81fb2100
+descriptor 8 status                              0x804e0380
+```
+
+The reopen installed a new receive ring at `0x81e9c000`. Controlled process
+allocation then detected corruption in two poisoned pages:
+
+```text
+81fb20e0: 20 03 ba 00 aa aa aa aa ...
+81fb2100: 80 03 44 00
+page: ... pfn:0x81fb2
+
+81ec0040: 00 18 ae 3c a2 49 80 da 13 77 b9 b2 86 dd ...
+page: ... pfn:0x81ec0
+```
+
+Page `0x81fb2000` is the exact freed old descriptor ring. The words written at
+the old descriptor 7 and 8 offsets are new receive completion statuses
+`0x00ba0320` and `0x00440380`, with DMA Ownership [OWN] clear. Page
+`0x81ec0000` held descriptor 7's exact old receive buffer; the bytes at
+`0x81ec0040` are a received IPv6 frame addressed to the board.
+
+The poison surrounding the targeted descriptor words establishes that the
+writebacks happened after the page was freed. The complete Ethernet frame at
+the exact old buffer address establishes that receive DMA, rather than an
+unrelated CPU writer, retained access to the freed resources. Page allocation
+debugging reported the damage later, when `copy_process()` reused the pages;
+its timestamps are detection times rather than write times.
+
+The interface went down at kernel time `588.070255`, link returned at
+`591.587422`, and the allocator detected the two corrupt pages at `637.818232`
+and `638.157811`. A 60-second post-reopen connectivity check received all 300
+ICMP replies. The board was rebooted immediately; the next boot mounted the
+root filesystem normally and reported no filesystem error.
+
 ## Earlier descriptor-writeback evidence
 
 `0x004e0380` read as a receive descriptor status has DMA Ownership [OWN]
@@ -96,7 +149,7 @@ interface and may have exposed a teardown race. Preserving masked Receive
 Interrupt [RI] status now lets the corruption test reach its reopen phase
 reliably; it is not a proposed fix for the memory corruption itself.
 
-## Thesis: the ring is freed before the receive process stops
+## Root cause: receive DMA is not quiesced before ring resources are freed
 
 `__stmmac_release()` stops the DMA and frees the ring in consecutive
 statements:
@@ -126,17 +179,20 @@ window writes into memory the kernel has already reclaimed, which is the
 observed corruption.
 
 This race does not explain the fresh-boot wedge above: no release had run and
-the live descriptor ring was still allocated and correctly programmed.  It
-remains a candidate for the corruption that follows an interface reopen.
+the live descriptor ring was still allocated and correctly programmed.
 
-This is a thesis. What supports it is the code path above, the two corruption
-captures, the descriptor-shaped value, the 32-byte spacing, and the timing
-after a reopen. What is missing is any observation of the receive process
-still running at the moment the ring is freed.
+The controlled 2026-09-04 capture establishes the lifetime failure: after the
+reopen installed a different ring, receive DMA wrote completion statuses into
+the poisoned old ring and a complete frame into an exact poisoned old receive
+buffer. What remains unobserved is the narrow interval inside
+`__stmmac_release()`: whether the receive process still reports running after
+Start Receive [SR] is cleared, or whether an additional hardware queue or
+prefetched transaction survives a stopped state.
 
-If it holds, the fix is to poll the DMA Status Register [CSR5] for the stopped
+The first fix to test is polling the DMA Status Register [CSR5] for the stopped
 receive state with a timeout after clearing Start Receive [SR] and before
-freeing, or to soft-reset the channel at release as
+freeing. If a stopped state does not prevent the stale writes, test a channel
+soft reset at release as
 `stmmac_init_dma_engine()` already does at open. The race is in mainline
 `dwmac_lib.c`, not in this port's glue, so the hand-rolled three-channel reset
 is not implicated.
@@ -148,7 +204,7 @@ Status Register [CSR5] between them. Capture the relevant DMA registers inside
 the free. Store the samples and print them after the free so the logging does
 not change the interval under investigation.
 
-## Thesis: outer cache maintenance around DMA
+## Secondary question: outer cache timing
 
 `linux.config` carries `CONFIG_OUTER_CACHE`, `CONFIG_OUTER_CACHE_SYNC`,
 `CONFIG_CACHE_HIL2V200` and `CONFIG_CACHE_L2X0`, from the L2 work of
@@ -194,15 +250,19 @@ freed-page write immediately after the interface reopen. The kernel reported
 `hil2v200: enabled outer cache, 256 KB, 8 ways, 32-byte lines` at boot. This
 one-run A/B result strongly implicates outer-cache state or its interaction
 with teardown, but repetition is required because the fault is intermittent.
-It does not yet distinguish incorrect cache maintenance from DMA continuing
-after the ring is freed.
+The exact old-ring and old-buffer correlation on 2026-09-04 establishes DMA
+continuing after the resources are freed. Outer-cache state may still change
+the race timing, but incorrect cache maintenance is no longer a competing
+explanation for the targeted descriptor writebacks and received frame.
 
 ## Reproduction
 
-Not deterministic. Two full runs at a 64-entry ring passed before the first
-page-poison capture, and runs at the 512-entry default have passed repeatedly.
-Sustained inbound traffic followed by an interface reopen is the shape that
-has failed;
+The receive stall used to enter the controlled recovery remains probabilistic:
+two fresh-boot 120-second runs passed before the third stalled after 15 seconds.
+After manually restarting receive DMA, cycling `eth0` and forcing page reuse
+exposed writes into exact old ring resources in that first controlled attempt.
+Sustained inbound traffic followed by an interface reopen is the general shape
+that has failed;
 `tools/ethernet-rx-recovery-test.sh` and `tools/ethernet-rx-wedge-repro.sh`
 both drive it.
 
@@ -224,23 +284,28 @@ Take the next steps in this order.
 
 1. Make the traffic harness inspect kernel diagnostics after every phase and
    fail immediately on page corruption, an oops, or another kernel fault.
-2. Instrument `__stmmac_release()` to capture the DMA Receive Descriptor List
+2. Turn the controlled 2026-09-04 sequence into a harness: record every old
+   descriptor and buffer address, reopen the interface, force safe page reuse,
+   and correlate every corruption report with the old mappings.
+3. Instrument `__stmmac_release()` to capture the DMA Receive Descriptor List
    Address Register [CSR3], DMA Status Register [CSR5], DMA Operation Mode
    Register [CSR6], DMA Current Host Receive Descriptor Register [CSR19], and
    DMA Current Host Receive Buffer Address Register [CSR21]:
    - immediately before `stmmac_stop_all_dma()`;
    - immediately after `stmmac_stop_all_dma()` returns;
    - immediately before `free_dma_desc_resources()` frees the ring.
-3. Store all three samples first and print them only after the ring has been
+4. Store all three samples first and print them only after the ring has been
    freed, so UART output cannot delay or conceal the race being measured.
-4. Repeat fresh-boot 64-entry runs with the outer cache enabled and disabled.
-   Separate runs with and without the reopen phase will establish whether
-   teardown is necessary. The register samples will show whether receive DMA
-   remains active or points at the old ring when it is freed.
 5. If receive DMA is still active at the pre-free sample, test a bounded wait
    for the receive process to stop after clearing Start Receive [SR]. Treat a
    timeout as a diagnostic failure rather than freeing the ring anyway.
-6. Reboot immediately after every corruption report. The root filesystem is
+6. If the pre-free sample reports the receive process stopped, or the bounded
+   wait does not prevent stale writes, test a channel soft reset before freeing
+   the old ring.
+7. Repeat the discriminating test with the outer cache disabled only after the
+   quiescence behavior is instrumented; cache state is now a timing variable,
+   not the primary competing mechanism.
+8. Reboot immediately after every corruption report. The root filesystem is
    mounted read-write, so check it after reboot before treating the disk as
    sound.
 
