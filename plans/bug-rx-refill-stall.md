@@ -2,13 +2,23 @@
 
 ## Status
 
-The failure is a race in the legacy stmmac shared DMA interrupt handler.
-Patch `0018-net-stmmac-preserve-masked-rx-interrupt-status.patch` implements
-the candidate fix and adds temporary counters that observe the race.
+The failure is a confirmed race in the legacy stmmac shared DMA interrupt
+handler. An unfixed live trace captured the destructive acknowledgement at the
+interrupt that made the stall permanent. Patch
+`0018-net-stmmac-preserve-masked-rx-interrupt-status.patch` implements the fix
+and adds temporary counters that observe the race.
 
 Patch `0016-net-stmmac-record-rx-refill-starvation.patch` is instrumentation
 only. It helped exclude receive-buffer allocation failure and does not change
 recovery behavior.
+
+Patch `0012-net-stmmac-dwmac-disable-flushing-frames-on-rx-buffer-unavailable.patch`
+is a backport of upstream commit `45d100ee0d6e` with the receive-poll-demand
+write routed through the Hi3531 per-instance DMA register base. It writes
+Receive Poll Demand [CSR2] after receive descriptors are refilled. That
+restarts a DMA already suspended for buffer unavailability, but it does not
+protect a receive status that a later shared interrupt acknowledges while
+receive interrupts are masked.
 
 This bug is distinct from the receive-path memory corruption tracked in
 [`bug-rx-writes-freed-pages.md`](bug-rx-writes-freed-pages.md). The stall
@@ -90,20 +100,30 @@ The legacy stmmac receive and transmit paths share one DMA interrupt handler.
 `dwmac_dma_interrupt()` reads and acknowledges the combined receive and
 transmit status.
 
-The failure sequence is:
+The simplest failure sequence, and the one observed in the live capture, is:
 
-1. RX NAPI clears Receive Interrupt Enable [RIE] while polling.
-2. Receive Interrupt [RI] becomes pending during that interval.
-3. Transmit Interrupt [TI] invokes the shared DMA interrupt handler.
-4. The handler reads both causes from DMA Status Register [CSR5]. Because
+1. An initial Receive Interrupt [RI] schedules RX NAPI, which clears Receive
+   Interrupt Enable [RIE] while polling.
+2. RX NAPI processes completed descriptors and returns them to the DMA. It has
+   not yet restored Receive Interrupt Enable [RIE].
+3. The RX DMA consumes every available receive descriptor. The final
+   completion leaves Receive Interrupt [RI] pending while Receive Interrupt
+   Enable [RIE] is clear, and the DMA suspends because it owns no descriptor.
+4. Transmit Interrupt [TI] invokes the shared DMA interrupt handler.
+5. The handler reads both causes from DMA Status Register [CSR5]. Because
    Receive Interrupt Enable [RIE] is clear, it correctly declines to schedule
-   RX NAPI again.
-5. The handler nevertheless includes Receive Interrupt [RI] in its
+   RX NAPI again. It nevertheless includes Receive Interrupt [RI] in its
    write-one-to-clear acknowledgement, destroying the pending receive event.
-6. NAPI completes and restores Receive Interrupt Enable [RIE], but the event
-   that should wake the next poll is gone. The DMA consumes the remaining
-   descriptors, suspends when the ring is empty, and cannot generate another
-   receive completion.
+6. The interrupted RX NAPI invocation completes and restores Receive Interrupt
+   Enable [RIE], but the event that should wake the next poll is gone. The DMA
+   is already suspended with the entire ring CPU-owned, so it cannot generate
+   another receive completion.
+
+The DMA need not always exhaust the ring before the destructive
+acknowledgement. A coalesced-tail execution is also possible if it has passed
+the last completion that asserts Receive Interrupt [RI] and subsequently
+drains only interrupt-suppressed descriptors. The zero-tail execution above
+needs fewer hardware-behavior qualifications and matches the captured state.
 
 The failure is therefore not that the driver detects an empty ring and fails
 to refill it. The driver loses the interrupt that would make it inspect and
@@ -207,6 +227,33 @@ required by the proposed root cause. DMA Status Register [CSR5] ended at
 `0x006e0000`, with receive-process state 7 rather than the terminal suspended
 state 4.
 
+An unfixed diagnostic run captured the complete zero-tail transition in
+`artifacts/ethernet-tests/20260904T051608Z-focused-bidir-live-capture-1/`.
+At the decisive shared interrupt:
+
+- DMA Status Register [CSR5] was `0x006904c5`, with Receive Interrupt [RI] and
+  Transmit Interrupt [TI] pending.
+- DMA Interrupt Enable Register [CSR7] was `0x0001a021`, with Receive Interrupt
+  Enable [RIE] clear.
+- The handler requested TX processing only but acknowledged Receive Interrupt
+  [RI].
+- RX NAPI was active, `cur_rx=dirty_rx=39`, and no descriptor was DMA-owned.
+
+About 8.54 ms later, RX NAPI restored Receive Interrupt Enable [RIE]. Receive
+Interrupt [RI] was already clear, all descriptors remained CPU-owned, and the
+receive process remained suspended. This directly observes the destructive
+acknowledgement rather than inferring it from the final ring state.
+
+A guarded recovery experiment in
+`artifacts/ethernet-tests/20260904T153348Z-focused-bidir-napi-recovery-minimal-hook-1/`
+scheduled the normal RX NAPI path without changing descriptor ownership
+directly. NAPI processed and refilled 63 completed descriptors, a Receive Poll
+Demand [CSR2] write restarted DMA, and the ring returned to all
+64 descriptors DMA-owned. Host-to-board ICMP and repeated SSH connections
+then remained stable. This establishes that the terminal ring was internally
+recoverable through the normal driver lifecycle; the missing RX wakeup was
+what prevented progress.
+
 The cache-enabled run later reported page-poison corruption after an interface
 reopen. Traffic continued and no receive stall occurred. That result belongs
 to the separate memory-corruption bug; it does not invalidate the receive-ring
@@ -231,17 +278,25 @@ liveness result.
   NAPI when the next descriptor was CPU-owned prevented the permanent
   terminal state, but could keep NAPI continuously scheduled under load. It
   treated the symptom and was replaced by preserving the lost interrupt.
+- **Receive Poll Demand after refill:** Patch 0012 was present in the kernel
+  used for the live capture. Its CSR2 write occurs when NAPI returns
+  descriptors. The captured DMA consumed those descriptors afterward and the
+  shared handler then destroyed the resulting masked Receive Interrupt [RI],
+  so the earlier kick could not prevent the stall.
 
-## Remaining work
+## Close Out
 
-1. Make the traffic harness fail immediately on an oops, page corruption, or
-   another kernel diagnostic so a liveness pass cannot conceal the separate
-   memory-corruption failure.
-2. Repeat the fixed 64-entry-ring test across fresh boots on a non-debug kernel
-   without interface teardown.
-3. Validate the fixed driver with the production 512-entry ring after the
-   diagnostic check is in place.
-4. Remove patch 0016 and the two temporary counters from patch 0018 after the
-   repeated validation, retaining only the masked-status acknowledgement fix.
-5. Decide whether the fix should be submitted upstream for all legacy DWMAC
-   integrations or initially scoped to this hardware.
+1. Add fail-fast diagnostics to the traffic harness. An oops, page-corruption
+   report, or related kernel diagnostic must invalidate a liveness run instead
+   of being concealed by it.
+2. Run repeated fixed-kernel validation from fresh boots without interface
+   teardown. Exercise the diagnostic 64-entry ring and the production
+   512-entry ring, and confirm that the temporary patch 0018 counters advance
+   during the 64-entry tests.
+3. Produce and validate the final production patch set. Remove
+   instrumentation-only patch 0016 and the two temporary counters from patch
+   0018, retain only the masked-Receive Interrupt [RI] acknowledgement fix,
+   rebuild, and run a final soak on that exact image.
+4. Commit the final patch and completed documentation. Decide separately
+   whether to submit the fix upstream for all legacy DWMAC integrations or
+   initially scope it to this hardware.
