@@ -4,8 +4,8 @@
  * The interval trades resolution against the bus bandwidth the poll loop
  * takes from the DMA it is watching.  Suspended episodes have measured from
  * tens of microseconds to 26 milliseconds, so the default catches all but the
- * shortest while costing a few thousand reads a second.  A zero interval
- * busy-polls, which measurably slows the traffic under test.
+ * shortest.  The default busy-polls so this diagnostic can deliberately
+ * perturb the interrupt timing; a nonzero interval yields between reads.
  *
  * Sleeping below the timer tick needs CONFIG_HIGH_RES_TIMERS in the kernel;
  * without it every interval rounds up to 1/CONFIG_HZ.
@@ -31,7 +31,7 @@
 #define DMA_STATUS_RU UINT32_C(0x00000080)
 #define DMA_STATUS_RPS UINT32_C(0x00000100)
 #define DMA_RX_SUSPENDED 4
-#define DEFAULT_INTERVAL_NS 200000L
+#define DEFAULT_INTERVAL_NS 0L
 
 static volatile sig_atomic_t stopping;
 
