@@ -24,6 +24,7 @@ LOGIN_TIMEOUT = 180
 TRANSFER_TIMEOUT = 120
 VENDOR_PASSWORD = "1001chin"
 VENDOR_KERNEL_PREFIX = "3.0.8"
+BOOT_ARGUMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._,:/@+=-]*")
 
 
 class BootFailure(Exception):
@@ -55,6 +56,14 @@ def ssh(host, command, capture=False):
     return run(("ssh", "-o", "BatchMode=yes", host, command), capture=capture)
 
 
+def boot_argument(value):
+    if not BOOT_ARGUMENT.fullmatch(value):
+        raise argparse.ArgumentTypeError(
+            "boot arguments may only contain kernel command-line characters"
+        )
+    return value
+
+
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         prog="dvr-boot.sh",
@@ -67,11 +76,20 @@ def parse_args(argv):
         action="store_true",
         help="report the current console state without booting",
     )
+    parser.add_argument(
+        "--bootarg",
+        action="append",
+        default=[],
+        type=boot_argument,
+        help="append a temporary kernel command-line argument",
+    )
     parser.add_argument("--transcript")
     parser.add_argument("profile", nargs="?")
     args = parser.parse_args(argv)
     if args.status and args.profile:
         parser.error("--status does not accept a profile")
+    if args.status and args.bootarg:
+        parser.error("--status does not accept --bootarg")
     if not args.status and not args.profile:
         parser.error("a profile is required unless --status is used")
     return args
@@ -642,7 +660,7 @@ def boot_vendor(console):
     fail("vendor Linux login prompt did not appear before the timeout", 9)
 
 
-def boot(profile, settings: LocalSettings, console):
+def boot(profile, settings: LocalSettings, console, bootargs=()):
     reach_uboot(settings, console)
     if profile.boot.action == "vendor":
         boot_vendor(console)
@@ -655,9 +673,9 @@ def boot(profile, settings: LocalSettings, console):
     if profile.kernel.source == "tftp" or profile.rootfs.source == "tftp":
         configure_uboot_network(settings, console)
 
-    extra = ()
+    extra = tuple(bootargs)
     if profile.rootfs.source == "tftp":
-        extra = (load_initramfs(profile, console),)
+        extra = (load_initramfs(profile, console), *extra)
     configure_bootargs(profile, console, extra)
     load_kernel(profile, console)
     print("Booting from RAM...")
@@ -699,6 +717,8 @@ def main(argv=None):
             if args.status
             else load_profile(args.profile, local_settings=settings)
         )
+        if args.bootarg and profile.boot.action == "prompt":
+            raise ProfileError("prompt profiles do not accept --bootarg")
         preflight(profile, settings)
         if args.check:
             print("Preflight passed; the UART was not accessed.")
@@ -708,7 +728,7 @@ def main(argv=None):
         if args.status:
             report_status(console)
             return 0
-        boot(profile, settings, console)
+        boot(profile, settings, console, args.bootarg)
         return 0
     except (BootFailure, ProfileError) as error:
         print(f"error: {error}", file=sys.stderr)

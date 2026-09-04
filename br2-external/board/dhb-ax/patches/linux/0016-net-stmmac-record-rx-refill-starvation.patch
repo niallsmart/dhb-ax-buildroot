@@ -1,0 +1,120 @@
+From: DHB_AX local port <local@invalid>
+Subject: [LOCAL ONLY] net: stmmac: record RX refill starvation
+
+Expose enough state through ethtool statistics to distinguish a receive
+refill failure from other ways the DMA can lose its descriptor ring.
+
+Count page allocation failures, refill attempts, and descriptors returned
+to DMA ownership. Whenever a poll would otherwise complete, retain the
+latest cur_rx, dirty_rx, and dirty descriptor count. These are deliberately
+low-overhead counters and gauges; the receive hot path does not print to
+the console.
+---
+ drivers/net/ethernet/stmicro/stmmac/common.h         |  7 +++++++
+ drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c |  7 +++++++
+ drivers/net/ethernet/stmicro/stmmac/stmmac_main.c    | 25 +++++++++++++++++++++++--
+ 3 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/common.h b/drivers/net/ethernet/stmicro/stmmac/common.h
+--- a/drivers/net/ethernet/stmicro/stmmac/common.h
++++ b/drivers/net/ethernet/stmicro/stmmac/common.h
+@@ -125,6 +125,13 @@ struct stmmac_extra_stats {
+ 	unsigned long tx_collision;
+ 	/* Receive errors */
+ 	unsigned long rx_desc;
++	unsigned long rx_refill_alloc_failed;
++	unsigned long rx_refill_calls;
++	unsigned long rx_refill_descriptors;
++	unsigned long rx_refill_last_descriptors;
++	unsigned long rx_napi_complete_cur;
++	unsigned long rx_napi_complete_dirty;
++	unsigned long rx_napi_complete_pending;
+ 	unsigned long sa_filter_fail;
+ 	unsigned long overflow_error;
+ 	unsigned long ipc_csum_error;
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+@@ -60,6 +60,13 @@ static const struct stmmac_stats stmmac_gstrings_stats[] = {
+ 	STMMAC_STAT(tx_ip_header_error),
+ 	/* Receive errors */
+ 	STMMAC_STAT(rx_desc),
++	STMMAC_STAT(rx_refill_alloc_failed),
++	STMMAC_STAT(rx_refill_calls),
++	STMMAC_STAT(rx_refill_descriptors),
++	STMMAC_STAT(rx_refill_last_descriptors),
++	STMMAC_STAT(rx_napi_complete_cur),
++	STMMAC_STAT(rx_napi_complete_dirty),
++	STMMAC_STAT(rx_napi_complete_pending),
+ 	STMMAC_STAT(sa_filter_fail),
+ 	STMMAC_STAT(overflow_error),
+ 	STMMAC_STAT(ipc_csum_error),
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+@@ -4749,9 +4749,13 @@ static inline void stmmac_rx_refill(struct stmmac_priv *priv, u32 queue)
+ {
+ 	struct stmmac_rx_queue *rx_q = &priv->dma_conf.rx_queue[queue];
+ 	int dirty = stmmac_rx_dirty(priv, queue);
++	unsigned int pending = dirty;
++	unsigned int refilled = 0;
+ 	unsigned int entry = rx_q->dirty_rx;
+ 	gfp_t gfp = (GFP_ATOMIC | __GFP_NOWARN);
+ 
++	if (pending)
++		priv->xstats.rx_refill_calls++;
+ 	if (priv->dma_cap.host_dma_width <= 32)
+ 		gfp |= GFP_DMA32;
+ 
+@@ -4769,8 +4773,10 @@ static inline void stmmac_rx_refill(struct stmmac_priv *priv, u32 queue)
+ 
+ 		if (!buf->page) {
+ 			buf->page = page_pool_alloc_pages(rx_q->page_pool, gfp);
+-			if (!buf->page)
++			if (!buf->page) {
++				priv->xstats.rx_refill_alloc_failed++;
+ 				break;
++			}
+ 		}
+ 
+ 		if (priv->sph && !buf->sec_page) {
+@@ -4778,6 +4784,8 @@ static inline void stmmac_rx_refill(struct stmmac_priv *priv, u32 queue)
+ 			buf->sec_page = page_pool_alloc_pages(rx_q->page_pool, gfp);
+-			if (!buf->sec_page)
++			if (!buf->sec_page) {
++				priv->xstats.rx_refill_alloc_failed++;
+ 				break;
++			}
+ 
+ 			buf->sec_addr = page_pool_get_dma_addr(buf->sec_page);
+ 		}
+@@ -4805,8 +4813,13 @@ static inline void stmmac_rx_refill(struct stmmac_priv *priv, u32 queue)
+ 		stmmac_set_rx_owner(priv, p, use_rx_wd);
+ 
+ 		entry = STMMAC_NEXT_ENTRY(entry, priv->dma_conf.dma_rx_size);
++		refilled++;
+ 	}
+ 	rx_q->dirty_rx = entry;
++	if (pending) {
++		priv->xstats.rx_refill_descriptors += refilled;
++		priv->xstats.rx_refill_last_descriptors = refilled;
++	}
+ 	rx_q->rx_tail_addr = rx_q->dma_rx_phy +
+ 			    (rx_q->dirty_rx * sizeof(struct dma_desc));
+ 	stmmac_set_rx_tail_ptr(priv, priv->dmaaddr, rx_q->rx_tail_addr, queue);
+@@ -5685,5 +5698,13 @@ static int stmmac_rx(struct stmmac_priv *priv, int limit, u32 queue)
+ 	priv->xstats.rx_dropped += rx_dropped;
+ 	priv->xstats.rx_errors += rx_errors;
++
++	if (count < limit) {
++		u32 dirty = stmmac_rx_dirty(priv, queue);
++
++		priv->xstats.rx_napi_complete_cur = rx_q->cur_rx;
++		priv->xstats.rx_napi_complete_dirty = rx_q->dirty_rx;
++		priv->xstats.rx_napi_complete_pending = dirty;
++	}
+ 
+ 	return count;
+ }
+-- 
+2.51.0

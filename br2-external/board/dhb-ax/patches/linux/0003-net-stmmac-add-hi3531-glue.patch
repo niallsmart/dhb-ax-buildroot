@@ -119,7 +119,7 @@ diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c b/drivers/net/et
 new file mode 100644
 --- /dev/null
 +++ b/drivers/net/ethernet/stmicro/stmmac/dwmac-hi3531.c
-@@ -0,0 +1,323 @@
+@@ -0,0 +1,335 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * HiSilicon Hi3531 (godnet) DWMAC glue
@@ -169,8 +169,8 @@ new file mode 100644
 +#define HI3531_TNK_ID			0x900c
 +
 +/*
-+ * Aggregator bit assignment, read out of the vendor ISR: DMA channel n
-+ * reports in bit 2 + n and MAC n reports in bit 5 + n.  The remaining bits
++ * TNK_INTR_STAT and TNK_INTR_EN use the same source assignment: DMA channel
++ * n occupies bit 2 + n and MAC n occupies bit 5 + n.  The remaining bits
 + * (0, 1, 4 and 7) belong to the TOE engine.
 + */
 +#define HI3531_TNK_INTR_DMA_CH1		BIT(3)
@@ -201,7 +201,12 @@ new file mode 100644
 +static int hi3531_get_hw_feature(void __iomem *ioaddr,
 +				 struct dma_features *dma_cap)
 +{
-+	/* This pre-3.50 multi-channel integration has no usable CSR58. */
++	/*
++	 * Refuse the feature register so stmmac_hw_init keeps the
++	 * capabilities selected in probe.  Adopting the hardware's own set
++	 * would enable TX checksum offload and PMT/WOL that this port has
++	 * not validated.
++	 */
 +	return -EOPNOTSUPP;
 +}
 +
@@ -241,10 +246,17 @@ new file mode 100644
 +}
 +
 +/*
-+ * Interface mode, speed and duplex live in a 16-bit field of a CRG register,
-+ * one field per MAC, and are sampled while that MAC's interface wrapper is
-+ * held in reset.  The sequence and the bit assignment below mirror the
-+ * vendor driver's stmmac_adjust_link().
++ * The Synopsys MAC and the Hi3531 GMAC interface control are configured
++ * separately.  After PHY negotiation, stmmac configures the MAC core and
++ * calls this function to configure GMAC1's RGMII mode and speed to match.
++ *
++ * CRG + 0xec contains one 16-bit interface field per MAC; GMAC1 occupies
++ * bits 31:16.  The interface logic latches a new field while GMAC1's reset
++ * at CRG + 0xc8 is asserted, so assert reset, update the field, read it back
++ * to flush the write, and release reset.
++ *
++ * The fix_mac_speed callback does not provide the negotiated duplex value,
++ * so this port programs the interface field for full duplex.
 + */
 +static void hi3531_fix_mac_speed(void *arg, int speed, unsigned int mode)
 +{
@@ -355,11 +367,11 @@ new file mode 100644
 +		return ret;
 +
 +	/*
-+	 * Own the aggregator mask outright instead of OR-ing into it: the
-+	 * vendor driver enables every source, including the TOE bits nothing
-+	 * here can service, and only clears them from its remove path.  A
-+	 * kernel started after the vendor kernel would otherwise inherit
-+	 * interrupt sources it cannot acknowledge.
++	 * TNK gates the standard GMAC and DMA interrupt outputs onto the shared
++	 * SoC IRQ.  stmmac manages the individual causes inside GMAC1 and DMA
++	 * channel 1; expose only those two combined outputs here.  The shared
++	 * register can retain unrelated enables across a warm boot, so replace
++	 * the complete mask.
 +	 */
 +	intr_en = readl(dwmac->gmac + HI3531_TNK_INTR_EN);
 +	new_intr_en = HI3531_TNK_INTR_GMAC1_MASK;
@@ -374,6 +386,7 @@ new file mode 100644
 +{
 +	struct hi3531_dwmac *dwmac = arg;
 +
++	/* Leave no shared interrupt source enabled while stmmac is inactive. */
 +	writel(0, dwmac->gmac + HI3531_TNK_INTR_EN);
 +}
 +
@@ -409,14 +422,14 @@ new file mode 100644
 +	plat->exit = hi3531_dwmac_exit;
 +
 +	/*
-+	 * CSR58 is unusable, so select only capabilities established by the
-+	 * vendor configuration and target testing.  Enhanced descriptors are
-+	 * required; checksum offload, jumbo frames, PMT/WOL and forced TX
-+	 * store-and-forward remain unsupported.
++	 * CSR58 is not read for capabilities, so select those established by
++	 * the vendor configuration and target testing.  Enhanced descriptors
++	 * are required and the MAC checksums received frames; jumbo frames,
++	 * PMT/WOL, TX checksum offload and forced TX store-and-forward are not.
 +	 */
 +	plat->enh_desc = 1;
 +	plat->tx_coe = 0;
-+	plat->rx_coe = STMMAC_RX_COE_NONE;
++	plat->rx_coe = STMMAC_RX_COE_TYPE2;
 +	plat->bugged_jumbo = 0;
 +	plat->pmt = 0;
 +	plat->force_sf_dma_mode = 0;

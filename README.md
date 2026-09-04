@@ -107,7 +107,8 @@ The production profiles are `buildroot-usb-hdd`, `buildroot-tftp`,
 `vendor` resumes the factory boot path without changing saved U-Boot state.
 Use `dvr-boot --status` to identify the current console state and `--check` for
 a non-mutating preflight. `dvr-stage --kernel-only` skips an external root
-filesystem.
+filesystem. Use `--bootarg` to append temporary, validated kernel command
+line arguments without changing a profile.
 
 ## Storage bootstrap
 
