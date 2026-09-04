@@ -109,6 +109,65 @@ The failure is therefore not that the driver detects an empty ring and fails
 to refill it. The driver loses the interrupt that would make it inspect and
 refill the ring.
 
+## Live capture
+
+A temporary fixed-record trace captured the race directly with the unfixed
+acknowledgement behavior. The diagnostic image was Linux 6.18.42 from commit
+`794cdc2360eb6a6c8d55b32c50dc47e65d89cb47`, with patch 0016 present, patch
+0018 absent, and DebugFS enabled only to retrieve the in-memory trace. Its
+SHA-256 was
+`922f65999489a98754168a12a0c4c0eb3000f6f5825c8fdafb81398ab33ea754`.
+
+The first 64-entry-ring, four-stream bidirectional TCP trial stalled after 13
+seconds. The final candidate interrupt-handler record contained:
+
+```text
+raw DMA Status Register [CSR5]       0x006904c5
+DMA Interrupt Enable Register [CSR7] 0x0001a021
+acknowledgement value                0x000104c5
+handler result                       0x8, handle TX only
+NAPI scheduled / poll active         1 / 1
+poll generation                      6968
+cur_rx / dirty_rx                    39 / 39
+DMA Ownership [OWN] bitmap           0x0000000000000000
+```
+
+The DMA Status Register [CSR5] value had Receive Interrupt [RI], Transmit
+Interrupt [TI], Normal Interrupt Summary [NIS], Receive Buffer Unavailable
+[RU], Early Transmit Interrupt [ETI], and Transmit Buffer Unavailable [TU]
+set. Its receive-process state was 4. Receive Interrupt Enable [RIE] was clear
+and Transmit Interrupt Enable [TIE] was set in the DMA Interrupt Enable
+Register [CSR7]. The acknowledgement therefore cleared Receive Interrupt [RI]
+while RX NAPI was active and no descriptor remained DMA-owned.
+
+RX NAPI reached its re-enable point 8.54 ms later. Immediately before it
+restored Receive Interrupt Enable [RIE], the DMA Status Register [CSR5] was
+`0x00680405`: Receive Interrupt [RI], Normal Interrupt Summary [NIS], and
+Receive Buffer Unavailable [RU] were clear, the receive-process state remained
+4, both cursors remained 39, and the DMA Ownership [OWN] bitmap remained zero.
+The sample immediately after the enable write showed the DMA Interrupt Enable
+Register [CSR7] change from `0x0001a020` to `0x0001a060`, while the DMA Status
+Register [CSR5] and ring state did not change.
+
+The terminal Current Host Receive Descriptor Register [CSR19] was
+`0x8203b4e0`, ring entry 39. All 64 receive descriptors had DMA Ownership [OWN]
+clear and contained completed-frame status. Patch 0016 reported zero refill
+allocation failures. A second UART sample more than two minutes later found
+the RX counters, cursors, DMA Status Register [CSR5], DMA Interrupt Enable
+Register [CSR7], and Current Host Receive Descriptor Register [CSR19]
+unchanged, while transmit packets and NAPI polls continued advancing.
+
+This is the zero-tail ordering: ring exhaustion preceded the destructive
+acknowledgement. It disproves the trailing-descriptor ordering for this
+instance. The trace observed 252 candidate acknowledgements during the short
+run; 245 coincided with Transmit Interrupt [TI]. The instrumentation did not
+prevent reproduction, but one trial cannot determine whether it changed the
+failure rate.
+
+The raw trace, terminal captures, descriptor dump, exact diagnostic patch and
+kernel configuration are in
+`artifacts/ethernet-tests/20260904T051608Z-focused-bidir-live-capture-1/`.
+
 ## Fix
 
 Patch `0018-net-stmmac-preserve-masked-rx-interrupt-status.patch` changes the
