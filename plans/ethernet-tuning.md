@@ -322,63 +322,6 @@ recorded no allocation failure and no dirty-ring retry. The complete terminal
 ring captures, falsified theories, candidate comparison, and final evidence
 are in `plans/bug-rx-refill-stall.md`.
 
-### 2026-09-02, the receive path writes to freed pages
-
-The debug kernel caught the corruption directly, at a 64-entry ring with no
-poller running: `20260902T224615Z-rx64`.  Three 30 s TCP runs and the UDP case
-passed, then the bidirectional case took the board off the network with the
-DMA Status Register [CSR5] at `0x00680404`, receive state 4.
-
-`PAGE_POISONING` reported twice:
-
-```text
-pagealloc: memory corruption
-81ddf2a0: 80 03 4e 00 aa aa aa aa aa aa aa aa aa aa aa aa
-81ddf2b0: aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa
-81ddf2c0: 80 03 4e 00
-```
-
-- Two 4-byte writes of the same value into a page held free and poisoned,
-  32 bytes apart, which is one cache line and one receive descriptor stride.
-- Read little-endian the word is `0x004e0380`: as a receive descriptor status
-  that has DMA Ownership [OWN] clear and a frame length of 78 bytes.
-  Descriptor writeback
-  into memory that is no longer the ring is the reading that fits, though it
-  is inference rather than an established fact.
-- One report surfaced in `stmmac_napi_poll_rx` allocating for the receive page
-  pool, the other in `copy_process` allocating a page table, so the damage is
-  not confined to the network path.
-- Both followed the interface reopen and link flap: link down at 81 s, up at
-  86 s, down at 110 s, up at 114 s, corruption reported at 122 s and 128 s.
-- `DMA_API_DEBUG` reported nothing, so the driver's own map and unmap calls
-  are consistent.  Whatever writes is doing so outside the DMA API's view.
-
-This displaces the earlier suspicion of the poller.  Every previous failure
-happened in a boot where the poller had run, but this run had none, and the
-corruption is the same class.  It also explains the ext4 oops, the
-`rss-counter` complaints.  A later cache-disabled run wedged before any
-interface release, with no poison report and a structurally valid ring whose
-descriptors were all CPU-owned, so the receive stall is a separate fault.
-
-The corruption evidence and investigation remain in
-`plans/bug-rx-writes-freed-pages.md`.  The stall evidence, upstream match and
-fix plan are in `plans/bug-rx-refill-stall.md`.
-
-### 2026-09-02, debug kernel
-
-`linux.config` gains `DEBUG_KERNEL`, `DEBUG_VM`, `DEBUG_LIST`, `DEBUG_SG`,
-`DEBUG_NET`, `DEBUG_PAGEALLOC`, `PAGE_POISONING` and `DMA_API_DEBUG`, to catch
-the memory corruption nearer to whatever writes it.  `SLUB_DEBUG` was already
-built in, so `slub_debug=FZP` needs only a boot argument.
-
-- These belong in a diagnostic configuration rather than the production one.
-  Page-alloc debugging and poisoning cost real throughput, so no number from
-  this kernel belongs in the step 4 baseline.
-- KASAN stays off: it instruments CPU accesses, so a device writing over
-  memory by DMA is invisible to it, and there is no IOMMU here to trap the
-  write itself.  These options shorten the distance between the write and the
-  complaint rather than catching it outright.
-
 ### 2026-09-02, step 2 green
 
 Step 2 passes at a 64-entry ring, no poller running:
@@ -400,19 +343,6 @@ Step 2 passes at a 64-entry ring, no poller running:
 
 Step 1 committed.  Steps 3 to 5 untouched.
 
-- The receive path corrupts kernel memory.  A run of four-stream inbound TCP
-  at a 64-entry ring, followed by ten interface reopens, ended in
-  `Unable to handle kernel paging request at virtual address 25242322` in
-  `ext4_read_folio`, preceded by `BUG: Bad rss-counter state`.  The faulting
-  registers held `0x25242322` and `0x19181717`, ascending byte sequences
-  rather than pointers, which is what a data payload written over a kernel
-  structure looks like.  Treat every other symptom below as downstream of
-  this until it is ruled out.
-- The first suspect is the ring-size patch, which sets
-  `dma_conf.dma_rx_size` at probe.  A descriptor array or buffer sized from a
-  different value than the DMA is programmed with would write past the end of
-  the ring.  Test the stock 512-entry ring with no `stmmac.rx_ring_size`
-  argument and see whether the corruption goes away.
 - Exhaustion recovery works.  Thirty seconds of four-stream inbound TCP at a
   64-entry ring, sampled by busy-polling at about 8 million reads a second:
   20100 entries into receive state 4, 16.6 s suspended of 40 s, longest 26 ms,
@@ -438,18 +368,11 @@ Step 1 committed.  Steps 3 to 5 untouched.
   this: it sits inside the refill.
 - `ip link set eth0 down`/`up` clears the wedge, once, on the first attempt in
   every case so far.
-- Four runs of traffic plus ten reopens on one boot: runs 1 and 2 clean before
-  the poller had been copied to the board, run 3 wedged with the poller
-  running, run 4 oopsed after it.  Corruption surfaces when the damaged page
-  is next touched, so run 4 does not clear the poller.  Nothing went wrong in
-  that boot until it ran.
-- To separate them, run the repro two or three times from a fresh boot with
-  the poller never started.
 - Read the DMA Status Register [CSR5] before calling the board wedged. State 4
   with frozen interrupts is the wedge; state 7 with interrupts advancing is
   a host path problem.
 - Throughput, four inbound TCP streams at a 64-entry ring: 706 to 712 Mbit/s
   clean, 534 Mbit/s with the poller, which holds a CPU at 5 to 8 million reads
   per second.
-- `STMMAC_RX_COE_TYPE2` has been set since 2026-08-28, including through the
-  runs that did not wedge.  A/B it once the corruption is understood.
+- Validate `STMMAC_RX_COE_TYPE2` separately with performance and checksum
+  correctness tests.
