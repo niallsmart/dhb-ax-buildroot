@@ -52,7 +52,7 @@ Here is an example of an end-to-end build. This example assumes the storage devi
 
 Three access methods are available depending on the use case and current boot state. Use `./tools/dvr-boot --status` to identify the current boot state.
 
-* **Serial Console** The serial console of the DVR is exposed over a tmux session named `dvr`. You can use tmux `send-keys` and `capture-pane` to interact with the console. If the `dvr` session is not available then pause and ask the user to create it. Reserve use of the console for U-Boot, live boot observation, or when networking is unavailable.
+* **Serial Console** The serial console of the DVR is exposed over a tmux session named `dvr`. Use `./tools/dvr-tail -100` to show recent output or `./tools/dvr-tail -f` to follow it. You can use tmux `send-keys` to interact with the console. If the `dvr` session is not available then pause and ask the user to create it. Reserve use of the console for U-Boot, live boot observation, or when networking is unavailable.
 
 * **SSH** When the Buildroot system is running, you can SSH to `dvr`. Root login is automatic from this host via public key.
 

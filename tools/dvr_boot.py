@@ -7,7 +7,6 @@
 import argparse
 import os
 import re
-import shlex
 import signal
 import subprocess
 import sys
@@ -18,6 +17,7 @@ import pexpect
 from pexpect.fdpexpect import fdspawn
 
 from dvr_config import LocalSettings, ProfileError, load_local_settings, load_profile
+from dvr_console_log import ConsoleLogError, ensure_console_log
 
 TMUX_SESSION = "dvr"
 LOGIN_TIMEOUT = 180
@@ -170,12 +170,10 @@ class Console:
     def __init__(self, session, transcript=None):
         self.session = session
         self.lock = Path(f"/tmp/dvr-tmux-{session}.lock")
-        self.fifo = self.lock / "console.fifo"
         self.transcript_path = transcript
         self.transcript = None
-        self.fifo_fd = None
+        self.follower = None
         self.expecter = None
-        self.pipe_enabled = False
 
     def open(self):
         try:
@@ -190,28 +188,20 @@ class Console:
                     encoding="utf-8",
                     errors="replace",
                 )
-            os.mkfifo(self.fifo, 0o600)
-            self.fifo_fd = os.open(self.fifo, os.O_RDWR | os.O_NONBLOCK)
-            pane_pipe = tmux(
-                "display-message",
-                "-p",
-                "-t",
-                self.session,
-                "#{pane_pipe}",
-                capture=True,
+            try:
+                log = ensure_console_log(self.session)
+            except ConsoleLogError as error:
+                fail(str(error), 4)
+            offset = log.stat().st_size
+            self.follower = subprocess.Popen(
+                ("tail", "-c", f"+{offset + 1}", "-f", str(log)),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
             )
-            if pane_pipe.returncode:
-                fail("could not inspect the tmux pane", 4)
-            if pane_pipe.stdout.strip() == "1":
-                fail(f"tmux session '{self.session}' already has a pane pipe", 4)
-            pipe_command = f"exec cat >> {shlex.quote(str(self.fifo))}"
-            if tmux(
-                "pipe-pane", "-t", self.session, pipe_command, capture=True
-            ).returncode:
-                fail("could not enable tmux pipe-pane", 4)
-            self.pipe_enabled = True
+            assert self.follower.stdout
             self.expecter = fdspawn(
-                self.fifo_fd,
+                os.dup(self.follower.stdout.fileno()),
                 encoding="utf-8",
                 codec_errors="replace",
                 maxread=65536,
@@ -223,23 +213,23 @@ class Console:
             raise
 
     def close(self):
-        if self.pipe_enabled:
-            tmux("pipe-pane", "-t", self.session, capture=True)
-            self.pipe_enabled = False
         if self.expecter:
             self.expecter.close()
             self.expecter = None
-        if self.fifo_fd is not None:
+        if self.follower:
+            self.follower.terminate()
             try:
-                os.close(self.fifo_fd)
-            except OSError:
-                pass
-            self.fifo_fd = None
+                self.follower.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.follower.kill()
+                self.follower.wait()
+            assert self.follower.stdout
+            self.follower.stdout.close()
+            self.follower = None
         if self.transcript:
             self.transcript.close()
             self.transcript = None
         try:
-            self.fifo.unlink()
             self.lock.rmdir()
         except OSError:
             pass

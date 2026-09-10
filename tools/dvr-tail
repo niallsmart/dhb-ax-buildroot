@@ -1,0 +1,56 @@
+#!/bin/sh
+# Print and optionally follow output from the persistent DVR UART console.
+set -eu
+
+usage()
+{
+	cat <<EOF
+usage: dvr-tail [-f] [-LINES]
+
+Print the last 10 lines of DVR console output, or the requested number.
+
+Options:
+  -f, --follow  print new console output as it arrives
+  -h, --help    show this help
+EOF
+}
+
+fail()
+{
+	echo "dvr-tail: $*" >&2
+	exit 2
+}
+
+lines=10
+follow=0
+while [ "$#" -gt 0 ]; do
+	case $1 in
+	-f|--follow)
+		follow=1
+		;;
+	-[0-9]*)
+		lines=${1#-}
+		case $lines in
+		*[!0-9]*) fail "line count must be a non-negative integer" ;;
+		esac
+		;;
+	-h|--help)
+		usage
+		exit 0
+		;;
+	*)
+		fail "unexpected argument: $1"
+		;;
+	esac
+	shift
+done
+
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+export DVR_BOOT_REPO_ROOT="$repo"
+log=$(python3 "$repo/tools/dvr_console_log.py" ensure) || exit
+
+if [ "$follow" -eq 1 ]; then
+	exec tail -n "$lines" -f "$log"
+else
+	exec tail -n "$lines" "$log"
+fi
