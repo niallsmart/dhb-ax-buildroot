@@ -21,3 +21,4 @@ rsync
 less
 vim-tiny
 hdparm
+iperf3
