@@ -10,10 +10,6 @@ bootstrap:
 build *args:
     scripts/buildroot.sh {{args}}
 
-# Build the Debian Trixie armhf root filesystem with the production modules.
-debian:
-    scripts/mmdebstrap.sh
-
 # Drop the Buildroot output and download volumes.
 clean:
     scripts/buildroot.sh --clean

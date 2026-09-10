@@ -531,9 +531,9 @@ def recover_phy(console):
 
 
 def transfer_timeout(artifact):
-    # The vendor U-Boot moves a few hundred KB/s at best, and the Debian
-    # initramfs is around 135 MB. Allow for 200 KB/s and never less than the
-    # time a kernel-sized transfer has always been given.
+    # The vendor U-Boot moves large root filesystem archives at a few hundred
+    # KB/s at best. Allow for 200 KB/s and never less than the time a
+    # kernel-sized transfer has always been given.
     return max(TRANSFER_TIMEOUT, int(artifact.stat().st_size / 200_000))
 
 

@@ -8,16 +8,12 @@
 
 # Directory structure
 
-* br2-external/board/dhb-ax/debian-rootfs-overlay should live under debian/ (or be removed)
-
 * Consolidate kernel and Buildroot sources under vendor/ or upstream/?
 
 
 # Buildroot
 
 * Remove unnecesssary files in br2-external (Config.in, external.mk, etc?)
-
-* Move debian stuff to a different folder
 
 * Upgrade from LTS
 

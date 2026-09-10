@@ -7,8 +7,8 @@ output=${1:-/work/artifacts/debian}
 workspace=/work
 modules=$workspace/artifacts/buildroot/kernel-modules.tar
 local_ssh=$workspace/artifacts/local/ssh
-overlay=$workspace/br2-external/board/dhb-ax/debian-rootfs-overlay
-package_list=$workspace/scripts/debian-packages.txt
+overlay=$workspace/debian/overlay
+package_list=$workspace/debian/packages.txt
 rootfs=$(mktemp -d /tmp/dhb-ax-debian-rootfs.XXXXXX)
 
 cleanup()
@@ -92,7 +92,6 @@ chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
 {
 	echo 'suite=trixie'
 	echo 'architecture=armhf'
-	echo "builder_base=${DHB_AX_DEBIAN_BUILDER_BASE:-unknown}"
 	echo "mmdebstrap=$(mmdebstrap --version | head -n 1)"
 	echo "kernel_release=$kernel_release"
 	echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

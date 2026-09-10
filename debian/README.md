@@ -1,0 +1,38 @@
+# Debian root filesystem
+
+This directory contains the complete Debian Trixie armhf root filesystem definition for the DHB_AX board. Debian supplies userspace only. It boots the production kernel built by Buildroot and contains that kernel's modules.
+
+## Build
+
+Build the production Buildroot image first so that `artifacts/buildroot/kernel-modules.tar` exists, then build the Debian root filesystem:
+
+```sh
+./scripts/buildroot.sh --config main
+./debian/build
+```
+
+The builder also requires `DHB_AX_ROOT_PASSWD` and `DHB_AX_DVR_ETHADDR` in `local.env`, plus the authorized key and SSH host keys under `artifacts/local/ssh/`.
+
+`build` creates an ARMv7 builder container from `Dockerfile`. The container runs `build-in-container.sh`, installs the packages in `packages.txt`, applies `overlay/`, adds the production kernel modules and SSH material, and writes the results beneath `artifacts/debian/`.
+
+The generated files are:
+
+- `rootfs.cpio.gz`: root filesystem used for both RAM and HDD installation.
+- `packages.txt`: installed package versions.
+- `build-info.txt`: suite, architecture, builder and kernel metadata.
+
+## Boot and installation
+
+The `debian-tftp` profile loads `rootfs.cpio.gz` into RAM as an initramfs. The `debian-usb-hdd` profile loads the production kernel from USB and mounts the Debian root filesystem from its dedicated HDD partition.
+
+Use the standard profile-driven commands to stage and boot either configuration:
+
+```sh
+./tools/dvr-stage debian-tftp
+./tools/dvr-boot debian-tftp
+
+./tools/dvr-stage debian-usb-hdd
+./tools/dvr-boot debian-usb-hdd
+```
+
+Storage initialization remains in `tools/dvr-prepare-storage` because it defines the complete HDD and USB layout shared by all operating systems.
