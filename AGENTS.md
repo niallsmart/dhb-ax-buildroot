@@ -69,6 +69,10 @@ Do not modify the backups maintained under `../dhb-ax-guide/backups/`.
 
 ## Project Conventions
 
+### Deviations from maintained workflows
+
+Ask for user confirmation before using alternative workflows that bypass or sit outside of the maintained tooling.
+
 ### Writing Markdown
 
 Do not insert hard line breaks in paragraphs.
