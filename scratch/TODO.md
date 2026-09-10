@@ -1,8 +1,32 @@
-# Tools
+# Miscellaneous
 
 * Remove the Justfile
 
 * Get dvr-console.sh to show an error when picocom fails (e.g., because it's already running elsewhere)
+
+* Move TFTP to macos
+
+# Directory structure
+
+* br2-external/board/dhb-ax/debian-rootfs-overlay should live under debian/ (or be removed)
+
+* Consolidate kernel and Buildroot sources under vendor/ or upstream/?
+
+
+# Buildroot
+
+* Remove unnecesssary files in br2-external (Config.in, external.mk, etc?)
+
+* Move debian stuff to a different folder
+
+* Upgrade from LTS
+
+## Dockerfile
+
+* Replace the package list with a shorthand version?
+* Review some of the complications that have crept into Dockerfile (dtschema, LANG)
+* Replace check_defconfig with the Python equivalent supplied with Buildroot
+
 
 # Ethernet Driver
 

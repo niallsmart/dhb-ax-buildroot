@@ -1,10 +1,7 @@
 # Remaining hardware work
 
-Peripherals this port does not yet drive, in descending order of value and then
-ascending effort. What already works is listed in `README.md`.
+Peripherals this port does not yet drive, in descending order of value and then ascending effort.  Value and effort are driven from the hardware guide's assessment of the board.
 
-The value and effort columns come from the hardware guide's assessment of the
-board. The status column is this repository's.
 
 | Item | Value | Effort | Status and notes |
 |---|---|---|---|
