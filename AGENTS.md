@@ -3,6 +3,10 @@
 
 This project is a port of mainline Linux to the LTS LTD2704XE-P DVR. This device is built on the HiSilicon Hi3531 SoC and uses a Shenzhen TVT Digital motherboard silkscreened **`DHB_AX V1.2`**.
 
+## Communication
+
+When the user asks a pointed question, do not automatically interpret that as a critique, or infer some corrective action. Just respond to their question.
+
 ## Build, Staging and Deployment
 
 ### Toolchain and Build System
