@@ -409,14 +409,14 @@ new file mode 100644
 +	plat->exit = hi3531_dwmac_exit;
 +
 +	/*
-+	 * CSR58 is unusable, so select only capabilities established by the
-+	 * vendor configuration and target testing.  Enhanced descriptors are
-+	 * required; checksum offload, jumbo frames, PMT/WOL and forced TX
-+	 * store-and-forward remain unsupported.
++	 * CSR58 is not read for capabilities, so select those established by
++	 * the vendor configuration and target testing.  Enhanced descriptors
++	 * are required and the MAC checksums received frames; jumbo frames,
++	 * PMT/WOL, TX checksum offload and forced TX store-and-forward are not.
 +	 */
 +	plat->enh_desc = 1;
 +	plat->tx_coe = 0;
-+	plat->rx_coe = STMMAC_RX_COE_NONE;
++	plat->rx_coe = STMMAC_RX_COE_TYPE2;
 +	plat->bugged_jumbo = 0;
 +	plat->pmt = 0;
 +	plat->force_sf_dma_mode = 0;
