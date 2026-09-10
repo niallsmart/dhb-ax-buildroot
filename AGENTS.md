@@ -21,9 +21,9 @@ The `kernel/` and `buildroot/` folders are upstream source trees and generated b
 
 Booting the Buildroot system requires coordination across these three areas:
 
-* **Storage Initialization:** Storage devices on the DVR must be prepared before they can accept staged artifacts. This is a destructive operation that requires explicit user approval. Use `tools/dvr-prepare-storage.sh` for this.
-* **Artifact Staging:** Build artifacts must be staged (or installed) on a storage device or TFTP server prior to boot. Use `tools/dvr-stage.sh` to stage artifacts.
-* **Booting:** Once artifacts are staged, they can be booted using `tools/dvr-boot.sh`.
+* **Storage Initialization:** Storage devices on the DVR must be prepared before they can accept staged artifacts. This is a destructive operation that requires explicit user approval. Use `tools/dvr-prepare-storage` for this.
+* **Artifact Staging:** Build artifacts must be staged (or installed) on a storage device or TFTP server prior to boot. Use `tools/dvr-stage` to stage artifacts.
+* **Booting:** Once artifacts are staged, they can be booted using `tools/dvr-boot`.
 
 These tools consume profiles defined under `tools/configs/` which describe the source artifacts, staging method, boot parameters, etc. The most commonly used profiles are:
 
@@ -44,13 +44,13 @@ Here is an example of an end-to-end build. This example assumes the storage devi
 | Step | Command | Description |
 |---|---|---|
 | 1    | `./scripts/buildroot.sh --config minimal` | Invokes Buildroot using the `minimal` defconfig described in `br2-external/configs/dhb_ax_minimal_defconfig`. This defconfig packages the root filesystem as an initramfs. |
-| 2    | `./tools/dvr-stage.sh minimal-tftp` | Stages the kernel image produced in step 1 to a TFTP server, as described in `tools/configs/minimal-tftp.toml`. |
-| 3    | `./tools/dvr-boot.sh minimal-tftp` | Boots the DVR into the kernel staged in step 2. |   
+| 2    | `./tools/dvr-stage minimal-tftp` | Stages the kernel image produced in step 1 to a TFTP server, as described in `tools/configs/minimal-tftp.toml`. |
+| 3    | `./tools/dvr-boot minimal-tftp` | Boots the DVR into the kernel staged in step 2. |
 
 
 ## Connecting to the DVR
 
-Three access methods are available depending on the use case and current boot state. Use `./tools/dvr-boot.sh --status` to identify the current boot state.
+Three access methods are available depending on the use case and current boot state. Use `./tools/dvr-boot --status` to identify the current boot state.
 
 * **Serial Console** The serial console of the DVR is exposed over a tmux session named `dvr`. You can use tmux `send-keys` and `capture-pane` to interact with the console. If the `dvr` session is not available then pause and ask the user to create it. Reserve use of the console for U-Boot, live boot observation, or when networking is unavailable.
 

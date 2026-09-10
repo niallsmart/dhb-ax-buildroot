@@ -386,7 +386,7 @@ def stage(
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="dvr-stage.sh",
+        prog="dvr-stage",
         description="Stage the artifacts described by a DVR boot profile.",
     )
     parser.add_argument("--check", action="store_true")

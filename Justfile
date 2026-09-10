@@ -20,16 +20,16 @@ clean:
 
 # Attach to the persistent UART console, starting it if it isn't already running.
 dvr-console:
-    tools/dvr-console.sh
+    tools/dvr-console
 
 # Boot a named DVR profile; defaults to the installed USB/HDD system.
 boot profile="buildroot-usb-hdd" *args:
-    tools/dvr-boot.sh {{args}} {{profile}}
+    tools/dvr-boot {{args}} {{profile}}
 
 # Stage the artifacts for a named DVR profile; defaults to the USB/HDD system.
 stage profile="buildroot-usb-hdd" *args:
-    tools/dvr-stage.sh {{args}} {{profile}}
+    tools/dvr-stage {{args}} {{profile}}
 
 # Destructively repartition the HDD and USB drive; requires the minimal initramfs.
 prepare-storage *args:
-    tools/dvr-prepare-storage.sh {{args}}
+    tools/dvr-prepare-storage {{args}}

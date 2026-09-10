@@ -82,7 +82,7 @@ chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
 [ -c "$rootfs/dev/console" ] || mknod -m 0600 "$rootfs/dev/console" c 5 1
 
 # newc, gzipped: U-Boot loads this to RAM as the initramfs root, and
-# tools/dvr-stage.sh streams the same archive onto the HDD partition. newc
+# tools/dvr-stage streams the same archive onto the HDD partition. newc
 # carries no extended attributes or ACLs; no package installed here sets either.
 (cd "$rootfs" && find . -print0 |
 	LC_ALL=C sort -z |

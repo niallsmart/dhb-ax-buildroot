@@ -66,7 +66,7 @@ def boot_argument(value):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(
-        prog="dvr-boot.sh",
+        prog="dvr-boot",
         description="Execute a named DVR boot profile through the tmux console.",
     )
     mode = parser.add_mutually_exclusive_group()
