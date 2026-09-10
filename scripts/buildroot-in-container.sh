@@ -48,7 +48,7 @@ minimal)
 esac
 
 defconfig_file=$external/configs/$defconfig
-sdk_tarball=arm-buildroot-linux-musleabihf_sdk-buildroot.tar.gz
+sdk_tarball=arm-buildroot-linux-gnueabihf_sdk-buildroot.tar.gz
 # Keep finished images outside the Buildroot output volume so they are easy to
 # stage and survive container recreation. The parent is gitignored.
 

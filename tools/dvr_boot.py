@@ -116,8 +116,7 @@ def preflight(profile, settings: LocalSettings):
 
     if (
         profile
-        and profile.kernel
-        and profile.kernel.source == "tftp"
+        and profile.uses_tftp
         and ssh(
             settings.pi_ipaddr,
             "systemctl is-active --quiet tftpd-hpa",
@@ -496,14 +495,11 @@ def require_uboot_prompt(console, message):
         fail(message, 8)
 
 
-def load_usb(profile, console):
-    kernel = profile.kernel
+def load_usb_file(usb_device, target, load_address, console):
     print("Scanning USB storage...")
     run_uboot_command(console, "usb reset")
-    print(f"Loading USB {kernel.usb_device}/{kernel.target}...")
-    console.send(
-        f" fatload usb {kernel.usb_device} {kernel.load_address} {kernel.target}\r"
-    )
+    print(f"Loading USB {usb_device}/{target}...")
+    console.send(f" fatload usb {usb_device} {load_address} {target}\r")
     state, _ = console.wait(
         (
             ("success", r"[0-9]+ bytes read"),
@@ -522,6 +518,7 @@ def load_usb(profile, console):
     if state != "success":
         fail("USB FAT load timed out", 8)
     require_uboot_prompt(console, "U-Boot prompt did not return after USB load")
+    return transferred_size(console)
 
 
 def configure_uboot_network(settings, console):
@@ -602,7 +599,12 @@ def load_tftp(target, load_address, console, timeout=TRANSFER_TIMEOUT):
 def load_kernel(profile, console):
     kernel = profile.kernel
     if kernel.source == "usb":
-        load_usb(profile, console)
+        load_usb_file(
+            kernel.usb_device,
+            kernel.target,
+            kernel.load_address,
+            console,
+        )
     else:
         load_tftp(kernel.target, kernel.load_address, console)
 
@@ -612,12 +614,20 @@ def load_initramfs(profile, console):
     # known until U-Boot reports what it transferred, and the kernel needs that
     # size in initrd= to find the archive.
     rootfs = profile.rootfs
-    size = load_tftp(
-        rootfs.target,
-        rootfs.load_address,
-        console,
-        transfer_timeout(rootfs.artifact),
-    )
+    if rootfs.source == "usb":
+        size = load_usb_file(
+            profile.kernel.usb_device,
+            rootfs.target,
+            rootfs.load_address,
+            console,
+        )
+    else:
+        size = load_tftp(
+            rootfs.target,
+            rootfs.load_address,
+            console,
+            transfer_timeout(rootfs.artifact),
+        )
     return f"initrd={rootfs.load_address},0x{size}"
 
 
@@ -670,11 +680,11 @@ def boot(profile, settings: LocalSettings, console, bootargs=()):
         print("U-Boot prompt reached successfully.")
         return
 
-    if profile.kernel.source == "tftp" or profile.rootfs.source == "tftp":
+    if profile.uses_tftp:
         configure_uboot_network(settings, console)
 
     extra = tuple(bootargs)
-    if profile.rootfs.source == "tftp":
+    if profile.rootfs.source in ("tftp", "usb"):
         extra = (load_initramfs(profile, console), *extra)
     configure_bootargs(profile, console, extra)
     load_kernel(profile, console)

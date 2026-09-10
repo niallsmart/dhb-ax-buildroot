@@ -6,7 +6,10 @@ load_address = "0x82000000"
 usb_device = "0:1"
 
 [rootfs]
-source = "initramfs"
+source = "usb"
+artifact = "artifacts/buildroot-minimal/rootfs.cpio.gz"
+target = "rootfs-minimal.cpio.gz"
+load_address = "0x88000000"
 
 [boot]
 action = "kernel"

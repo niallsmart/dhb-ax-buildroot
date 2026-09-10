@@ -157,7 +157,7 @@ grep -q "^$root_part " /proc/swaps 2>/dev/null && {
 
 def check_usb(dvr_ipaddr: str) -> None:
     if ssh(f"root@{dvr_ipaddr}", "sh", "-s", input_text=USB_CHECK).returncode:
-        fail("USB kernel staging preflight failed")
+        fail("USB staging preflight failed")
 
 
 def check_hdd_root(profile: Profile, dvr_ipaddr: str) -> None:
@@ -188,8 +188,8 @@ def preflight(
     if not kernel_only and profile.rootfs.artifact:
         readable(profile.rootfs.artifact, "root filesystem artifact")
 
-    needs_pi = profile.kernel.source == "tftp" or (
-        not kernel_only and profile.rootfs.source == "tftp"
+    needs_pi = (
+        profile.kernel.source == "tftp" if kernel_only else profile.uses_tftp
     )
     if needs_pi:
         check_pi(settings.pi_ipaddr, start_tftp=not check)
@@ -211,15 +211,15 @@ def stage_tftp_file(artifact: Path, target: str, pi_ipaddr: str) -> None:
 USB_INSTALL = r"""
 set -eu
 
-uimage=$1
-kernel_name=$2
+source=$1
+target_name=$2
 boot_mount=/mnt/dhb-ax-boot
 
 cleanup()
 {
 	sync
 	grep -q " $boot_mount " /proc/mounts && umount "$boot_mount" || true
-	rm -f "$uimage"
+	rm -f "$source"
 }
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
@@ -228,21 +228,24 @@ boot_part=$(blkid -t 'LABEL=DHBAXBOOT' -o device)
 mkdir -p "$boot_mount"
 modprobe vfat 2>/dev/null || true
 mount -t vfat "$boot_part" "$boot_mount"
-rm -f "$boot_mount/$kernel_name.new"
-cp "$uimage" "$boot_mount/$kernel_name.new"
+rm -f "$boot_mount/$target_name.new"
+cp "$source" "$boot_mount/$target_name.new"
 sync
-mv -f "$boot_mount/$kernel_name.new" "$boot_mount/$kernel_name"
-rm -f "$boot_mount/$kernel_name.sha256"
+mv -f "$boot_mount/$target_name.new" "$boot_mount/$target_name"
 sync
-echo "Installed kernel on $boot_part as /$kernel_name"
+echo "Installed $target_name on $boot_part"
 """
 
 
-def stage_usb_kernel(profile: Profile, dvr_ipaddr: str) -> None:
-    assert profile.kernel
+def stage_usb_file(
+    artifact: Path,
+    target: str,
+    dvr_ipaddr: str,
+    description: str,
+) -> None:
     host = f"root@{dvr_ipaddr}"
-    temporary = f"/tmp/dvr-stage-{os.getpid()}-{profile.kernel.target}"
-    print(f"Staging {profile.kernel.artifact} on {host} USB...")
+    temporary = f"/tmp/dvr-stage-{os.getpid()}-{target}"
+    print(f"Staging {artifact} on {host} USB...")
     if run(
         (
             "scp",
@@ -250,22 +253,22 @@ def stage_usb_kernel(profile: Profile, dvr_ipaddr: str) -> None:
             "-o",
             "BatchMode=yes",
             "--",
-            str(profile.kernel.artifact),
+            str(artifact),
             f"{host}:{temporary}",
         )
     ).returncode:
-        fail(f"could not copy the kernel to {host}")
+        fail(f"could not copy the {description} to {host}")
     if ssh(
         host,
         "sh",
         "-s",
         "--",
         temporary,
-        profile.kernel.target,
+        target,
         input_text=USB_INSTALL,
     ).returncode:
         ssh(host, "rm", "-f", temporary)
-        fail("could not install the USB kernel")
+        fail(f"could not install the USB {description}")
 
 
 HDD_INSTALL = r"""
@@ -345,11 +348,23 @@ def stage_rootfs(profile: Profile, settings: LocalSettings) -> None:
         stage_tftp_file(
             profile.rootfs.artifact, profile.rootfs.target, settings.pi_ipaddr
         )
+    elif profile.rootfs.source == "usb":
+        stage_usb_file(
+            profile.rootfs.artifact,
+            profile.rootfs.target,
+            settings.dvr_ipaddr,
+            "root filesystem",
+        )
 
 
 def stage_kernel(profile: Profile, settings: LocalSettings) -> None:
     if profile.kernel.source == "usb":
-        stage_usb_kernel(profile, settings.dvr_ipaddr)
+        stage_usb_file(
+            profile.kernel.artifact,
+            profile.kernel.target,
+            settings.dvr_ipaddr,
+            "kernel",
+        )
     else:
         stage_tftp_file(
             profile.kernel.artifact, profile.kernel.target, settings.pi_ipaddr

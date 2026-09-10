@@ -43,7 +43,7 @@ br_src=$buildroot_dir/buildroot-$br_version
 
 image=dhb-ax-buildroot:bookworm
 dl_volume=dhb-ax-br-dl
-sdk_tarball=arm-buildroot-linux-musleabihf_sdk-buildroot.tar.gz
+sdk_tarball=arm-buildroot-linux-gnueabihf_sdk-buildroot.tar.gz
 
 mkdir -p "$kernel_dir" "$buildroot_dir"
 

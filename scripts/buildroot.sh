@@ -19,7 +19,7 @@ usage: $0 [--config NAME] [target ...]. # run buildroot target (or default)
 Configurations:
   main       production image (default)
   toolchain  build and stage the shared cross-toolchain SDK
-  minimal    self-contained UART diagnostic image
+  minimal    UART diagnostic image
 
 EOF
 }

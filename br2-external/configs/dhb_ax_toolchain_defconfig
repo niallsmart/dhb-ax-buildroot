@@ -11,7 +11,7 @@ BR2_ARM_EABIHF=y
 BR2_ARM_FPU_VFPV3D16=y
 
 BR2_TOOLCHAIN_BUILDROOT=y
-BR2_TOOLCHAIN_BUILDROOT_MUSL=y
+BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
 BR2_KERNEL_HEADERS_6_18=y
 
 # This configuration exports the compiler and sysroot only. Avoid inheriting
