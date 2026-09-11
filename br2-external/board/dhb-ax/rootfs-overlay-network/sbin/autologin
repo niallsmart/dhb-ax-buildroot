@@ -1,0 +1,5 @@
+#!/bin/sh
+# BusyBox getty cannot pass "-f root" to an alternate login program. Use this
+# wrapper to create a normal root session on the trusted maintenance UART while
+# keeping password authentication locked.
+exec /bin/login -f root

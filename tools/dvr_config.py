@@ -37,7 +37,6 @@ class LocalSettings:
     dvr_ipaddr: str
     dvr_netmask: str
     dvr_ethaddr: str
-    root_password: str
 
 
 @dataclass(frozen=True)
@@ -72,7 +71,6 @@ class Rootfs:
 class Boot:
     action: str
     args: tuple[str, ...] = ()
-    hostname: str | None = None
 
 
 @dataclass(frozen=True)
@@ -198,14 +196,7 @@ def load_local_settings(
     if not ETHERNET_ADDRESS.fullmatch(dvr_ethaddr):
         raise ProfileError("DHB_AX_DVR_ETHADDR is not an Ethernet address")
 
-    root_password = environ.get("DHB_AX_ROOT_PASSWD")
-    if not root_password:
-        raise ProfileError("environment variable is not set: DHB_AX_ROOT_PASSWD")
-    if "\r" in root_password or "\n" in root_password:
-        raise ProfileError("DHB_AX_ROOT_PASSWD cannot contain a newline")
-    return LocalSettings(
-        **values, dvr_ethaddr=dvr_ethaddr, root_password=root_password
-    )
+    return LocalSettings(**values, dvr_ethaddr=dvr_ethaddr)
 
 
 def _kernel(data: Mapping[str, Any], repo_root: Path) -> Kernel:
@@ -338,7 +329,7 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
 
 def _boot(data: Mapping[str, Any]) -> Boot:
     table = _table(data, "boot")
-    _keys(table, "boot", {"action", "args", "hostname"})
+    _keys(table, "boot", {"action", "args"})
     action = _string(table, "boot", "action")
     if action not in ("kernel", "prompt", "vendor"):
         raise ProfileError("boot.action must be 'kernel', 'prompt' or 'vendor'")
@@ -354,8 +345,7 @@ def _boot(data: Mapping[str, Any]) -> Boot:
         or not all(isinstance(item, str) and item for item in args)
     ):
         raise ProfileError("kernel profiles require a non-empty boot.args array")
-    hostname = _string(table, "boot", "hostname")
-    return Boot(action=action, args=tuple(args), hostname=hostname)
+    return Boot(action=action, args=tuple(args))
 
 
 def load_profile(

@@ -6,7 +6,7 @@ workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 . "$workspace/scripts/lib.sh"
 
 require_env_file "$workspace/local.env" \
-	DHB_AX_ROOT_PASSWD DHB_AX_DVR_ETHADDR
+	DHB_AX_DVR_ETHADDR
 
 modules=$workspace/artifacts/buildroot/kernel-modules.tar
 if [ ! -r "$modules" ]; then
@@ -38,7 +38,6 @@ docker build \
 mkdir -p "$workspace/artifacts/debian"
 docker run --rm \
 	--platform linux/arm/v7 \
-	--env DHB_AX_ROOT_PASSWD \
 	--env DHB_AX_DVR_ETHADDR \
 	--mount "type=bind,source=$workspace,target=/work,readonly" \
 	--mount "type=bind,source=$workspace/artifacts,target=/work/artifacts" \

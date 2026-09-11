@@ -416,7 +416,7 @@ def disarm_vendor_mcu_watchdog(console):
     console.send_slow("printf '\\xa0\\x08\\x00\\x00\\xa8' > /dev/ttyAMA1\r")
 
 
-def reach_uboot(settings: LocalSettings, console):
+def reach_uboot(console):
     state = identify_console(console)
     if state == "uboot":
         return
@@ -426,10 +426,11 @@ def reach_uboot(settings: LocalSettings, console):
         print("Logging in to vendor Linux through the serial console...")
         login(console, VENDOR_PASSWORD)
     elif state == "maintained_login":
-        print(
-            "Logging in to the maintained Linux system through the serial console..."
+        fail(
+            "maintained Linux presented a login prompt instead of its root "
+            "serial console",
+            5,
         )
-        login(console, settings.root_password)
     elif state == "shell":
         vendor_linux = is_vendor_linux(console)
 
@@ -661,7 +662,7 @@ def boot_vendor(console):
 
 
 def boot(profile, settings: LocalSettings, console, bootargs=()):
-    reach_uboot(settings, console)
+    reach_uboot(console)
     if profile.boot.action == "vendor":
         boot_vendor(console)
         return
@@ -682,10 +683,7 @@ def boot(profile, settings: LocalSettings, console, bootargs=()):
     console.send(f" bootm {profile.kernel.load_address}\r")
     state, _ = console.wait(
         (
-            (
-                "login",
-                rf"(?m)^\r*{re.escape(profile.boot.hostname)} login: *\r*$",
-            ),
+            ("shell", SHELL_PROMPT),
             ("panic", r"Kernel panic - not syncing"),
             ("overlap", r"kernel image will overwrite uboot"),
             ("reset", r"(?m)^\r*U-Boot 2010\.06"),
@@ -695,12 +693,12 @@ def boot(profile, settings: LocalSettings, console, bootargs=()):
     errors = {
         "panic": "kernel panic",
         "overlap": "kernel payload overlaps vendor U-Boot",
-        "reset": "board reset before the Linux login prompt",
-        "timeout": "Linux login prompt did not appear before the timeout",
+        "reset": "board reset before the Linux shell prompt",
+        "timeout": "Linux shell prompt did not appear before the timeout",
     }
-    if state != "login":
+    if state != "shell":
         fail(errors[state], 9)
-    print("Expected Linux login prompt reached successfully.")
+    print("Expected Linux root shell reached successfully.")
 
 
 def interrupted(_signum, _frame):

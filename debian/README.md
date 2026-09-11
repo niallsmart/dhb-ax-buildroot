@@ -11,7 +11,7 @@ Build the production Buildroot image first so that `artifacts/buildroot/kernel-m
 ./debian/build
 ```
 
-The builder also requires `DHB_AX_ROOT_PASSWD` and `DHB_AX_DVR_ETHADDR` in `local.env`, plus the authorized key and SSH host keys under `artifacts/local/ssh/`.
+The builder also requires `DHB_AX_DVR_ETHADDR` in `local.env`, plus the authorized key and SSH host keys under `artifacts/local/ssh/`. Root has a locked password, logs in automatically on the serial console, and accepts only public-key authentication over SSH.
 
 `build` creates an ARMv7 builder container from `Dockerfile`. The container runs `build-in-container.sh`, installs the packages in `packages.txt`, applies `overlay/`, adds the production kernel modules and SSH material, and writes the results beneath `artifacts/debian/`.
 

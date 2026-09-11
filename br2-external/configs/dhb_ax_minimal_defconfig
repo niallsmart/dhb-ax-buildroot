@@ -47,10 +47,11 @@ BR2_INIT_BUSYBOX=y
 BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/busybox-network.fragment $(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/busybox-minimal.fragment"
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/rootfs-overlay-network"
 BR2_TARGET_GENERIC_GETTY=y
+BR2_TARGET_GENERIC_GETTY_OPTIONS="-n -l /sbin/autologin"
 BR2_TARGET_GENERIC_HOSTNAME="minimal"
-# The serial getty authenticates root with the password from gitignored local.env.
-BR2_TARGET_ENABLE_ROOT_LOGIN=y
-BR2_TARGET_GENERIC_ROOT_PASSWD="$(DHB_AX_ROOT_PASSWD)"
+# Root's password is locked; the serial getty explicitly starts an authenticated
+# root session, while Dropbear accepts public keys only.
+# BR2_TARGET_ENABLE_ROOT_LOGIN is not set
 
 # DHCP obtains the board's reservation after the network overlay applies its
 # factory MAC address.
