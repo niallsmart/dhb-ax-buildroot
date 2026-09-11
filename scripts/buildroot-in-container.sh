@@ -10,14 +10,17 @@ set -eu
 
 # Buildroot cannot be built as root: several host packages -- GNU tar first --
 # have a configure check that refuses outright.  The container starts as root
-# only so it can take ownership of the output, download and ccache volumes,
-# which come up owned by root the first time they are created. Everything after
-# this runs as br.
+# only so it can take ownership of the writable volumes, which come up owned by
+# root the first time they are created. Everything after this runs as br.
 if [ "$(id -u)" = 0 ]; then
 	mkdir -p /output /dl /home/br/.buildroot-ccache
 	for d in /output /dl /home/br/.buildroot-ccache; do
 		[ "$(stat -c %u "$d")" = 1000 ] || chown -R br:br "$d"
 	done
+	if [ "${BUILD_CONFIG:-main}" = toolchain ] &&
+		[ "$(stat -c %u /opt/dhb-ax-sdk)" != 1000 ]; then
+		chown -R br:br /opt/dhb-ax-sdk
+	fi
 	exec setpriv --reuid=br --regid=br --init-groups \
 		env HOME=/home/br LANG="${LANG:-C.UTF-8}" \
 		LC_ALL="${LC_ALL:-C.UTF-8}" "$0" "$@"
@@ -48,7 +51,6 @@ minimal)
 esac
 
 defconfig_file=$external/configs/$defconfig
-sdk_tarball=arm-buildroot-linux-gnueabihf_sdk-buildroot.tar.gz
 # Keep finished images outside the Buildroot output volume so they are easy to
 # stage and survive container recreation. The parent is gitignored.
 
@@ -219,19 +221,6 @@ check_headers_not_newer() {
 	echo "kernel headers verified: $headers is not newer than $kernel"
 }
 
-stage_sdk() {
-	source=$output/images/$sdk_tarball
-	if [ ! -f "$source" ]; then
-		echo "Buildroot did not produce $source" >&2
-		return 1
-	fi
-
-	temporary=/dl/.$sdk_tarball.$$
-	install -m 0644 "$source" "$temporary"
-	mv -f "$temporary" "/dl/$sdk_tarball"
-	echo "staged SDK -> /dl/$sdk_tarball"
-}
-
 check_headers_not_newer
 prune_image_sdk
 built_all=0
@@ -241,17 +230,11 @@ if [ "$#" -gt 0 ]; then
 	case " $* " in
 	*" $defconfig "*) check_defconfig ;;
 	esac
-	case " $* " in
-	*" sdk "*)
-		[ "$build_config" = toolchain ] && stage_sdk
-		;;
-	esac
 else
 	br "$defconfig"
 	check_defconfig
 	if [ "$build_config" = toolchain ]; then
-		br -j"$(nproc)" sdk
-		stage_sdk
+		br -j"$(nproc)" dhb-ax-sdk
 	else
 		br -j"$(nproc)" all
 		built_all=1

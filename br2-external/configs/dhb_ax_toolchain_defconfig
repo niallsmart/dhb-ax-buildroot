@@ -1,8 +1,11 @@
 # Shared cross-toolchain for every DHB_AX image configuration.
 #
-# Build and stage it with:
+# Build and install it with:
 #
 #   scripts/buildroot.sh --config toolchain
+#
+# After changing toolchain options, clean this configuration and every image
+# configuration that consumes the SDK before rebuilding them.
 
 BR2_arm=y
 BR2_cortex_a9=y

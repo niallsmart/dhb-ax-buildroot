@@ -10,9 +10,9 @@ bootstrap:
 build *args:
     scripts/buildroot.sh {{args}}
 
-# Drop the Buildroot output and download volumes.
+# Clean the production Buildroot output.
 clean:
-    scripts/buildroot.sh --clean
+    scripts/buildroot.sh clean
 
 # Attach to the persistent UART console, starting it if it isn't already running.
 dvr-console:

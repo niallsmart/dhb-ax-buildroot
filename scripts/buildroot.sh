@@ -13,12 +13,11 @@ usage()
 	cat <<EOF
 usage: $0 [--config NAME] [target ...]. # run buildroot target (or default)
        $0 [--config NAME] --shell       # run shell
-       $0 [--config NAME] --clean       # drops the selected output volume
-       $0 --distclean                   # drops every output
+       $0 --distclean                   # drops every build volume
 
 Configurations:
   main       production image (default)
-  toolchain  build and stage the shared cross-toolchain SDK
+  toolchain  build and install the shared cross-toolchain SDK
   minimal    UART diagnostic image
 
 EOF
@@ -29,6 +28,7 @@ buildroot_src=$repo/buildroot/buildroot-2026.02.3
 image=dhb-ax-buildroot:bookworm
 volume_dl=dhb-ax-br-dl
 volume_ccache=dhb-ax-br-ccache
+volume_sdk=dhb-ax-br-sdk
 build_config=main
 
 if [ "${1:-}" = "--config" ]; then
@@ -50,20 +50,10 @@ main|toolchain|minimal)
 	;;
 esac
 
-# Each of these options should be possible without requiring a local.env, so
-# they are processed before require_env_file
-#
-# The --clean and --distclean options are named after Buildroot's own targets,
-# which draw the line in the same place: clean deletes what the build produced,
-# distclean also drops the downloads.
+# These options do not require local.env, so process them first.
 case "${1:-}" in
 -h | --help)
 	usage
-	exit 0
-	;;
---clean)
-	echo "removing volume $volume_output"
-	docker volume rm -f "$volume_output"
 	exit 0
 	;;
 --distclean)
@@ -114,6 +104,12 @@ docker build \
 	--tag "$image" \
 	"$repo/scripts"
 
+if [ "$build_config" = toolchain ]; then
+	sdk_mount="type=volume,source=$volume_sdk,target=/opt/dhb-ax-sdk"
+else
+	sdk_mount="type=volume,source=$volume_sdk,target=/opt/dhb-ax-sdk,readonly"
+fi
+
 # Buildroot's default BR2_CCACHE_DIR is $HOME/.buildroot-ccache.
 docker run --rm $tty_flags \
 	--env "BUILD_CONFIG=$build_config" \
@@ -124,5 +120,6 @@ docker run --rm $tty_flags \
 	--mount "type=volume,source=$volume_output,target=/output" \
 	--mount "type=volume,source=$volume_dl,target=/dl" \
 	--mount "type=volume,source=$volume_ccache,target=/home/br/.buildroot-ccache" \
+	--mount "$sdk_mount" \
 	"$image" \
 	"$cmd" "$@"
