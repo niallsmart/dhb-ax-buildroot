@@ -3,6 +3,10 @@
 
 This project is a port of mainline Linux to the LTS LTD2704XE-P DVR. This device is built on the HiSilicon Hi3531 SoC and uses a Shenzhen TVT Digital motherboard silkscreened **`DHB_AX V1.2`**.
 
+## Communication
+
+When the user asks a pointed question, do not automatically interpret that as a critique, or infer some corrective action. Just respond to their question.
+
 ## Build, Staging and Deployment
 
 ### Toolchain and Build System
@@ -17,9 +21,9 @@ The `kernel/` and `buildroot/` folders are upstream source trees and generated b
 
 Booting the Buildroot system requires coordination across these three areas:
 
-* **Storage Initialization:** Storage devices on the DVR must be prepared before they can accept staged artifacts. This is a destructive operation that requires explicit user approval. Use `tools/dvr-prepare-storage.sh` for this.
-* **Artifact Staging:** Build artifacts must be staged (or installed) on a storage device or TFTP server prior to boot. Use `tools/dvr-stage.sh` to stage artifacts.
-* **Booting:** Once artifacts are staged, they can be booted using `tools/dvr-boot.sh`.
+* **Storage Initialization:** Storage devices on the DVR must be prepared before they can accept staged artifacts. This is a destructive operation that requires explicit user approval. Use `tools/dvr-prepare-storage` for this.
+* **Artifact Staging:** Build artifacts must be staged (or installed) on a storage device or TFTP server prior to boot. Use `tools/dvr-stage` to stage artifacts.
+* **Booting:** Once artifacts are staged, they can be booted using `tools/dvr-boot`.
 
 These tools consume profiles defined under `tools/configs/` which describe the source artifacts, staging method, boot parameters, etc. The most commonly used profiles are:
 
@@ -40,15 +44,15 @@ Here is an example of an end-to-end build. This example assumes the storage devi
 | Step | Command | Description |
 |---|---|---|
 | 1    | `./scripts/buildroot.sh --config minimal` | Invokes Buildroot using the `minimal` defconfig described in `br2-external/configs/dhb_ax_minimal_defconfig`. This defconfig packages the root filesystem as an initramfs. |
-| 2    | `./tools/dvr-stage.sh minimal-tftp` | Stages the kernel image produced in step 1 to a TFTP server, as described in `tools/configs/minimal-tftp.toml`. |
-| 3    | `./tools/dvr-boot.sh minimal-tftp` | Boots the DVR into the kernel staged in step 2. |   
+| 2    | `./tools/dvr-stage minimal-tftp` | Stages the kernel image produced in step 1 to a TFTP server, as described in `tools/configs/minimal-tftp.toml`. |
+| 3    | `./tools/dvr-boot minimal-tftp` | Boots the DVR into the kernel staged in step 2. |
 
 
 ## Connecting to the DVR
 
-Three access methods are available depending on the use case and current boot state. Use `./tools/dvr-boot.sh --status` to identify the current boot state.
+Three access methods are available depending on the use case and current boot state. Use `./tools/dvr-boot --status` to identify the current boot state.
 
-* **Serial Console** The serial console of the DVR is exposed over a tmux session named `dvr`. You can use tmux `send-keys` and `capture-pane` to interact with the console. If the `dvr` session is not available then pause and ask the user to create it. Reserve use of the console for U-Boot, live boot observation, or when networking is unavailable.
+* **Serial Console** The serial console of the DVR is exposed over a tmux session named `dvr`. Use `./tools/dvr-tail -100` to show recent output or `./tools/dvr-tail -f` to follow it. You can use tmux `send-keys` to interact with the console. If the `dvr` session is not available then pause and ask the user to create it. Reserve use of the console for U-Boot, live boot observation, or when networking is unavailable.
 
 * **SSH** When the Buildroot system is running, you can SSH to `dvr`. Root login is automatic from this host via public key.
 
@@ -64,6 +68,22 @@ Do not write to `/tmp` when the vendor Linux is booted, as that filesystem is ba
 Do not modify the backups maintained under `../dhb-ax-guide/backups/`.
 
 ## Project Conventions
+
+### Engineering Tradeoffs
+
+This port is noused by a solo developer on a personal project. Agents should optimize for simplicity of the tooling versus scalability and extensive handling of edge-cases.
+
+### Checksums
+
+Only use checksums to verify file integrity when there is a realistic chance of corruption or other clear rationale. You can assume that files transferred via scp and rsync do not require post-transfer verification.
+
+### Diagnostics, debugging or benchmarking tools
+
+Prefer proven, off-the-shelf tools for general debugging, diagnostics and benchmarking. Only hand-roll your own tools to satisfy a unique need.
+
+### Ad-Hoc Workflow
+
+Ask for user confirmation before using alternative workflows that bypass or sit outside of the maintained tooling.
 
 ### Writing Markdown
 
@@ -82,14 +102,6 @@ Do not add a Signed-off-by line unless it is required.
 * When a message is tagged `#memory`, respond from what is already in context. Do not make tool calls to service it. Memory of the tree goes stale, so flag any claim you would otherwise have checked.
 
 * When a message is tagged `#q`, then just reply to the question without inferring an implied action. Prefer to answer from memory, but you can use tool calls when memory is incomplete or stale.
-
-### Checksums
-
-Only use checksums to verify file integrity when there is a realistic chance of corruption or other clear rationale. You can assume that files transferred via scp and rsync do not require post-transfer verification.
-
-### Diagnostics, debugging or benchmarking tools
-
-Prefer proven, off-the-shelf tools for general debugging, diagnostics and benchmarking. Only hand-roll your own tools to satisfy a unique need.
 
 ## Hardware Guide
 

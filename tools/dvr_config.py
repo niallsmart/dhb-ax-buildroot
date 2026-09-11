@@ -82,6 +82,13 @@ class Profile:
     kernel: Kernel | None = None
     rootfs: Rootfs | None = None
 
+    @property
+    def uses_tftp(self) -> bool:
+        return any(
+            item is not None and item.source == "tftp"
+            for item in (self.kernel, self.rootfs)
+        )
+
 
 def repository_root() -> Path:
     return Path(
@@ -265,8 +272,10 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
         },
     )
     source = _string(table, "rootfs", "source")
-    if source not in ("hdd", "tftp", "initramfs"):
-        raise ProfileError("rootfs.source must be 'hdd', 'tftp', or 'initramfs'")
+    if source not in ("hdd", "tftp", "usb", "initramfs"):
+        raise ProfileError(
+            "rootfs.source must be 'hdd', 'tftp', 'usb', or 'initramfs'"
+        )
 
     artifact = table.get("artifact")
     device = table.get("device")
@@ -292,11 +301,11 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
         if target is not None or load_address is not None:
             raise ProfileError(
                 "rootfs.target and rootfs.load_address are only valid for "
-                "TFTP roots"
+                "TFTP or USB roots"
             )
-    elif source == "tftp":
+    elif source in ("tftp", "usb"):
         if not isinstance(artifact, str) or not artifact:
-            raise ProfileError("TFTP roots require rootfs.artifact")
+            raise ProfileError(f"{source.upper()} roots require rootfs.artifact")
         if not isinstance(target, str) or not TARGET_NAME.fullmatch(target):
             raise ProfileError("rootfs.target must be a safe filename")
         if not isinstance(load_address, str) or not LOAD_ADDRESS.fullmatch(
@@ -307,7 +316,7 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
             value is not None for value in (device, label, expected_os_id)
         ):
             raise ProfileError(
-                "TFTP roots have no device, label or expected_os_id"
+                f"{source.upper()} roots have no device, label or expected_os_id"
             )
     elif any(
         value is not None
@@ -391,6 +400,8 @@ def load_profile(
 
     kernel = _kernel(data, repo_root)
     rootfs = _rootfs(data, repo_root)
+    if rootfs.source == "usb" and kernel.source != "usb":
+        raise ProfileError("USB roots require a USB kernel and kernel.usb_device")
     return Profile(
         name=name,
         boot=boot,

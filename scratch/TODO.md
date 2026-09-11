@@ -1,5 +1,7 @@
 # Miscellaneous
 
+* Remove the GitHub action
+
 * Remove the Justfile
 
 * Get dvr-console.sh to show an error when picocom fails (e.g., because it's already running elsewhere)
@@ -8,16 +10,27 @@
 
 # Directory structure
 
-* br2-external/board/dhb-ax/debian-rootfs-overlay should live under debian/ (or be removed)
-
 * Consolidate kernel and Buildroot sources under vendor/ or upstream/?
 
+# Stage and Boot tooling
+
+* The load addresses belong in a board-level hardware definition, not in each boot profile.
+
+* Print wall clock time after completion (boot, stage)
+
+* Implement dvr-tail (may require reworking dvr-boot's pipe-pane -- they can't bs shared)
+
+* The directory should be profile/ not config/ (too easily confused with Kconfg)
+
+* Remove check_console (runs on the Raspberry Pi and checks /proc/consoles for an active ttyAMA0 kernel console.)
+
+* A computed property such as profile.uses_tftp might simplify conditional guards
 
 # Buildroot
 
-* Remove unnecesssary files in br2-external (Config.in, external.mk, etc?)
+* Move br-owned folders under /home/br (avoids chown dance)
 
-* Move debian stuff to a different folder
+* Remove unnecesssary files in br2-external (Config.in, external.mk, etc?)
 
 * Upgrade from LTS
 

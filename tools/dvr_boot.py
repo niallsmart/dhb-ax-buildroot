@@ -7,7 +7,6 @@
 import argparse
 import os
 import re
-import shlex
 import signal
 import subprocess
 import sys
@@ -18,6 +17,7 @@ import pexpect
 from pexpect.fdpexpect import fdspawn
 
 from dvr_config import LocalSettings, ProfileError, load_local_settings, load_profile
+from dvr_console_log import ConsoleLogError, ensure_console_log
 
 TMUX_SESSION = "dvr"
 LOGIN_TIMEOUT = 180
@@ -66,7 +66,7 @@ def boot_argument(value):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(
-        prog="dvr-boot.sh",
+        prog="dvr-boot",
         description="Execute a named DVR boot profile through the tmux console.",
     )
     mode = parser.add_mutually_exclusive_group()
@@ -116,8 +116,7 @@ def preflight(profile, settings: LocalSettings):
 
     if (
         profile
-        and profile.kernel
-        and profile.kernel.source == "tftp"
+        and profile.uses_tftp
         and ssh(
             settings.pi_ipaddr,
             "systemctl is-active --quiet tftpd-hpa",
@@ -171,12 +170,10 @@ class Console:
     def __init__(self, session, transcript=None):
         self.session = session
         self.lock = Path(f"/tmp/dvr-tmux-{session}.lock")
-        self.fifo = self.lock / "console.fifo"
         self.transcript_path = transcript
         self.transcript = None
-        self.fifo_fd = None
+        self.follower = None
         self.expecter = None
-        self.pipe_enabled = False
 
     def open(self):
         try:
@@ -191,28 +188,20 @@ class Console:
                     encoding="utf-8",
                     errors="replace",
                 )
-            os.mkfifo(self.fifo, 0o600)
-            self.fifo_fd = os.open(self.fifo, os.O_RDWR | os.O_NONBLOCK)
-            pane_pipe = tmux(
-                "display-message",
-                "-p",
-                "-t",
-                self.session,
-                "#{pane_pipe}",
-                capture=True,
+            try:
+                log = ensure_console_log(self.session)
+            except ConsoleLogError as error:
+                fail(str(error), 4)
+            offset = log.stat().st_size
+            self.follower = subprocess.Popen(
+                ("tail", "-c", f"+{offset + 1}", "-f", str(log)),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
             )
-            if pane_pipe.returncode:
-                fail("could not inspect the tmux pane", 4)
-            if pane_pipe.stdout.strip() == "1":
-                fail(f"tmux session '{self.session}' already has a pane pipe", 4)
-            pipe_command = f"exec cat >> {shlex.quote(str(self.fifo))}"
-            if tmux(
-                "pipe-pane", "-t", self.session, pipe_command, capture=True
-            ).returncode:
-                fail("could not enable tmux pipe-pane", 4)
-            self.pipe_enabled = True
+            assert self.follower.stdout
             self.expecter = fdspawn(
-                self.fifo_fd,
+                os.dup(self.follower.stdout.fileno()),
                 encoding="utf-8",
                 codec_errors="replace",
                 maxread=65536,
@@ -224,23 +213,23 @@ class Console:
             raise
 
     def close(self):
-        if self.pipe_enabled:
-            tmux("pipe-pane", "-t", self.session, capture=True)
-            self.pipe_enabled = False
         if self.expecter:
             self.expecter.close()
             self.expecter = None
-        if self.fifo_fd is not None:
+        if self.follower:
+            self.follower.terminate()
             try:
-                os.close(self.fifo_fd)
-            except OSError:
-                pass
-            self.fifo_fd = None
+                self.follower.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.follower.kill()
+                self.follower.wait()
+            assert self.follower.stdout
+            self.follower.stdout.close()
+            self.follower = None
         if self.transcript:
             self.transcript.close()
             self.transcript = None
         try:
-            self.fifo.unlink()
             self.lock.rmdir()
         except OSError:
             pass
@@ -496,14 +485,11 @@ def require_uboot_prompt(console, message):
         fail(message, 8)
 
 
-def load_usb(profile, console):
-    kernel = profile.kernel
+def load_usb_file(usb_device, target, load_address, console):
     print("Scanning USB storage...")
     run_uboot_command(console, "usb reset")
-    print(f"Loading USB {kernel.usb_device}/{kernel.target}...")
-    console.send(
-        f" fatload usb {kernel.usb_device} {kernel.load_address} {kernel.target}\r"
-    )
+    print(f"Loading USB {usb_device}/{target}...")
+    console.send(f" fatload usb {usb_device} {load_address} {target}\r")
     state, _ = console.wait(
         (
             ("success", r"[0-9]+ bytes read"),
@@ -522,6 +508,7 @@ def load_usb(profile, console):
     if state != "success":
         fail("USB FAT load timed out", 8)
     require_uboot_prompt(console, "U-Boot prompt did not return after USB load")
+    return transferred_size(console)
 
 
 def configure_uboot_network(settings, console):
@@ -544,9 +531,9 @@ def recover_phy(console):
 
 
 def transfer_timeout(artifact):
-    # The vendor U-Boot moves a few hundred KB/s at best, and the Debian
-    # initramfs is around 135 MB. Allow for 200 KB/s and never less than the
-    # time a kernel-sized transfer has always been given.
+    # The vendor U-Boot moves large root filesystem archives at a few hundred
+    # KB/s at best. Allow for 200 KB/s and never less than the time a
+    # kernel-sized transfer has always been given.
     return max(TRANSFER_TIMEOUT, int(artifact.stat().st_size / 200_000))
 
 
@@ -602,7 +589,12 @@ def load_tftp(target, load_address, console, timeout=TRANSFER_TIMEOUT):
 def load_kernel(profile, console):
     kernel = profile.kernel
     if kernel.source == "usb":
-        load_usb(profile, console)
+        load_usb_file(
+            kernel.usb_device,
+            kernel.target,
+            kernel.load_address,
+            console,
+        )
     else:
         load_tftp(kernel.target, kernel.load_address, console)
 
@@ -612,12 +604,20 @@ def load_initramfs(profile, console):
     # known until U-Boot reports what it transferred, and the kernel needs that
     # size in initrd= to find the archive.
     rootfs = profile.rootfs
-    size = load_tftp(
-        rootfs.target,
-        rootfs.load_address,
-        console,
-        transfer_timeout(rootfs.artifact),
-    )
+    if rootfs.source == "usb":
+        size = load_usb_file(
+            profile.kernel.usb_device,
+            rootfs.target,
+            rootfs.load_address,
+            console,
+        )
+    else:
+        size = load_tftp(
+            rootfs.target,
+            rootfs.load_address,
+            console,
+            transfer_timeout(rootfs.artifact),
+        )
     return f"initrd={rootfs.load_address},0x{size}"
 
 
@@ -670,11 +670,11 @@ def boot(profile, settings: LocalSettings, console, bootargs=()):
         print("U-Boot prompt reached successfully.")
         return
 
-    if profile.kernel.source == "tftp" or profile.rootfs.source == "tftp":
+    if profile.uses_tftp:
         configure_uboot_network(settings, console)
 
     extra = tuple(bootargs)
-    if profile.rootfs.source == "tftp":
+    if profile.rootfs.source in ("tftp", "usb"):
         extra = (load_initramfs(profile, console), *extra)
     configure_bootargs(profile, console, extra)
     load_kernel(profile, console)

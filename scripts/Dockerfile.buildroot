@@ -47,8 +47,15 @@ RUN sed -i 's/^# en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 # Several host packages refuse to configure as root -- GNU tar is the first to
-# hit it.  The container starts as root so it can take ownership of the mounted
-# volumes, then drops to this user; see scripts/buildroot-in-container.sh.
+# hit it. New named volumes inherit the ownership of these mount points, so the
+# container can run as the build user from the outset.
 RUN useradd --create-home --uid 1000 --shell /bin/sh br
+RUN install -d -o br -g br \
+      /home/br/output \
+      /home/br/downloads \
+      /home/br/ccache \
+      /home/br/sdk
 
 WORKDIR /work
+USER br
+ENV HOME=/home/br

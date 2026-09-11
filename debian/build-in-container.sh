@@ -7,8 +7,8 @@ output=${1:-/work/artifacts/debian}
 workspace=/work
 modules=$workspace/artifacts/buildroot/kernel-modules.tar
 local_ssh=$workspace/artifacts/local/ssh
-overlay=$workspace/br2-external/board/dhb-ax/debian-rootfs-overlay
-package_list=$workspace/scripts/debian-packages.txt
+overlay=$workspace/debian/overlay
+package_list=$workspace/debian/packages.txt
 rootfs=$(mktemp -d /tmp/dhb-ax-debian-rootfs.XXXXXX)
 
 cleanup()
@@ -82,7 +82,7 @@ chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
 [ -c "$rootfs/dev/console" ] || mknod -m 0600 "$rootfs/dev/console" c 5 1
 
 # newc, gzipped: U-Boot loads this to RAM as the initramfs root, and
-# tools/dvr-stage.sh streams the same archive onto the HDD partition. newc
+# tools/dvr-stage streams the same archive onto the HDD partition. newc
 # carries no extended attributes or ACLs; no package installed here sets either.
 (cd "$rootfs" && find . -print0 |
 	LC_ALL=C sort -z |
@@ -92,7 +92,6 @@ chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
 {
 	echo 'suite=trixie'
 	echo 'architecture=armhf'
-	echo "builder_base=${DHB_AX_DEBIAN_BUILDER_BASE:-unknown}"
 	echo "mmdebstrap=$(mmdebstrap --version | head -n 1)"
 	echo "kernel_release=$kernel_release"
 	echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

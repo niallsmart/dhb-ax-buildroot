@@ -1,10 +1,10 @@
 #!/bin/sh
-# Append the minimal DTB to the initramfs-bearing zImage and wrap it for the
-# vendor U-Boot. The addresses and appended-DTB rationale are in post-image.sh.
+# Append the minimal DTB to the zImage and wrap it for the vendor U-Boot. The
+# addresses and appended-DTB rationale are in post-image.sh.
 set -eu
 
 images=${1:-$BINARIES_DIR}
-mkimage=${HOST_DIR:-/output/host}/bin/mkimage
+mkimage=${HOST_DIR:-${HOME}/output/host}/bin/mkimage
 version=$(sed -n \
 	's/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\(.*\)"$/\1/p' \
 	"$BR2_CONFIG")

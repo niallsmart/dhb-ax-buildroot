@@ -20,7 +20,7 @@
 set -eu
 
 images=${1:-$BINARIES_DIR}
-mkimage=${HOST_DIR:-/output/host}/bin/mkimage
+mkimage=${HOST_DIR:-${HOME}/output/host}/bin/mkimage
 version=$(sed -n \
 	's/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\(.*\)"$/\1/p' \
 	"$BR2_CONFIG")
@@ -52,3 +52,20 @@ cat "$images/zImage" "$dtb" > "$appended"
 	"$uimage" > /dev/null
 
 echo "post-image: $(basename "$uimage")"
+
+set -- "$TARGET_DIR"/lib/modules/*
+if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
+	echo "post-image: production rootfs must contain exactly one kernel module release" >&2
+	exit 1
+fi
+release=${1##*/}
+if [ "$release" != "$version" ]; then
+	echo "post-image: module release $release does not match configured kernel $version" >&2
+	exit 1
+fi
+
+# The target tree belongs to the unprivileged build user. Record the ownership
+# the modules will have in the final target filesystem.
+tar --sort=name --numeric-owner --owner=0 --group=0 -C "$TARGET_DIR" \
+	-cf "$images/kernel-modules.tar" lib/modules
+echo "post-image: kernel modules $release -> kernel-modules.tar"
