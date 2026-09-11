@@ -99,17 +99,9 @@ else
 	fi
 fi
 
-# Copy out whatever the build produced.  A configure-only invocation leaves
-# the images directory empty, which is not an error.
-if [ -d "$output/images" ] && [ -n "$(ls -A "$output/images" 2>/dev/null)" ]; then
-	echo
-	echo "artifacts -> ${artifacts#/work/}/"
-	for f in "$output"/images/*; do
-		[ -f "$f" ] || continue
-		name=$(basename "$f")
-		temporary=$artifacts/.$name.$$
-		install -m 0644 "$f" "$temporary"
-		mv -f "$temporary" "$artifacts/$name"
-		printf '  %s\n' "$name"
-	done
-fi
+# A configure-only invocation leaves the images directory empty, which is not
+# an error.
+for image in "$output"/images/*; do
+	[ -f "$image" ] || continue
+	cp "$image" "$artifacts/"
+done
