@@ -83,31 +83,6 @@ check_root_password() {
 	echo "root password verified: Buildroot crypt hash installed"
 }
 
-export_kernel_modules() {
-	modules=$output/target/lib/modules
-	set -- "$modules"/*
-	if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
-		echo "production rootfs must contain exactly one kernel module release" >&2
-		return 1
-	fi
-	release=${1##*/}
-	expected=$(sed -n \
-		's/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\([0-9][0-9.]*\)"$/\1/p' \
-		"$defconfig_file")
-	if [ "$release" != "$expected" ]; then
-		echo "module release $release does not match configured kernel $expected" >&2
-		return 1
-	fi
-
-	archive=$output/images/kernel-modules.tar
-	# Buildroot's target tree belongs to its unprivileged build user. The
-	# filesystem image corrects that ownership under fakeroot; do the same for
-	# this separately exported system archive.
-	tar --sort=name --numeric-owner --owner=0 --group=0 -C "$output/target" \
-		-cf "$archive" lib/modules
-	echo "kernel modules: $release -> $(basename "$archive")"
-}
-
 if [ "$#" -gt 0 ]; then
 	br "$@"
 	case " $* " in
@@ -121,9 +96,6 @@ else
 	else
 		br -j"$(nproc)" all
 		check_root_password
-		if [ "$build_config" = main ]; then
-			export_kernel_modules
-		fi
 	fi
 fi
 
