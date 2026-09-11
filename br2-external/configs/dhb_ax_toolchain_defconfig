@@ -26,7 +26,6 @@ BR2_SYSTEM_BIN_SH_NONE=y
 # BR2_PACKAGE_IFUPDOWN_SCRIPTS is not set
 # BR2_TARGET_ROOTFS_TAR is not set
 
-# BR2_CCACHE_DIR defaults to $HOME/.buildroot-ccache, which the build wrapper
-# mounts from the shared dhb-ax-br-ccache volume for every configuration.
 BR2_CCACHE=y
+BR2_CCACHE_DIR="$(HOME)/ccache"
 BR2_CCACHE_INITIAL_SETUP="--max-size=10G"

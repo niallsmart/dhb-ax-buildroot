@@ -20,7 +20,7 @@
 set -eu
 
 images=${1:-$BINARIES_DIR}
-mkimage=${HOST_DIR:-/output/host}/bin/mkimage
+mkimage=${HOST_DIR:-${HOME}/output/host}/bin/mkimage
 version=$(sed -n \
 	's/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\(.*\)"$/\1/p' \
 	"$BR2_CONFIG")

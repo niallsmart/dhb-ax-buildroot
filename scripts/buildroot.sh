@@ -29,6 +29,7 @@ image=dhb-ax-buildroot:bookworm
 volume_dl=dhb-ax-br-dl
 volume_ccache=dhb-ax-br-ccache
 volume_sdk=dhb-ax-br-sdk
+container_home=/home/br
 build_config=main
 
 if [ "${1:-}" = "--config" ]; then
@@ -105,21 +106,20 @@ docker build \
 	"$repo/scripts"
 
 if [ "$build_config" = toolchain ]; then
-	sdk_mount="type=volume,source=$volume_sdk,target=/opt/dhb-ax-sdk"
+	sdk_mount="type=volume,source=$volume_sdk,target=$container_home/sdk"
 else
-	sdk_mount="type=volume,source=$volume_sdk,target=/opt/dhb-ax-sdk,readonly"
+	sdk_mount="type=volume,source=$volume_sdk,target=$container_home/sdk,readonly"
 fi
 
-# Buildroot's default BR2_CCACHE_DIR is $HOME/.buildroot-ccache.
 docker run --rm $tty_flags \
 	--env "BUILD_CONFIG=$build_config" \
+	--env "GIT_CEILING_DIRECTORIES=/work" \
 	--mount "type=bind,source=$repo,target=/work,readonly" \
 	--mount "type=bind,source=$repo/artifacts,target=/work/artifacts" \
 	--mount "type=bind,source=$repo/br2-external,target=/work/br2-external" \
-	--mount "type=bind,source=$buildroot_src,target=/buildroot,readonly" \
-	--mount "type=volume,source=$volume_output,target=/output" \
-	--mount "type=volume,source=$volume_dl,target=/dl" \
-	--mount "type=volume,source=$volume_ccache,target=/home/br/.buildroot-ccache" \
+	--mount "type=volume,source=$volume_output,target=$container_home/output" \
+	--mount "type=volume,source=$volume_dl,target=$container_home/downloads" \
+	--mount "type=volume,source=$volume_ccache,target=$container_home/ccache" \
 	--mount "$sdk_mount" \
 	"$image" \
 	"$cmd" "$@"

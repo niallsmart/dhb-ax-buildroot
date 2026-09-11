@@ -8,26 +8,9 @@
 # choices from leaking out of the persistent output volume into an image.
 set -eu
 
-# Buildroot cannot be built as root: several host packages -- GNU tar first --
-# have a configure check that refuses outright.  The container starts as root
-# only so it can take ownership of the writable volumes, which come up owned by
-# root the first time they are created. Everything after this runs as br.
-if [ "$(id -u)" = 0 ]; then
-	mkdir -p /output /dl /home/br/.buildroot-ccache
-	for d in /output /dl /home/br/.buildroot-ccache; do
-		[ "$(stat -c %u "$d")" = 1000 ] || chown -R br:br "$d"
-	done
-	if [ "${BUILD_CONFIG:-main}" = toolchain ] &&
-		[ "$(stat -c %u /opt/dhb-ax-sdk)" != 1000 ]; then
-		chown -R br:br /opt/dhb-ax-sdk
-	fi
-	exec setpriv --reuid=br --regid=br --init-groups \
-		env HOME=/home/br LANG="${LANG:-C.UTF-8}" \
-		LC_ALL="${LC_ALL:-C.UTF-8}" "$0" "$@"
-fi
-
-buildroot=${BUILDROOT:-/buildroot}
-output=${BR_OUTPUT:-/output}
+buildroot=${BUILDROOT:-/work/buildroot/buildroot-2026.02.3}
+output=${BR_OUTPUT:-${HOME}/output}
+downloads=${BR_DOWNLOADS:-${HOME}/downloads}
 external=${BR2_EXTERNAL:-/work/br2-external}
 build_config=${BUILD_CONFIG:-main}
 
@@ -60,7 +43,7 @@ if [ ! -f "$defconfig_file" ]; then
 	echo "no $build_config defconfig at $defconfig_file" >&2
 	exit 1
 fi
-mkdir -p "$output" /dl "$artifacts"
+mkdir -p "$output" "$downloads" "$artifacts"
 
 # The main post-image script once paired its kernel with the minimal DTB.
 # Remove that non-bootable side product from persistent outputs until every
@@ -100,7 +83,7 @@ root_passwd_var='DHB_AX_ROOT_PASSWD=$(shell printf "%s" "$${DHB_AX_ROOT_PASSWD}"
 # harmless and keeps the two calls identical.
 br() {
 	make --silent -C "$buildroot" O="$output" BR2_EXTERNAL="$external" \
-		BR2_DL_DIR=/dl "$root_passwd_var" "$@"
+		BR2_DL_DIR="$downloads" "$root_passwd_var" "$@"
 }
 
 check_root_password() {

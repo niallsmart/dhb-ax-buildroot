@@ -5,7 +5,7 @@
 #
 include $(sort $(wildcard $(BR2_EXTERNAL_DHB_AX_PATH)/package/*/*.mk))
 
-DHB_AX_SDK_DIR = /opt/dhb-ax-sdk
+DHB_AX_SDK_DIR = $(HOME)/sdk
 
 .PHONY: dhb-ax-sdk
 dhb-ax-sdk: sdk
