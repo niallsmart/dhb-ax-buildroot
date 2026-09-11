@@ -26,4 +26,3 @@ args = [
   "rootwait",
   "rw",
 ]
-hostname = "dvr"
