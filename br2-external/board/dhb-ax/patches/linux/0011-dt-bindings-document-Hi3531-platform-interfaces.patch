@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Niall Smart <niall.smart@gmail.com>
 Date: Fri, 11 Sep 2026 08:31:19 -0400
-Subject: [PATCH 11/13] dt-bindings: document Hi3531 platform interfaces
+Subject: [PATCH] dt-bindings: document Hi3531 platform interfaces
 
 Document the board and SoC identity, the secondary-CPU enable method and the
 Hi3531-specific system controller, UART clock mux, AHCI and USB PHY nodes.

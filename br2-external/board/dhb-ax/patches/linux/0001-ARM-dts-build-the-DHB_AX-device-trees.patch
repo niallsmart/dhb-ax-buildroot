@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Niall Smart <niall.smart@gmail.com>
 Date: Fri, 11 Sep 2026 08:31:13 -0400
-Subject: [PATCH 01/13] ARM: dts: build the DHB_AX device trees
+Subject: [PATCH] ARM: dts: build the DHB_AX device trees
 
 Both variants are built from the same source tree, so add both in one hunk:
 splitting them across two patches makes neither able to apply nor reverse-

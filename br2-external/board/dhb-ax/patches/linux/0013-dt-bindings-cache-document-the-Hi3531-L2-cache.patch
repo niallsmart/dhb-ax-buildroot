@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Niall Smart <niall.smart@gmail.com>
 Date: Fri, 11 Sep 2026 08:31:20 -0400
-Subject: [PATCH 13/13] dt-bindings: cache: document the Hi3531 L2 cache
+Subject: [PATCH] dt-bindings: cache: document the Hi3531 L2 cache
 
 Describe the HiSilicon L2 Cache V200 node the driver probes: one register
 region, the three error interrupts, and the fixed geometry of this

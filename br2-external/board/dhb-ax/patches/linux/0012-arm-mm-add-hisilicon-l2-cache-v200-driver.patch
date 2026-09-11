@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Niall Smart <niall.smart@gmail.com>
 Date: Fri, 11 Sep 2026 08:31:19 -0400
-Subject: [PATCH 12/13] ARM: mm: add HiSilicon L2 Cache V200 driver
+Subject: [PATCH] ARM: mm: add HiSilicon L2 Cache V200 driver
 
 The Hi3531 carries a 256 KB unified outer cache that no mainline driver
 binds to.  It is a HiSilicon "L2 Cache V200", not an ARM PL310: the register

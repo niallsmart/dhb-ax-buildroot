@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Niall Smart <niall.smart@gmail.com>
 Date: Fri, 11 Sep 2026 08:31:18 -0400
-Subject: [PATCH 09/13] phy: hisilicon: add Hi3531 USB PHY
+Subject: [PATCH] phy: hisilicon: add Hi3531 USB PHY
 
 USB 2.0 PHY provider for the Hi3531, plus its Kconfig symbol and
 Makefile entry.  The EHCI and OHCI controllers reference it so the

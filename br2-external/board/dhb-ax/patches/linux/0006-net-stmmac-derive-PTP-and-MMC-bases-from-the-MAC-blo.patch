@@ -1,8 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Niall Smart <niall.smart@gmail.com>
 Date: Fri, 11 Sep 2026 08:31:16 -0400
-Subject: [PATCH 06/13] net: stmmac: derive PTP and MMC bases from the MAC
- block
+Subject: [PATCH] net: stmmac: derive PTP and MMC bases from the MAC block
 
 The PTP, MMC and EST register blocks sit at fixed offsets from the MAC
 registers, but stmmac_hwif_init() computes them from priv->ioaddr.  Where

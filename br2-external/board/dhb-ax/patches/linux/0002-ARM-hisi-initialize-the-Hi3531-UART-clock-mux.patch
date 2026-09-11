@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Niall Smart <niall.smart@gmail.com>
 Date: Fri, 11 Sep 2026 08:31:13 -0400
-Subject: [PATCH 02/13] ARM: hisi: initialize the Hi3531 UART clock mux
+Subject: [PATCH] ARM: hisi: initialize the Hi3531 UART clock mux
 
 U-Boot leaves the UART on its 3 MHz source.  Clear CRG bit 13 during OF
 clock initialization so the full console runs at the rate the device tree
