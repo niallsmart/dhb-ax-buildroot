@@ -22,8 +22,27 @@ def repository_root() -> Path:
     )
 
 
+def shared_repository_root() -> Path:
+    root = repository_root()
+    result = subprocess.run(
+        ("git", "rev-parse", "--path-format=absolute", "--git-common-dir"),
+        cwd=root,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode:
+        return root
+
+    common_dir = Path(result.stdout.strip())
+    if common_dir.name != ".git":
+        return root
+    return common_dir.parent
+
+
 def console_log_path() -> Path:
-    return repository_root() / "logs" / "dvr-console.log"
+    return shared_repository_root() / "logs" / "dvr-console.log"
 
 
 def _tmux(*args: str) -> subprocess.CompletedProcess[str]:
