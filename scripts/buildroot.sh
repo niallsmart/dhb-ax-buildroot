@@ -75,6 +75,33 @@ if [ ! -f "$buildroot_src/Makefile" ]; then
 	exit 1
 fi
 
+linux_override=
+case $build_config in
+main | minimal)
+	kernel_tree=$repo/kernel/linux
+	if [ -e "$kernel_tree" ] || [ -L "$kernel_tree" ]; then
+		[ "$(git -C "$kernel_tree" rev-parse --is-inside-work-tree \
+			2>/dev/null || true)" = true ] || {
+			echo "$kernel_tree is not a Git working tree" >&2
+			exit 1
+		}
+		kernel_head=$(git -C "$kernel_tree" rev-parse --verify HEAD)
+		exported_head=$(git -C "$kernel_tree" rev-parse --verify --quiet \
+			'dhb-ax-exported^{commit}' 2>/dev/null || true)
+		kernel_status=$(git -C "$kernel_tree" status --porcelain)
+		if [ -z "$exported_head" ] || [ "$kernel_head" != "$exported_head" ] ||
+			[ -n "$kernel_status" ]; then
+			linux_override=/work/kernel/linux
+			echo "Kernel source: local kernel/linux (changes since last export)"
+		else
+			echo "Kernel source: canonical Buildroot patch queue"
+		fi
+	else
+		echo "Kernel source: canonical Buildroot patch queue"
+	fi
+	;;
+esac
+
 # menuconfig and friends need a terminal; everything else does not, and
 # allocating one breaks the script when stdout is a pipe.  Note that
 # dhb_ax_defconfig is *not* interactive, so match the curses targets by name
@@ -114,6 +141,7 @@ fi
 docker run --rm $tty_flags \
 	--env "BUILD_CONFIG=$build_config" \
 	--env "GIT_CEILING_DIRECTORIES=/work" \
+	--env "LINUX_OVERRIDE_SRCDIR=$linux_override" \
 	--mount "type=bind,source=$repo,target=/work,readonly" \
 	--mount "type=bind,source=$repo/artifacts,target=/work/artifacts" \
 	--mount "type=bind,source=$repo/br2-external,target=/work/br2-external" \

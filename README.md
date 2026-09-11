@@ -15,11 +15,27 @@ git clone --bare https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.gi
 ./scripts/kernel-patches prepare
 ```
 
-Edit and commit changes on the resulting `kernel/linux` `dhb-ax` branch, then regenerate the canonical patch queue:
+The workspace uses three reference points: the upstream release tag identifies the pinned Linux version, `dhb-ax-base` marks the pristine source before the port, and `dhb-ax-exported` marks the last `dhb-ax` commit successfully exported to the patch queue.
+
+For fast iteration, modify files under `kernel/linux` and rebuild from the project root:
+
+```sh
+./scripts/buildroot.sh --config minimal linux-rebuild all
+./tools/dvr-stage minimal-tftp
+./tools/dvr-boot minimal-tftp
+```
+
+While `kernel/linux` has commits or local changes beyond `dhb-ax-exported`, the build wrapper automatically uses it through Buildroot's `LINUX_OVERRIDE_SRCDIR` support and reports that choice. Otherwise it reports and uses the canonical patch queue.
+
+Once the change works, commit it on the `dhb-ax` branch and regenerate the canonical patch queue:
 
 ```sh
 ./scripts/kernel-patches export
+./scripts/buildroot.sh --config minimal linux-dirclean
+./scripts/buildroot.sh --config minimal
 ```
+
+Export verifies the generated queue before moving `dhb-ax-exported`. Run `kernel-patches verify` at any later time to prove that applying the checked-in queue to `dhb-ax-base` still produces the exact `dhb-ax-exported` Git tree. The clean Buildroot build separately proves that the queue applies and compiles through the maintained build configuration.
 
 The generated tree uses the exclusions in `scripts/kernel-sparse-checkout` to omit upstream paths whose names differ only by case, because those files cannot coexist on the default macOS filesystem.
 

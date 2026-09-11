@@ -15,7 +15,7 @@ Buildroot provides the cross-compilation toolchain and build system. It builds t
 
 The `br2-external/` folder contains a canonical br2-external tree containing board configurations, the kernel patch queue, root filesystem overlays, etc.
 
-The `buildroot/` folder contains the regenerable Buildroot source extracted by `bootstrap-sources.sh`. Kernel development uses the shared bare stable-kernel clone configured by `DHB_AX_LINUX_REPOSITORY` in `local.env`. `scripts/kernel-patches prepare` creates the ignored `kernel/linux` Git workspace from the configured upstream tag and imports the canonical patch queue as commits. Its `dhb-ax-base` tag identifies the pristine kernel revision; use `scripts/kernel-patches export` to write committed changes back to the patch queue.
+The `buildroot/` folder contains the regenerable Buildroot source extracted by `bootstrap-sources.sh`. Kernel development uses the shared bare stable-kernel clone configured by `DHB_AX_LINUX_REPOSITORY` in `local.env`. `scripts/kernel-patches prepare` creates the ignored `kernel/linux` Git workspace and imports the canonical patch queue onto its `dhb-ax` branch. `dhb-ax-base` identifies the pristine kernel revision and `dhb-ax-exported` identifies the last commit represented by the patch queue. Buildroot automatically uses `kernel/linux` through `LINUX_OVERRIDE_SRCDIR` when it has later commits or local changes. Use `scripts/kernel-patches export` to regenerate the queue and `scripts/kernel-patches verify` to prove it exactly reproduces the exported tree before the final clean Buildroot build.
 
 ### Staging and Deployment
 

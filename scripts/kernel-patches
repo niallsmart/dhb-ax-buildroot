@@ -7,9 +7,11 @@ usage()
 	cat <<EOF
 usage: $0 prepare
        $0 export
+       $0 verify
 
 prepare  create kernel/linux from the shared kernel repository and patch queue
 export   replace the patch queue with commits from kernel/linux
+verify   confirm the patch queue reproduces the last exported kernel tree
 EOF
 }
 
@@ -26,9 +28,59 @@ patch_dir=$workspace/br2-external/board/dhb-ax/patches/linux
 defconfig=$workspace/br2-external/configs/dhb_ax_defconfig
 sparse_checkout=$workspace/scripts/kernel-sparse-checkout
 base_tag=dhb-ax-base
+exported_tag=dhb-ax-exported
 port_branch=dhb-ax
+temporary_index=
 
 . "$workspace/scripts/lib.sh"
+
+cleanup()
+{
+	[ -z "$temporary_index" ] || rm -f -- "$temporary_index"
+}
+
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+
+require_kernel_workspace()
+{
+	git -C "$kernel_tree" rev-parse --git-dir >/dev/null 2>&1 ||
+		fail "no prepared kernel workspace at $kernel_tree"
+}
+
+verify_patch_tree()
+{
+	expected_ref=$1
+	expected_name=$2
+
+	git -C "$kernel_tree" show-ref --verify --quiet "refs/tags/$base_tag" ||
+		fail "kernel workspace has no $base_tag tag"
+	expected_tree=$(git -C "$kernel_tree" rev-parse --verify \
+		"$expected_ref^{tree}") || fail "kernel workspace has no $expected_name tree"
+
+	set -- "$patch_dir"/*.patch
+	[ -f "$1" ] || fail "no kernel patches found in $patch_dir"
+	patch_count=$#
+
+	temporary_index=$(mktemp "${TMPDIR:-/tmp}/dhb-ax-kernel-index.XXXXXX")
+	rm -f -- "$temporary_index"
+	GIT_INDEX_FILE=$temporary_index git -C "$kernel_tree" read-tree \
+		"$base_tag^{tree}"
+	for patch in "$@"; do
+		if ! GIT_INDEX_FILE=$temporary_index git -C "$kernel_tree" apply \
+			--cached --whitespace=nowarn "$patch"; then
+			fail "could not apply $(basename "$patch") to $base_tag"
+		fi
+	done
+	actual_tree=$(GIT_INDEX_FILE=$temporary_index \
+		git -C "$kernel_tree" write-tree)
+	rm -f -- "$temporary_index"
+	temporary_index=
+
+	[ "$actual_tree" = "$expected_tree" ] ||
+		fail "patch queue tree does not match $expected_name"
+	echo "verified $patch_count patches: patch queue matches $expected_name"
+}
 
 prepare()
 {
@@ -64,20 +116,31 @@ prepare()
 	git -C "$kernel_tree" sparse-checkout set --no-cone --stdin \
 		< "$sparse_checkout"
 	git -C "$kernel_tree" switch --quiet --create "$port_branch" "$upstream_tag"
-	git -C "$kernel_tree" tag "$base_tag" "$upstream_tag"
+	git -C "$kernel_tree" tag "$base_tag" "$upstream_tag^{commit}"
 
 	set -- "$patch_dir"/*.patch
 	[ -f "$1" ] || fail "no kernel patches found in $patch_dir"
 	git -C "$kernel_tree" am --quiet --no-gpg-sign "$@"
+	git -C "$kernel_tree" tag "$exported_tag" "$port_branch"
 
 	count=$(git -C "$kernel_tree" rev-list --count "$base_tag..$port_branch")
 	echo "prepared $kernel_tree with $count patches"
+	cat <<EOF
+
+Workflow:
+  1. Modify the kernel sources under kernel/linux.
+  2. From the project root, iterate with:
+       ./scripts/buildroot.sh --config minimal linux-rebuild all
+       ./tools/dvr-stage minimal-tftp
+       ./tools/dvr-boot minimal-tftp
+  3. Commit the kernel changes and run:
+       ./scripts/kernel-patches export
+EOF
 }
 
 export_patches()
 {
-	git -C "$kernel_tree" rev-parse --git-dir >/dev/null 2>&1 ||
-		fail "no prepared kernel workspace at $kernel_tree"
+	require_kernel_workspace
 	branch=$(git -C "$kernel_tree" symbolic-ref --quiet --short HEAD) ||
 		fail "kernel workspace has a detached HEAD"
 	[ "$branch" = "$port_branch" ] ||
@@ -95,7 +158,26 @@ export_patches()
 	git -C "$kernel_tree" format-patch --quiet --numbered --zero-commit \
 		--no-signature --output-directory="$patch_dir" \
 		"$base_tag..$port_branch"
+	verify_patch_tree HEAD HEAD
+	git -C "$kernel_tree" tag --force "$exported_tag" HEAD >/dev/null
 	echo "exported $count patches -> $patch_dir"
+	cat <<EOF
+
+Next, verify the canonical patch queue from the project root:
+  ./scripts/buildroot.sh --config minimal linux-dirclean
+  ./scripts/buildroot.sh --config minimal
+
+Then stage and boot the resulting image if final hardware verification is required.
+EOF
+}
+
+verify_patches()
+{
+	require_kernel_workspace
+	git -C "$kernel_tree" show-ref --verify --quiet \
+		"refs/tags/$exported_tag" ||
+		fail "kernel workspace has no $exported_tag tag"
+	verify_patch_tree "$exported_tag" "$exported_tag"
 }
 
 [ "$#" -eq 1 ] || {
@@ -109,6 +191,9 @@ prepare)
 	;;
 export)
 	export_patches
+	;;
+verify)
+	verify_patches
 	;;
 -h | --help)
 	usage
