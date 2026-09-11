@@ -34,6 +34,7 @@ minimal)
 esac
 
 defconfig_file=$external/configs/$defconfig
+check_dotconfig=$buildroot/support/scripts/check-dotconfig.py
 # Keep finished images outside the Buildroot output volume so they are easy to
 # stage and survive container recreation. The parent is gitignored.
 
@@ -107,45 +108,14 @@ export_kernel_modules() {
 	echo "kernel modules: $release -> $(basename "$archive")"
 }
 
-# kconfig drops a defconfig line whose symbol does not exist, or whose
-# dependencies are unmet, without printing anything at all.  That is how an
-# entire toolchain selection went missing once: BR2_TOOLCHAIN_EXTERNAL_BOOTLIN
-# depends on an x86_64 host, this container is aarch64, and the build simply
-# fell back to the default toolchain.  Compare the two files and complain.
-check_defconfig() {
-	missing=
-	while IFS= read -r line; do
-		case $line in
-		# "# BR2_FOO is not set" is an assertion, not prose: kconfig
-		# writes it for a symbol that is off, and several of ours are
-		# deliberately off because their default is on.  Check those
-		# too, and skip only genuine comments.
-		'# BR2_'*' is not set') : ;;
-		'' | \#*) continue ;;
-		esac
-		grep -qxF "$line" "$output/.config" || missing="$missing$line
-"
-	done < "$defconfig_file"
-
-	if [ -n "$missing" ]; then
-		echo >&2
-		echo "these defconfig settings did not survive into .config:" >&2
-		echo "$missing" | sed -e '/^$/d' -e 's/^/  /' >&2
-		echo >&2
-		echo "the symbol does not exist, or its dependencies are unmet" >&2
-		return 1
-	fi
-	echo "defconfig verified: every setting present in .config"
-}
-
 if [ "$#" -gt 0 ]; then
 	br "$@"
 	case " $* " in
-	*" $defconfig "*) check_defconfig ;;
+	*" $defconfig "*) "$check_dotconfig" "$output/.config" "$defconfig_file" ;;
 	esac
 else
 	br "$defconfig"
-	check_defconfig
+	"$check_dotconfig" "$output/.config" "$defconfig_file"
 	if [ "$build_config" = toolchain ]; then
 		br -j"$(nproc)" dhb-ax-sdk
 	else
