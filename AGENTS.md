@@ -15,7 +15,9 @@ Buildroot provides the cross-compilation toolchain and build system. It builds t
 
 The `br2-external/` folder contains a canonical br2-external tree containing board configurations, the kernel patch queue, root filesystem overlays, etc.
 
-The `buildroot/` folder contains the regenerable Buildroot source extracted by `bootstrap-sources.sh`. Kernel development uses the shared bare stable-kernel clone configured by `DHB_AX_LINUX_REPOSITORY` in `local.env`. `scripts/kernel-sources prepare` creates the ignored `kernel/linux` Git workspace and imports the canonical patch queue onto its `dhb-ax` branch, with `dhb-ax-base` identifying the pristine kernel revision. Buildroot always builds image kernels from `kernel/linux` through `LINUX_OVERRIDE_SRCDIR`. Commit changes on `dhb-ax`, use `scripts/kernel-sources export-patches` to regenerate the durable patch queue, and complete a clean Buildroot build before committing the outer repository.
+The `buildroot/` folder contains the regenerable Buildroot source extracted by `bootstrap-sources.sh`. Kernel development uses the shared bare stable-kernel clone configured by `DHB_AX_LINUX_REPOSITORY` in `local.env`. `scripts/kernel-sources prepare` creates the ignored `kernel/linux` Git workspace and imports the canonical patch queue onto its `dhb-ax` branch, with `dhb-ax-base` identifying the pristine kernel revision.
+
+During kernel development, edit `kernel/linux` and test changes with `scripts/buildroot.sh --config minimal linux-rebuild all`. Buildroot reads `kernel/linux` directly through `LINUX_OVERRIDE_SRCDIR`, including uncommitted changes, so do not commit or export patches merely to perform a build. Iterate, and boot when required, until the change works. Then commit the kernel change on `dhb-ax` and use `scripts/kernel-sources export-patches` to regenerate the durable patch queue. Use `linux-dirclean` only when the user requests a clean build or stale kernel output is suspected.
 
 ### Staging and Deployment
 

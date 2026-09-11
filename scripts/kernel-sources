@@ -85,17 +85,6 @@ prepare()
 
 	count=$(git -C "$kernel_tree" rev-list --count "$base_tag..$port_branch")
 	echo "prepared $kernel_tree with $count patches"
-	cat <<EOF
-
-Workflow:
-  1. Modify and commit the kernel sources under kernel/linux.
-  2. From the project root, iterate with:
-       ./scripts/buildroot.sh --config minimal linux-rebuild all
-       ./tools/dvr-stage minimal-tftp
-       ./tools/dvr-boot minimal-tftp
-  3. Export the committed changes with:
-       ./scripts/kernel-sources export-patches
-EOF
 }
 
 export_patches()
