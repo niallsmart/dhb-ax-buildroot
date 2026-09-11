@@ -1,11 +1,20 @@
-From: DHB_AX local port <local@invalid>
-Subject: [LOCAL ONLY] phy: hisilicon: add Hi3531 USB PHY
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Niall Smart <niall.smart@gmail.com>
+Date: Fri, 11 Sep 2026 08:31:18 -0400
+Subject: [PATCH 09/13] phy: hisilicon: add Hi3531 USB PHY
 
 USB 2.0 PHY provider for the Hi3531, plus its Kconfig symbol and
 Makefile entry.  The EHCI and OHCI controllers reference it so the
 USB core refcounts bring-up across both.
 ---
+ drivers/phy/hisilicon/Kconfig          |   9 ++
+ drivers/phy/hisilicon/Makefile         |   1 +
+ drivers/phy/hisilicon/phy-hi3531-usb.c | 172 +++++++++++++++++++++++++
+ 3 files changed, 182 insertions(+)
+ create mode 100644 drivers/phy/hisilicon/phy-hi3531-usb.c
+
 diff --git a/drivers/phy/hisilicon/Kconfig b/drivers/phy/hisilicon/Kconfig
+index 6c89136fc8c2..e7b6f7b7e0b8 100644
 --- a/drivers/phy/hisilicon/Kconfig
 +++ b/drivers/phy/hisilicon/Kconfig
 @@ -2,6 +2,15 @@
@@ -25,6 +34,7 @@ diff --git a/drivers/phy/hisilicon/Kconfig b/drivers/phy/hisilicon/Kconfig
  	tristate "hi6220 USB PHY support"
  	depends on (ARCH_HISI && ARM64) || COMPILE_TEST
 diff --git a/drivers/phy/hisilicon/Makefile b/drivers/phy/hisilicon/Makefile
+index 4029d3813b1e..af641c6b3108 100644
 --- a/drivers/phy/hisilicon/Makefile
 +++ b/drivers/phy/hisilicon/Makefile
 @@ -1,4 +1,5 @@
@@ -35,6 +45,7 @@ diff --git a/drivers/phy/hisilicon/Makefile b/drivers/phy/hisilicon/Makefile
  obj-$(CONFIG_PHY_HI3670_USB)		+= phy-hi3670-usb3.o
 diff --git a/drivers/phy/hisilicon/phy-hi3531-usb.c b/drivers/phy/hisilicon/phy-hi3531-usb.c
 new file mode 100644
+index 000000000000..b13495aea444
 --- /dev/null
 +++ b/drivers/phy/hisilicon/phy-hi3531-usb.c
 @@ -0,0 +1,172 @@

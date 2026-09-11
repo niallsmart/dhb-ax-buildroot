@@ -1,0 +1,120 @@
+#!/bin/sh
+# Prepare and export the editable Git form of the Buildroot kernel patch queue.
+set -eu
+
+usage()
+{
+	cat <<EOF
+usage: $0 prepare
+       $0 export
+
+prepare  create kernel/linux from the shared kernel repository and patch queue
+export   replace the patch queue with commits from kernel/linux
+EOF
+}
+
+fail()
+{
+	echo "kernel-patches: $*" >&2
+	exit 1
+}
+
+workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+kernel_dir=$workspace/kernel
+kernel_tree=$kernel_dir/linux
+patch_dir=$workspace/br2-external/board/dhb-ax/patches/linux
+defconfig=$workspace/br2-external/configs/dhb_ax_defconfig
+sparse_checkout=$workspace/scripts/kernel-sparse-checkout
+base_tag=dhb-ax-base
+port_branch=dhb-ax
+
+. "$workspace/scripts/lib.sh"
+
+prepare()
+{
+	version=$(awk '
+		/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="[0-9.]+"$/ {
+			value = $0
+			sub(/^[^"]*"/, "", value)
+			sub(/"$/, "", value)
+			found++
+		}
+		END {
+			if (found != 1)
+				exit 1
+			print value
+		}
+	' "$defconfig") || fail "production defconfig must select one kernel version"
+	require_env_file "$workspace/local.env" DHB_AX_LINUX_REPOSITORY
+	upstream=$DHB_AX_LINUX_REPOSITORY
+
+	git -C "$upstream" rev-parse --git-dir >/dev/null 2>&1 || {
+		echo "kernel-patches: no shared kernel repository at $upstream" >&2
+		echo "clone it with: git clone --bare https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git $upstream" >&2
+		exit 1
+	}
+	upstream_tag=v$version
+	git -C "$upstream" rev-parse --verify --quiet "$upstream_tag^{commit}" \
+		>/dev/null || fail "$upstream contains no $upstream_tag tag"
+	[ ! -e "$kernel_tree" ] && [ ! -L "$kernel_tree" ] ||
+		fail "$kernel_tree already exists; remove it explicitly before preparing again"
+
+	mkdir -p "$kernel_dir"
+	git clone --local --no-checkout --quiet "$upstream" "$kernel_tree"
+	git -C "$kernel_tree" sparse-checkout set --no-cone --stdin \
+		< "$sparse_checkout"
+	git -C "$kernel_tree" switch --quiet --create "$port_branch" "$upstream_tag"
+	git -C "$kernel_tree" tag "$base_tag" "$upstream_tag"
+
+	set -- "$patch_dir"/*.patch
+	[ -f "$1" ] || fail "no kernel patches found in $patch_dir"
+	git -C "$kernel_tree" am --quiet --no-gpg-sign "$@"
+
+	count=$(git -C "$kernel_tree" rev-list --count "$base_tag..$port_branch")
+	echo "prepared $kernel_tree with $count patches"
+}
+
+export_patches()
+{
+	git -C "$kernel_tree" rev-parse --git-dir >/dev/null 2>&1 ||
+		fail "no prepared kernel workspace at $kernel_tree"
+	branch=$(git -C "$kernel_tree" symbolic-ref --quiet --short HEAD) ||
+		fail "kernel workspace has a detached HEAD"
+	[ "$branch" = "$port_branch" ] ||
+		fail "kernel workspace must be on branch $port_branch, not $branch"
+	[ -z "$(git -C "$kernel_tree" status --porcelain)" ] ||
+		fail "kernel workspace has uncommitted changes"
+	git -C "$kernel_tree" show-ref --verify --quiet "refs/tags/$base_tag" ||
+		fail "kernel workspace has no $base_tag tag"
+	git -C "$kernel_tree" merge-base --is-ancestor "$base_tag" "$port_branch" ||
+		fail "$base_tag is not an ancestor of $port_branch"
+	count=$(git -C "$kernel_tree" rev-list --count "$base_tag..$port_branch")
+	[ "$count" -gt 0 ] || fail "kernel workspace contains no port commits"
+
+	find "$patch_dir" -maxdepth 1 -type f -name '*.patch' -delete
+	git -C "$kernel_tree" format-patch --quiet --numbered --zero-commit \
+		--no-signature --output-directory="$patch_dir" \
+		"$base_tag..$port_branch"
+	echo "exported $count patches -> $patch_dir"
+}
+
+[ "$#" -eq 1 ] || {
+	usage >&2
+	exit 2
+}
+
+case $1 in
+prepare)
+	prepare
+	;;
+export)
+	export_patches
+	;;
+-h | --help)
+	usage
+	;;
+*)
+	usage >&2
+	exit 2
+	;;
+esac

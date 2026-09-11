@@ -1,13 +1,28 @@
-From: DHB_AX local port <local@invalid>
-Subject: [LOCAL ONLY] dt-bindings: document Hi3531 platform interfaces
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Niall Smart <niall.smart@gmail.com>
+Date: Fri, 11 Sep 2026 08:31:19 -0400
+Subject: [PATCH 11/13] dt-bindings: document Hi3531 platform interfaces
 
 Document the board and SoC identity, the secondary-CPU enable method and the
 Hi3531-specific system controller, UART clock mux, AHCI and USB PHY nodes.
 These contracts cover every local compatible used by the maintained device
 trees; the DWMAC binding is supplied with its glue driver.
 ---
+ .../arm/hisilicon/controller/sysctrl.yaml     | 12 +++--
+ .../arm/hisilicon/hisilicon,hi3531-smp.yaml   | 49 +++++++++++++++++++
+ .../bindings/arm/hisilicon/hisilicon.yaml     |  5 ++
+ .../bindings/ata/hisilicon,hi3531-ahci.yaml   | 40 +++++++++++++++
+ .../clock/hisilicon,hi3531-uart-mux.yaml      | 30 ++++++++++++
+ .../phy/hisilicon,hi3531-usb-phy.yaml         | 42 ++++++++++++++++
+ .../devicetree/bindings/vendor-prefixes.yaml  |  2 +
+ 7 files changed, 176 insertions(+), 4 deletions(-)
+ create mode 100644 Documentation/devicetree/bindings/arm/hisilicon/hisilicon,hi3531-smp.yaml
+ create mode 100644 Documentation/devicetree/bindings/ata/hisilicon,hi3531-ahci.yaml
+ create mode 100644 Documentation/devicetree/bindings/clock/hisilicon,hi3531-uart-mux.yaml
+ create mode 100644 Documentation/devicetree/bindings/phy/hisilicon,hi3531-usb-phy.yaml
+
 diff --git a/Documentation/devicetree/bindings/arm/hisilicon/controller/sysctrl.yaml b/Documentation/devicetree/bindings/arm/hisilicon/controller/sysctrl.yaml
-index 7a221e1..6fac257 100644
+index 7a221e1c09df..6fac25755b3c 100644
 --- a/Documentation/devicetree/bindings/arm/hisilicon/controller/sysctrl.yaml
 +++ b/Documentation/devicetree/bindings/arm/hisilicon/controller/sysctrl.yaml
 @@ -14,16 +14,17 @@ description: |
@@ -44,7 +59,7 @@ index 7a221e1..6fac257 100644
      maxItems: 1
 diff --git a/Documentation/devicetree/bindings/arm/hisilicon/hisilicon,hi3531-smp.yaml b/Documentation/devicetree/bindings/arm/hisilicon/hisilicon,hi3531-smp.yaml
 new file mode 100644
-index 0000000..bb29918
+index 000000000000..bb299185aab9
 --- /dev/null
 +++ b/Documentation/devicetree/bindings/arm/hisilicon/hisilicon,hi3531-smp.yaml
 @@ -0,0 +1,49 @@
@@ -98,7 +113,7 @@ index 0000000..bb29918
 +
 +...
 diff --git a/Documentation/devicetree/bindings/arm/hisilicon/hisilicon.yaml b/Documentation/devicetree/bindings/arm/hisilicon/hisilicon.yaml
-index 5408763..d9b5872 100644
+index 540876322040..1eb857af61ea 100644
 --- a/Documentation/devicetree/bindings/arm/hisilicon/hisilicon.yaml
 +++ b/Documentation/devicetree/bindings/arm/hisilicon/hisilicon.yaml
 @@ -60,6 +60,11 @@ properties:
@@ -115,7 +130,7 @@ index 5408763..d9b5872 100644
            - const: H836ASDJ
 diff --git a/Documentation/devicetree/bindings/ata/hisilicon,hi3531-ahci.yaml b/Documentation/devicetree/bindings/ata/hisilicon,hi3531-ahci.yaml
 new file mode 100644
-index 0000000..25b1a3f
+index 000000000000..25b1a3f019e4
 --- /dev/null
 +++ b/Documentation/devicetree/bindings/ata/hisilicon,hi3531-ahci.yaml
 @@ -0,0 +1,40 @@
@@ -161,7 +176,7 @@ index 0000000..25b1a3f
 +...
 diff --git a/Documentation/devicetree/bindings/clock/hisilicon,hi3531-uart-mux.yaml b/Documentation/devicetree/bindings/clock/hisilicon,hi3531-uart-mux.yaml
 new file mode 100644
-index 0000000..302b532
+index 000000000000..302b532836cd
 --- /dev/null
 +++ b/Documentation/devicetree/bindings/clock/hisilicon,hi3531-uart-mux.yaml
 @@ -0,0 +1,30 @@
@@ -197,7 +212,7 @@ index 0000000..302b532
 +...
 diff --git a/Documentation/devicetree/bindings/phy/hisilicon,hi3531-usb-phy.yaml b/Documentation/devicetree/bindings/phy/hisilicon,hi3531-usb-phy.yaml
 new file mode 100644
-index 0000000..d96c907
+index 000000000000..d96c907a5d90
 --- /dev/null
 +++ b/Documentation/devicetree/bindings/phy/hisilicon,hi3531-usb-phy.yaml
 @@ -0,0 +1,42 @@
@@ -244,7 +259,7 @@ index 0000000..d96c907
 +
 +...
 diff --git a/Documentation/devicetree/bindings/vendor-prefixes.yaml b/Documentation/devicetree/bindings/vendor-prefixes.yaml
-index a9cf85f..d061c7e 100644
+index a9cf85fd6fbe..d061c7e7bf09 100644
 --- a/Documentation/devicetree/bindings/vendor-prefixes.yaml
 +++ b/Documentation/devicetree/bindings/vendor-prefixes.yaml
 @@ -1677,6 +1677,8 @@ patternProperties:

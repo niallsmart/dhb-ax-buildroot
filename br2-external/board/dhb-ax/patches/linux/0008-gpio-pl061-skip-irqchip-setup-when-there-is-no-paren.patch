@@ -1,5 +1,8 @@
-From: DHB_AX local port <local@invalid>
-Subject: [LOCAL ONLY] gpio: pl061: skip irqchip setup when there is no parent irq
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Niall Smart <niall.smart@gmail.com>
+Date: Fri, 11 Sep 2026 08:31:17 -0400
+Subject: [PATCH 08/13] gpio: pl061: skip irqchip setup when there is no parent
+ irq
 
 The driver already tolerates a missing parent interrupt, logging "IRQ support
 disabled" and continuing.  It then registers the irqchip anyway, so
@@ -15,10 +18,14 @@ This is a local hardware-enablement patch and is not for submission; an
 upstream fix would want to distinguish "no interrupt described" from "failed
 to get one".
 ---
+ drivers/gpio/gpio-pl061.c | 20 +++++++++++---------
+ 1 file changed, 11 insertions(+), 9 deletions(-)
+
 diff --git a/drivers/gpio/gpio-pl061.c b/drivers/gpio/gpio-pl061.c
+index 02e4ffcf5a6f..3fcfa151357c 100644
 --- a/drivers/gpio/gpio-pl061.c
 +++ b/drivers/gpio/gpio-pl061.c
-@@ -346,15 +346,17 @@
+@@ -346,15 +346,17 @@ static int pl061_probe(struct amba_device *adev, const struct amba_id *id)
  	pl061->parent_irq = irq;
  
  	girq = &pl061->gc.irq;

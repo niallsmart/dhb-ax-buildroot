@@ -1,5 +1,8 @@
-From: DHB_AX local port <local@invalid>
-Subject: [LOCAL ONLY] net: stmmac: derive PTP and MMC bases from the MAC block
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Niall Smart <niall.smart@gmail.com>
+Date: Fri, 11 Sep 2026 08:31:16 -0400
+Subject: [PATCH 06/13] net: stmmac: derive PTP and MMC bases from the MAC
+ block
 
 The PTP, MMC and EST register blocks sit at fixed offsets from the MAC
 registers, but stmmac_hwif_init() computes them from priv->ioaddr.  Where
@@ -14,10 +17,14 @@ platform keeps the resource base.
 
 This is a local hardware-enablement patch and is not for submission.
 ---
+ drivers/net/ethernet/stmicro/stmmac/hwif.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
 diff --git a/drivers/net/ethernet/stmicro/stmmac/hwif.c b/drivers/net/ethernet/stmicro/stmmac/hwif.c
+index 00083ce52549..d1ca544d11b2 100644
 --- a/drivers/net/ethernet/stmicro/stmmac/hwif.c
 +++ b/drivers/net/ethernet/stmicro/stmmac/hwif.c
-@@ -295,6 +295,7 @@
+@@ -295,6 +295,7 @@ int stmmac_hwif_init(struct stmmac_priv *priv)
  	struct mac_device_info *mac;
  	bool needs_setup = true;
  	u32 id, dev_id = 0;
@@ -25,21 +32,21 @@ diff --git a/drivers/net/ethernet/stmicro/stmmac/hwif.c b/drivers/net/ethernet/s
  	int i, ret;
  
  	if (core_type == DWMAC_CORE_GMAC) {
-@@ -332,6 +333,13 @@
- 
+@@ -333,6 +334,13 @@ int stmmac_hwif_init(struct stmmac_priv *priv)
  	if (!mac)
  		return -ENOMEM;
-+
+ 
 +	/* The PTP, MMC and EST blocks are addressed relative to the MAC
 +	 * registers, which platform setup may have placed away from the
 +	 * resource base.  Core setup callbacks have not run at this point and
 +	 * leave pcsr NULL, which keeps the resource base.
 +	 */
 +	macbase = mac->pcsr ? : priv->ioaddr;
- 
++
  	/* Fallback to generic HW */
  	for (i = ARRAY_SIZE(stmmac_hw) - 1; i >= 0; i--) {
-@@ -358,12 +366,12 @@
+ 		entry = &stmmac_hw[i];
+@@ -358,12 +366,12 @@ int stmmac_hwif_init(struct stmmac_priv *priv)
  
  		priv->hw = mac;
  		priv->fpe_cfg.reg = entry->regs.fpe_reg;
