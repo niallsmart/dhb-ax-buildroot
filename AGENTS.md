@@ -33,10 +33,6 @@ These tools consume profiles defined under `tools/configs/` which describe the s
 
 To learn more about these tools, invoke them with `--help` (which is always a safe operation.) To learn more about the profiles, inspect them directly.
 
-### Limitations
-
-Do not use ad-hoc commands to stage artifacts or boot the DVR. If the existing tooling is insufficint, explain why
-
 ### Example Build
 
 Here is an example of an end-to-end build. This example assumes the storage devices have already been initialized.
@@ -81,9 +77,13 @@ Only use checksums to verify file integrity when there is a realistic chance of 
 
 Prefer proven, off-the-shelf tools for general debugging, diagnostics and benchmarking. Only hand-roll your own tools to satisfy a unique need.
 
-### Ad-Hoc Workflow
+### Maintained Workflows
 
-Ask for user confirmation before using alternative workflows that bypass or sit outside of the maintained tooling.
+Use the project’s maintained scripts and tools for builds, staging, deployment, booting, and device access. If the existing tooling is insufficint, explain why
+
+If a maintained workflow fails because of missing files, worktree layout, environment configuration, permissions, container mounts, or another setup problem, then stop and report the exact failure.
+
+Running documented `--help`, status, inspection, lint, and other read-only diagnostic commands is allowed.
 
 ### Writing Markdown
 
@@ -96,6 +96,10 @@ Keep each commit to one logical change, and add a body only when the reason or s
 Use a short, imperative subject, such as "buildroot: verify the kernel archive" or "tools: reuse the persistent DVR console". Add a component prefix when it makes the subject clearer, but do not force one.
 
 Do not add a Signed-off-by line unless it is required.
+
+### Pull Requests
+
+When requested to create a pull request for a branch that contains multiple independent logical changes, offer to create a stacked pull request.
 
 ### Message Tags
 
