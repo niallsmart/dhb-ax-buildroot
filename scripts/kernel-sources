@@ -115,18 +115,10 @@ export_patches()
 	[ "$count" -gt 0 ] || fail "kernel workspace contains no port commits"
 
 	find "$patch_dir" -maxdepth 1 -type f -name '*.patch' -delete
-	git -C "$kernel_tree" format-patch --quiet --numbered --zero-commit \
+	git -C "$kernel_tree" format-patch --quiet --no-numbered --zero-commit \
 		--no-signature --output-directory="$patch_dir" \
 		"$base_tag..$port_branch"
 	echo "exported $count patches -> $patch_dir"
-	cat <<EOF
-
-Before committing the exported patches, run a clean Buildroot build:
-  ./scripts/buildroot.sh --config minimal linux-dirclean
-  ./scripts/buildroot.sh --config minimal
-
-Then stage and boot the resulting image if final hardware verification is required.
-EOF
 }
 
 [ "$#" -eq 1 ] || {
