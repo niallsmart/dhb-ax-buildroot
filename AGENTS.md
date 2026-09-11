@@ -69,7 +69,19 @@ Do not modify the backups maintained under `../dhb-ax-guide/backups/`.
 
 ## Project Conventions
 
-### Deviations from maintained workflows
+### Engineering Tradeoffs
+
+This port is noused by a solo developer on a personal project. Agents should optimize for simplicity of the tooling versus scalability and extensive handling of edge-cases.
+
+### Checksums
+
+Only use checksums to verify file integrity when there is a realistic chance of corruption or other clear rationale. You can assume that files transferred via scp and rsync do not require post-transfer verification.
+
+### Diagnostics, debugging or benchmarking tools
+
+Prefer proven, off-the-shelf tools for general debugging, diagnostics and benchmarking. Only hand-roll your own tools to satisfy a unique need.
+
+### Ad-Hoc Workflow
 
 Ask for user confirmation before using alternative workflows that bypass or sit outside of the maintained tooling.
 
@@ -90,14 +102,6 @@ Do not add a Signed-off-by line unless it is required.
 * When a message is tagged `#memory`, respond from what is already in context. Do not make tool calls to service it. Memory of the tree goes stale, so flag any claim you would otherwise have checked.
 
 * When a message is tagged `#q`, then just reply to the question without inferring an implied action. Prefer to answer from memory, but you can use tool calls when memory is incomplete or stale.
-
-### Checksums
-
-Only use checksums to verify file integrity when there is a realistic chance of corruption or other clear rationale. You can assume that files transferred via scp and rsync do not require post-transfer verification.
-
-### Diagnostics, debugging or benchmarking tools
-
-Prefer proven, off-the-shelf tools for general debugging, diagnostics and benchmarking. Only hand-roll your own tools to satisfy a unique need.
 
 ## Hardware Guide
 
