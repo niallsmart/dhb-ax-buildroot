@@ -23,10 +23,8 @@ BR2_CCACHE=y
 BR2_CCACHE_DIR="$(HOME)/ccache"
 BR2_CCACHE_INITIAL_SETUP="--max-size=10G"
 
-BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/patches"
-
-# linux.hash pins the kernel source archive. linux.config is a complete kernel
-# configuration; Buildroot runs olddefconfig over it.
+# linux.config is a complete kernel configuration; Buildroot runs olddefconfig
+# over it.
 BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.18.42"

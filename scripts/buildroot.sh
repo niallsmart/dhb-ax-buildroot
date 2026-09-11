@@ -79,26 +79,13 @@ linux_override=
 case $build_config in
 main | minimal)
 	kernel_tree=$repo/kernel/linux
-	if [ -e "$kernel_tree" ] || [ -L "$kernel_tree" ]; then
-		[ "$(git -C "$kernel_tree" rev-parse --is-inside-work-tree \
-			2>/dev/null || true)" = true ] || {
-			echo "$kernel_tree is not a Git working tree" >&2
-			exit 1
-		}
-		kernel_head=$(git -C "$kernel_tree" rev-parse --verify HEAD)
-		exported_head=$(git -C "$kernel_tree" rev-parse --verify --quiet \
-			'dhb-ax-exported^{commit}' 2>/dev/null || true)
-		kernel_status=$(git -C "$kernel_tree" status --porcelain)
-		if [ -z "$exported_head" ] || [ "$kernel_head" != "$exported_head" ] ||
-			[ -n "$kernel_status" ]; then
-			linux_override=/work/kernel/linux
-			echo "Kernel source: local kernel/linux (changes since last export)"
-		else
-			echo "Kernel source: canonical Buildroot patch queue"
-		fi
-	else
-		echo "Kernel source: canonical Buildroot patch queue"
-	fi
+	[ "$(git -C "$kernel_tree" rev-parse --is-inside-work-tree \
+		2>/dev/null || true)" = true ] || {
+		echo "no prepared kernel workspace at $kernel_tree" >&2
+		echo "run: ./scripts/kernel-sources prepare" >&2
+		exit 1
+	}
+	linux_override=/work/kernel/linux
 	;;
 esac
 

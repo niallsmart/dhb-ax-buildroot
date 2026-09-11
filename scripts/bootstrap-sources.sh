@@ -4,8 +4,8 @@
 #   bootstrap-sources.sh
 #
 # Everything here is reproducible from the checksum-pinned Buildroot tarball,
-# so none of it needs backing up. Buildroot fetches its own kernel source into
-# the download volume; scripts/kernel-patches uses the shared kernel Git clone.
+# so none of it needs backing up. scripts/kernel-sources creates the ignored
+# kernel workspace from a shared Git clone and the checked-in patch queue.
 #
 # Buildroot extracts and patches its own copy of the kernel on every build, so
 # there is no persistent build tree here any more and no --reset-build.  The

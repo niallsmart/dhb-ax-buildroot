@@ -6,18 +6,18 @@ The Hi3531 has no upstream support. This port names the SoC `hisilicon,hi3531` a
 
 This repository contains the maintained Linux and Buildroot implementation, along with a [Debian root filesystem](debian/README.md) using the Buildroot kernel.
 
-## Kernel patch development
+## Kernel development
 
-The kernel changes are maintained as a Buildroot patch queue. Configure `DHB_AX_LINUX_REPOSITORY` in `local.env` to point to a shared bare clone of the stable kernel repository. Create that clone once, then run `kernel-patches prepare` to create the ignored Git editing workspace:
+Buildroot always builds the kernel from the ignored `kernel/linux` Git workspace. The checked-in patch queue is the durable representation of the port and initializes a new workspace. Configure `DHB_AX_LINUX_REPOSITORY` in `local.env` to point to a shared bare clone of the stable kernel repository. Create that clone once, then prepare the workspace:
 
 ```sh
 git clone --bare https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git ~/workspace/linux
-./scripts/kernel-patches prepare
+./scripts/kernel-sources prepare
 ```
 
-The workspace uses three reference points: the upstream release tag identifies the pinned Linux version, `dhb-ax-base` marks the pristine source before the port, and `dhb-ax-exported` marks the last `dhb-ax` commit successfully exported to the patch queue.
+The upstream release tag identifies the pinned Linux version, `dhb-ax-base` marks that pristine commit, and the `dhb-ax` branch contains the port commits imported from the patch queue.
 
-For fast iteration, modify files under `kernel/linux` and rebuild from the project root:
+Modify files under `kernel/linux` and rebuild from the project root:
 
 ```sh
 ./scripts/buildroot.sh --config minimal linux-rebuild all
@@ -25,17 +25,15 @@ For fast iteration, modify files under `kernel/linux` and rebuild from the proje
 ./tools/dvr-boot minimal-tftp
 ```
 
-While `kernel/linux` has commits or local changes beyond `dhb-ax-exported`, the build wrapper automatically uses it through Buildroot's `LINUX_OVERRIDE_SRCDIR` support and reports that choice. Otherwise it reports and uses the canonical patch queue.
-
-Once the change works, commit it on the `dhb-ax` branch and regenerate the canonical patch queue:
+Once the change works, commit it on the `dhb-ax` branch and export the commits back to the checked-in patch queue:
 
 ```sh
-./scripts/kernel-patches export
+./scripts/kernel-sources export-patches
 ./scripts/buildroot.sh --config minimal linux-dirclean
 ./scripts/buildroot.sh --config minimal
 ```
 
-Export verifies the generated queue before moving `dhb-ax-exported`. Run `kernel-patches verify` at any later time to prove that applying the checked-in queue to `dhb-ax-base` still produces the exact `dhb-ax-exported` Git tree. The clean Buildroot build separately proves that the queue applies and compiles through the maintained build configuration.
+`export-patches` uses `git format-patch` for every commit after `dhb-ax-base`. The clean Buildroot build then proves that the current kernel workspace compiles through the maintained configuration. Include the regenerated patches in the corresponding outer-repository commit; `kernel/linux` remains ignored and disposable.
 
 The generated tree uses the exclusions in `scripts/kernel-sparse-checkout` to omit upstream paths whose names differ only by case, because those files cannot coexist on the default macOS filesystem.
 
