@@ -1,0 +1,4 @@
+#!/bin/sh
+# The maintenance UART is the local root trust boundary. Keep the account
+# password locked and authenticate only the session started by its getty.
+exec /bin/login -f root

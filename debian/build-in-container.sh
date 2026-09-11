@@ -46,7 +46,7 @@ sed -i "s/@DHB_AX_DVR_ETHADDR@/$DHB_AX_DVR_ETHADDR/" \
 	"$rootfs/etc/systemd/network/10-dhb-ax.link"
 ln -snf /usr/share/zoneinfo/America/New_York "$rootfs/etc/localtime"
 ln -snf /run/systemd/resolve/stub-resolv.conf "$rootfs/etc/resolv.conf"
-printf 'root:%s\n' "$DHB_AX_ROOT_PASSWD" | chroot "$rootfs" chpasswd
+chroot "$rootfs" passwd --lock root
 
 install -d -m 0700 "$rootfs/root/.ssh"
 install -m 0600 "$local_ssh/authorized_keys" \
