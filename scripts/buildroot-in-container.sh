@@ -8,10 +8,10 @@
 # choices from leaking out of the persistent output volume into an image.
 set -eu
 
-buildroot=${BUILDROOT:-/work/buildroot/buildroot-2026.02.3}
-output=${BR_OUTPUT:-${HOME}/output}
-downloads=${BR_DOWNLOADS:-${HOME}/downloads}
-external=${BR2_EXTERNAL:-/work/br2-external}
+buildroot=/work/buildroot/buildroot-2026.02.3
+output=${HOME}/output
+downloads=${HOME}/downloads
+external=/work/br2-external
 build_config=${BUILD_CONFIG:-main}
 
 case $build_config in
@@ -37,24 +37,7 @@ defconfig_file=$external/configs/$defconfig
 # Keep finished images outside the Buildroot output volume so they are easy to
 # stage and survive container recreation. The parent is gitignored.
 
-test -f "$buildroot/Makefile"
-test -f "$external/external.desc"
-if [ ! -f "$defconfig_file" ]; then
-	echo "no $build_config defconfig at $defconfig_file" >&2
-	exit 1
-fi
-mkdir -p "$output" "$downloads" "$artifacts"
-
-# The main post-image script once paired its kernel with the minimal DTB.
-# Remove that non-bootable side product from persistent outputs until every
-# main output volume in use has been rebuilt or cleaned after this migration.
-if [ "$build_config" = main ]; then
-	rm -f \
-		"$output/images/uImage-hi3531-dhb-ax-minimal" \
-		"$output/images/zImage-hi3531-dhb-ax-minimal-appended-dtb" \
-		"$artifacts/uImage-hi3531-dhb-ax-minimal" \
-		"$artifacts/zImage-hi3531-dhb-ax-minimal-appended-dtb"
-fi
+mkdir -p "$artifacts"
 
 # shellcheck source=scripts/lib.sh
 . "$(dirname -- "$0")/lib.sh"
@@ -100,8 +83,6 @@ check_root_password() {
 }
 
 export_kernel_modules() {
-	[ "$build_config" = main ] || return 0
-
 	modules=$output/target/lib/modules
 	set -- "$modules"/*
 	if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
@@ -124,27 +105,6 @@ export_kernel_modules() {
 	tar --sort=name --numeric-owner --owner=0 --group=0 -C "$output/target" \
 		-cf "$archive" lib/modules
 	echo "kernel modules: $release -> $(basename "$archive")"
-}
-
-# Buildroot does not remove an old filesystem image when its format is later
-# disabled. Do not copy such stale outputs into artifacts/ where they can look
-# like products of the current configuration.
-prune_disabled_images() {
-	if ! grep -qx 'BR2_TARGET_ROOTFS_CPIO=y' "$output/.config"; then
-		rm -f "$output/images/rootfs.cpio" "$artifacts/rootfs.cpio" \
-			"$output/images/rootfs.cpio.gz" "$artifacts/rootfs.cpio.gz"
-	fi
-	if ! grep -qx 'BR2_TARGET_ROOTFS_TAR=y' "$output/.config"; then
-		rm -f "$output/images/rootfs.tar" "$artifacts/rootfs.tar"
-	fi
-}
-
-# SDK archives belong only to the toolchain configuration. This also removes
-# one left by an earlier `make sdk` in an image output tree.
-prune_image_sdk() {
-	[ "$build_config" = toolchain ] && return
-	rm -f "$output"/images/*_sdk-buildroot.tar.gz \
-		"$artifacts"/*_sdk-buildroot.tar.gz
 }
 
 # kconfig drops a defconfig line whose symbol does not exist, or whose
@@ -178,36 +138,6 @@ check_defconfig() {
 	echo "defconfig verified: every setting present in .config"
 }
 
-# Linux supports building against headers older than the running kernel, but
-# not newer ones. Compare the declared series before spending time building.
-check_headers_not_newer() {
-	headers=$(sed -n \
-		's/^BR2_TOOLCHAIN_EXTERNAL_HEADERS_\([0-9][0-9_]*\)=y$/\1/p' \
-		"$defconfig_file" | tr _ .)
-	kernel=$(sed -n \
-		's/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\([0-9][0-9.]*\)"$/\1/p' \
-		"$defconfig_file")
-
-	# A toolchain-only configuration has no kernel to compare.
-	[ -n "$headers" ] && [ -n "$kernel" ] || return 0
-
-	if awk -v headers="$headers" -v kernel="$kernel" 'BEGIN {
-		split(headers, h, "."); split(kernel, k, ".");
-		exit !((h[1] + 0 > k[1] + 0) ||
-		       (h[1] + 0 == k[1] + 0 && h[2] + 0 > k[2] + 0));
-	}'; then
-		echo "toolchain headers $headers are newer than kernel $kernel" >&2
-		echo "use headers no newer than the oldest kernel this image runs" >&2
-		return 1
-	fi
-
-	echo "kernel headers verified: $headers is not newer than $kernel"
-}
-
-check_headers_not_newer
-prune_image_sdk
-built_all=0
-
 if [ "$#" -gt 0 ]; then
 	br "$@"
 	case " $* " in
@@ -220,16 +150,12 @@ else
 		br -j"$(nproc)" dhb-ax-sdk
 	else
 		br -j"$(nproc)" all
-		built_all=1
+		check_root_password
+		if [ "$build_config" = main ]; then
+			export_kernel_modules
+		fi
 	fi
 fi
-
-[ "$built_all" = 0 ] || {
-	check_root_password
-	export_kernel_modules
-}
-
-prune_disabled_images
 
 # Copy out whatever the build produced.  A configure-only invocation leaves
 # the images directory empty, which is not an error.
