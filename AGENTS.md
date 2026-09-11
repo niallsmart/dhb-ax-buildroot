@@ -15,9 +15,21 @@ Buildroot provides the cross-compilation toolchain and build system. It builds t
 
 The `br2-external/` folder contains a canonical br2-external tree containing board configurations, the kernel patch queue, root filesystem overlays, etc.
 
-The `buildroot/` folder contains the regenerable Buildroot source extracted by `bootstrap-sources.sh`. Kernel development uses the shared bare stable-kernel clone configured by `DHB_AX_LINUX_REPOSITORY` in `local.env`. `scripts/kernel-sources prepare` creates the ignored `kernel/linux` Git workspace and imports the canonical patch queue onto its `dhb-ax` branch, with `dhb-ax-base` identifying the pristine kernel revision.
+The `buildroot/` folder contains the regenerable Buildroot source extracted by `bootstrap-sources.sh`.
 
-During kernel development, edit `kernel/linux` and test changes with `scripts/buildroot.sh --config minimal linux-rebuild all`. Buildroot reads `kernel/linux` directly through `LINUX_OVERRIDE_SRCDIR`, including uncommitted changes, so do not commit or export patches merely to perform a build. Iterate, and boot when required, until the change works. Then commit the kernel change on `dhb-ax` and use `scripts/kernel-sources export-patches` to regenerate the durable patch queue. Use `linux-dirclean` only when the user requests a clean build or stale kernel output is suspected.
+Buildroot runs in a Docker image through `scripts/buildroot.sh`.
+
+### Kernel Development Workflow
+
+The canonical kernel patch queue for this port is maintained in `br2-external/board/dhb-ax/patches/linux/`
+
+For ease of development, Buildroot references the Git workspace located at `kernel/linux`, which it reads directly through `LINUX_OVERRIDE_SRCDIR`.
+
+Initialize this workspace using `scripts/kernel-sources prepare`. This command will clone the bare stable-kernel repository identified by `DHB_AX_LINUX_REPOSITORY` in `local.env`, and then import the canonical patch queue onto its `dhb-ax` branch, with `dhb-ax-base` identifying the pristine kernel revision.
+
+After the workspace is prepared, you can make edits in that folder directly and build using the appropriate Buildroot target(s) (such as `linux-rebuild`).
+
+To commit verified changes, first commit in the workspace, and then use `scripts/kernel-sources export-patches` to regenerate the patch queue.
 
 ### Staging and Deployment
 
@@ -37,7 +49,7 @@ To learn more about these tools, invoke them with `--help` (which is always a sa
 
 ### Example Build
 
-Here is an example of an end-to-end build. This example assumes the storage devices have already been initialized.
+Here is an example of an end-to-end build. This example assumes the storage devices have already been initialized, and the `kernel/linux` workspace has been prepared.
 
 | Step | Command | Description |
 |---|---|---|
