@@ -380,9 +380,9 @@ def is_vendor_linux(console):
         (
             (
                 "vendor",
-                rf"(?m)^\r*DVR_KERNEL={re.escape(VENDOR_KERNEL_PREFIX)}[^\r\n]*\r*$",
+                rf"{LINE_START}DVR_KERNEL={re.escape(VENDOR_KERNEL_PREFIX)}[^\r\n]*\r*$",
             ),
-            ("other", r"(?m)^\r*DVR_KERNEL=[^\r\n]+\r*$"),
+            ("other", rf"{LINE_START}DVR_KERNEL=[^\r\n]+\r*$"),
         ),
         10,
     )
