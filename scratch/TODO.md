@@ -14,6 +14,8 @@
 
 # Stage and Boot tooling
 
+* Fix profile naming and remove unused profiles.
+
 * The load addresses belong in a board-level hardware definition, not in each boot profile.
 
 * Print wall clock time after completion (boot, stage)
@@ -28,18 +30,24 @@
 
 # Buildroot
 
-* Move br-owned folders under /home/br (avoids chown dance)
+## Worktree support
+* Fix SSH keys in artifacts folder
+* Fix console log
+* Copy downloaded files to save time
 
-* Remove unnecesssary files in br2-external (Config.in, external.mk, etc?)
-
+## Other
+* Stage TFTP on local macOS
+* Consolidate to a single profile?
+* Move to .env / .env.local (are they more canonical?)
+* Remove song and dance required to set the root password
 * Upgrade from LTS
+* Review/consolidate files in br2-external (Config.in, external.mk, post-build scripts, etc)
+* Does root-owned /work still make sense, or should it be $HOME/work?
 
 ## Dockerfile
 
-* Replace the package list with a shorthand version?
+* Replace the Debian package list with a shorthand version?
 * Review some of the complications that have crept into Dockerfile (dtschema, LANG)
-* Replace check_defconfig with the Python equivalent supplied with Buildroot
-
 
 # Ethernet Driver
 
