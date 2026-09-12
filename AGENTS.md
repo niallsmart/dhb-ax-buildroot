@@ -94,7 +94,7 @@ Only use checksums to verify file integrity when there is a realistic chance of 
 
 Prefer proven, off-the-shelf tools for general debugging, diagnostics and benchmarking. Only hand-roll your own tools to satisfy a unique need.
 
-### Maintained Workflows
+### Project Workflows
 
 Use the project’s maintained scripts and tools for builds, staging, deployment, booting, and device access. If the existing tooling is insufficint, explain why
 
@@ -103,6 +103,10 @@ Do not create partial or temporary copies of the repository to exercise maintain
 If a maintained workflow fails because of missing files, worktree layout, environment configuration, permissions, container mounts, or another setup problem, then stop and report the exact failure.
 
 Running documented `--help`, status, inspection, lint, and other read-only diagnostic commands is allowed.
+
+### Git Workflows
+
+Prefer native Git features for history editing and stacked branches, such as rebase --autosquash --update-refs and push --force-with-lease. Avoid custom orchestration scripts when standard Git commands suffice.
 
 ### Writing Markdown
 
