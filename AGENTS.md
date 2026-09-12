@@ -83,6 +83,8 @@ Do not modify the backups maintained under `../dhb-ax-guide/backups/`.
 
 This port is noused by a solo developer on a personal project. Agents should optimize for simplicity of the tooling versus scalability and extensive handling of edge-cases.
 
+Avoid redundant validation or defensive syntax for states that earlier or later checks already detect, or where the failure mode would quickly become self-evident.
+
 ### Checksums
 
 Only use checksums to verify file integrity when there is a realistic chance of corruption or other clear rationale. You can assume that files transferred via scp and rsync do not require post-transfer verification.
