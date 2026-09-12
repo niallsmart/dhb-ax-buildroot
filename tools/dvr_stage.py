@@ -292,7 +292,7 @@ echo "Formatting $root_part as $label..."
 mke2fs -F -t ext4 -L "$label" -m 0 "$root_part"
 mkdir -p "$root_mount"
 mount -t ext4 "$root_part" "$root_mount"
-gunzip -c | (cd "$root_mount" && cpio -idmu)
+xz -dc | (cd "$root_mount" && cpio -idmu)
 [ -x "$root_mount/sbin/init" ] || {
 	echo 'dvr-stage: installed rootfs has no executable /sbin/init' >&2
 	exit 1

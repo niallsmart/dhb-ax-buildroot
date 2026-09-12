@@ -7,8 +7,8 @@ usb_device = "0:1"
 
 [rootfs]
 source = "usb"
-artifact = "artifacts/buildroot/rootfs.cpio.gz"
-target = "rootfs.cpio.gz"
+artifact = "artifacts/buildroot/rootfs.cpio.xz"
+target = "rootfs.cpio.xz"
 load_address = "0x88000000"
 
 [boot]

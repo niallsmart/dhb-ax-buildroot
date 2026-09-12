@@ -11,6 +11,7 @@ RUN apt-get update \
         kmod \
         mmdebstrap \
         systemd \
+        xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY build-in-container.sh /usr/local/sbin/dhb-ax-mmdebstrap

@@ -17,7 +17,7 @@ The builder also requires `DHB_AX_DVR_ETHADDR` in `local.env`, plus the authoriz
 
 The generated files are:
 
-- `rootfs.cpio.gz`: root filesystem archive for HDD installation.
+- `rootfs.cpio.xz`: root filesystem archive for HDD installation.
 - `packages.txt`: installed package versions.
 - `build-info.txt`: suite, architecture, builder and kernel metadata.
 
