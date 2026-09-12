@@ -89,9 +89,6 @@ prepare()
 		echo "clone it with: git clone --bare https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git $DHB_AX_LINUX_REPOSITORY" >&2
 		exit 1
 	}
-	git -C "$DHB_AX_LINUX_REPOSITORY" rev-parse --verify --quiet \
-		"$upstream_tag^{commit}" >/dev/null ||
-		fail "$DHB_AX_LINUX_REPOSITORY contains no $upstream_tag tag"
 
 	mkdir -p "$kernel_tree"
 	git clone --local --no-checkout --quiet \
@@ -100,7 +97,7 @@ prepare()
 		git -C "$kernel_tree" sparse-checkout set --no-cone --stdin
 	git -C "$kernel_tree" -c checkout.workers=0 \
 		switch --quiet --create dhb-ax "$upstream_tag"
-	git -C "$kernel_tree" tag dhb-ax-base "$upstream_tag"
+	git -C "$kernel_tree" tag dhb-ax-base
 
 	set -- "$patch_dir"/*.patch
 	[ -f "$1" ] || fail "no kernel patches found in $patch_dir"
