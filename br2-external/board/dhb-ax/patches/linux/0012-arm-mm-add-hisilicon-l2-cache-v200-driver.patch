@@ -1,5 +1,7 @@
-From: DHB_AX local port <local@invalid>
-Subject: [LOCAL ONLY] ARM: mm: add HiSilicon L2 Cache V200 driver
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Niall Smart <niall.smart@gmail.com>
+Date: Fri, 11 Sep 2026 08:31:19 -0400
+Subject: [PATCH] ARM: mm: add HiSilicon L2 Cache V200 driver
 
 The Hi3531 carries a 256 KB unified outer cache that no mainline driver
 binds to.  It is a HiSilicon "L2 Cache V200", not an ARM PL310: the register
@@ -30,8 +32,20 @@ board runs would never populate the cache.
 Error reporting is deferred: the three interrupt lines stay masked and no
 handler is registered.
 ---
+ .../arm/include/asm/hardware/cache-hil2v200.h |  20 ++
+ arch/arm/kernel/irq.c                         |   2 +
+ arch/arm/mm/Kconfig                           |  10 +
+ arch/arm/mm/Makefile                          |   1 +
+ arch/arm/mm/cache-hil2v200.c                  | 296 ++++++++++++++++++
+ arch/arm/mm/cache-hil2v200.h                  |  64 ++++
+ 6 files changed, 393 insertions(+)
+ create mode 100644 arch/arm/include/asm/hardware/cache-hil2v200.h
+ create mode 100644 arch/arm/mm/cache-hil2v200.c
+ create mode 100644 arch/arm/mm/cache-hil2v200.h
+
 diff --git a/arch/arm/include/asm/hardware/cache-hil2v200.h b/arch/arm/include/asm/hardware/cache-hil2v200.h
 new file mode 100644
+index 000000000000..50ba345c6db3
 --- /dev/null
 +++ b/arch/arm/include/asm/hardware/cache-hil2v200.h
 @@ -0,0 +1,20 @@
@@ -56,6 +70,7 @@ new file mode 100644
 +
 +#endif /* __CACHE_HIL2V200_H */
 diff --git a/arch/arm/kernel/irq.c b/arch/arm/kernel/irq.c
+index e1993e28a9ec..55176978142a 100644
 --- a/arch/arm/kernel/irq.c
 +++ b/arch/arm/kernel/irq.c
 @@ -34,6 +34,7 @@
@@ -75,6 +90,7 @@ diff --git a/arch/arm/kernel/irq.c b/arch/arm/kernel/irq.c
  
  #ifdef CONFIG_SPARSE_IRQ
 diff --git a/arch/arm/mm/Kconfig b/arch/arm/mm/Kconfig
+index 7b27ee9482b3..0d11423ec9aa 100644
 --- a/arch/arm/mm/Kconfig
 +++ b/arch/arm/mm/Kconfig
 @@ -970,6 +970,16 @@ config CACHE_FEROCEON_L2_WRITETHROUGH
@@ -95,6 +111,7 @@ diff --git a/arch/arm/mm/Kconfig b/arch/arm/mm/Kconfig
  	bool
  	help
 diff --git a/arch/arm/mm/Makefile b/arch/arm/mm/Makefile
+index 1e2201013371..64dbd2064045 100644
 --- a/arch/arm/mm/Makefile
 +++ b/arch/arm/mm/Makefile
 @@ -94,6 +94,7 @@ obj-$(CONFIG_CFI)		+= proc.o
@@ -107,6 +124,7 @@ diff --git a/arch/arm/mm/Makefile b/arch/arm/mm/Makefile
  obj-$(CONFIG_CACHE_XSC3L2)	+= cache-xsc3l2.o
 diff --git a/arch/arm/mm/cache-hil2v200.c b/arch/arm/mm/cache-hil2v200.c
 new file mode 100644
+index 000000000000..786482a368c7
 --- /dev/null
 +++ b/arch/arm/mm/cache-hil2v200.c
 @@ -0,0 +1,296 @@
@@ -408,6 +426,7 @@ new file mode 100644
 +}
 diff --git a/arch/arm/mm/cache-hil2v200.h b/arch/arm/mm/cache-hil2v200.h
 new file mode 100644
+index 000000000000..3c7841945c29
 --- /dev/null
 +++ b/arch/arm/mm/cache-hil2v200.h
 @@ -0,0 +1,64 @@

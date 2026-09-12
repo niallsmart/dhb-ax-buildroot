@@ -1,5 +1,7 @@
-From: DHB_AX local port <local@invalid>
-Subject: [LOCAL ONLY] net: stmmac: address the MAC block through pcsr
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Niall Smart <niall.smart@gmail.com>
+Date: Fri, 11 Sep 2026 08:31:15 -0400
+Subject: [PATCH] net: stmmac: address the MAC block through pcsr
 
 Hi3531 puts the shared MDIO registers at the platform resource base and the
 GMAC1 control registers 0x4000 further on, so priv->ioaddr and the MAC
@@ -14,85 +16,30 @@ This is a local hardware-enablement patch and is not for submission: an
 upstream version needs the same treatment for dwmac100, dwmac4, dwxgmac2
 and stmmac_vlan, none of which this board uses.
 ---
-diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
---- a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
-+++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
-@@ -866,7 +866,7 @@
+ .../net/ethernet/stmicro/stmmac/dwmac1000_core.c |  2 +-
+ .../net/ethernet/stmicro/stmmac/stmmac_ethtool.c |  2 +-
+ .../ethernet/stmicro/stmmac/stmmac_hwtstamp.c    |  4 ++--
+ .../net/ethernet/stmicro/stmmac/stmmac_main.c    | 16 ++++++++--------
+ 4 files changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac1000_core.c b/drivers/net/ethernet/stmicro/stmmac/dwmac1000_core.c
+index 5bf717188c92..027afbd151bb 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac1000_core.c
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac1000_core.c
+@@ -142,7 +142,7 @@ static void dwmac1000_set_mchash(void __iomem *ioaddr, u32 *mcfilterbits,
+ static void dwmac1000_set_filter(struct mac_device_info *hw,
+ 				 struct net_device *dev)
  {
- 	struct stmmac_priv *priv = netdev_priv(to_net_dev(config->dev));
- 
--	stmmac_mac_set(priv, priv->ioaddr, false);
-+	stmmac_mac_set(priv, priv->hw->pcsr, false);
- 	if (priv->dma_cap.eee)
- 		stmmac_set_eee_pls(priv, priv->hw, false);
- 
-@@ -889,7 +889,7 @@
- 	    priv->plat->serdes_powerup)
- 		priv->plat->serdes_powerup(priv->dev, priv->plat->bsp_priv);
- 
--	old_ctrl = readl(priv->ioaddr + MAC_CTRL_REG);
-+	old_ctrl = readl(priv->hw->pcsr + MAC_CTRL_REG);
- 	ctrl = old_ctrl & ~priv->hw->link.speed_mask;
- 
- 	switch (speed) {
-@@ -954,7 +954,7 @@
- 	stmmac_mac_flow_ctrl(priv, duplex, flow_ctrl);
- 
- 	if (ctrl != old_ctrl)
--		writel(ctrl, priv->ioaddr + MAC_CTRL_REG);
-+		writel(ctrl, priv->hw->pcsr + MAC_CTRL_REG);
- 
- 	if (priv->plat->set_clk_tx_rate) {
- 		ret = priv->plat->set_clk_tx_rate(priv->plat->bsp_priv,
-@@ -966,7 +966,7 @@
- 				   phy_modes(interface), speed, ERR_PTR(ret));
- 	}
- 
--	stmmac_mac_set(priv, priv->ioaddr, true);
-+	stmmac_mac_set(priv, priv->hw->pcsr, true);
- 	if (priv->dma_cap.eee)
- 		stmmac_set_eee_pls(priv, priv->hw, true);
- 
-@@ -3461,7 +3461,7 @@
- 	}
- 
- 	/* Enable the MAC Rx/Tx */
--	stmmac_mac_set(priv, priv->ioaddr, true);
-+	stmmac_mac_set(priv, priv->hw->pcsr, true);
- 
- 	/* Set the HW DMA mode and the COE */
- 	stmmac_dma_operation_mode(priv);
-@@ -6867,7 +6867,7 @@
- 	free_dma_desc_resources(priv, &priv->dma_conf);
- 
- 	/* Disable the MAC Rx/Tx */
--	stmmac_mac_set(priv, priv->ioaddr, false);
-+	stmmac_mac_set(priv, priv->hw->pcsr, false);
- 
- 	/* set trans_start so we don't get spurious
- 	 * watchdogs during reset
-@@ -6956,7 +6956,7 @@
- 	}
- 
- 	/* Enable the MAC Rx/Tx */
--	stmmac_mac_set(priv, priv->ioaddr, true);
-+	stmmac_mac_set(priv, priv->hw->pcsr, true);
- 
- 	/* Start Rx & Tx DMA Channels */
- 	stmmac_start_all_dma(priv);
-@@ -7769,7 +7769,7 @@
- 		stmmac_pmt(priv, priv->hw, priv->wolopts);
- 		priv->irq_wake = 1;
- 	} else {
--		stmmac_mac_set(priv, priv->ioaddr, false);
-+		stmmac_mac_set(priv, priv->hw->pcsr, false);
- 		pinctrl_pm_select_sleep_state(priv->device);
- 	}
- 
+-	void __iomem *ioaddr = (void __iomem *)dev->base_addr;
++	void __iomem *ioaddr = hw->pcsr;
+ 	unsigned int value = 0;
+ 	unsigned int perfect_addr_number = hw->unicast_filter_entries;
+ 	u32 mc_filter[8];
 diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+index 81d4039e1c08..8e902ef6a752 100644
 --- a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
 +++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
-@@ -564,7 +564,7 @@
+@@ -564,7 +564,7 @@ static void stmmac_get_ethtool_stats(struct net_device *dev,
  		}
  
  		if (priv->synopsys_id >= DWMAC_CORE_3_50)
@@ -102,9 +49,10 @@ diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c b/drivers/net/
  					rx_queues_count, tx_queues_count);
  	}
 diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_hwtstamp.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_hwtstamp.c
+index bb110124f21e..8a12560a2928 100644
 --- a/drivers/net/ethernet/stmicro/stmmac/stmmac_hwtstamp.c
 +++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_hwtstamp.c
-@@ -225,7 +225,7 @@
+@@ -225,7 +225,7 @@ static void timestamp_interrupt(struct stmmac_priv *priv)
  		return;
  	}
  
@@ -113,7 +61,7 @@ diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_hwtstamp.c b/drivers/net
  
  	if (!tsync_int)
  		return;
-@@ -233,7 +233,7 @@
+@@ -233,7 +233,7 @@ static void timestamp_interrupt(struct stmmac_priv *priv)
  	/* Read timestamp status to clear interrupt from either external
  	 * timestamp or start/end of PPS.
  	 */
@@ -122,15 +70,79 @@ diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_hwtstamp.c b/drivers/net
  
  	if (!(priv->plat->flags & STMMAC_FLAG_EXT_SNAPSHOT_EN))
  		return;
-diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac1000_core.c b/drivers/net/ethernet/stmicro/stmmac/dwmac1000_core.c
---- a/drivers/net/ethernet/stmicro/stmmac/dwmac1000_core.c
-+++ b/drivers/net/ethernet/stmicro/stmmac/dwmac1000_core.c
-@@ -142,7 +142,7 @@
- static void dwmac1000_set_filter(struct mac_device_info *hw,
- 				 struct net_device *dev)
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+index 3be0b7953249..3d223d81a57b 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+@@ -866,7 +866,7 @@ static void stmmac_mac_link_down(struct phylink_config *config,
  {
--	void __iomem *ioaddr = (void __iomem *)dev->base_addr;
-+	void __iomem *ioaddr = hw->pcsr;
- 	unsigned int value = 0;
- 	unsigned int perfect_addr_number = hw->unicast_filter_entries;
- 	u32 mc_filter[8];
+ 	struct stmmac_priv *priv = netdev_priv(to_net_dev(config->dev));
+ 
+-	stmmac_mac_set(priv, priv->ioaddr, false);
++	stmmac_mac_set(priv, priv->hw->pcsr, false);
+ 	if (priv->dma_cap.eee)
+ 		stmmac_set_eee_pls(priv, priv->hw, false);
+ 
+@@ -889,7 +889,7 @@ static void stmmac_mac_link_up(struct phylink_config *config,
+ 	    priv->plat->serdes_powerup)
+ 		priv->plat->serdes_powerup(priv->dev, priv->plat->bsp_priv);
+ 
+-	old_ctrl = readl(priv->ioaddr + MAC_CTRL_REG);
++	old_ctrl = readl(priv->hw->pcsr + MAC_CTRL_REG);
+ 	ctrl = old_ctrl & ~priv->hw->link.speed_mask;
+ 
+ 	switch (speed) {
+@@ -954,7 +954,7 @@ static void stmmac_mac_link_up(struct phylink_config *config,
+ 	stmmac_mac_flow_ctrl(priv, duplex, flow_ctrl);
+ 
+ 	if (ctrl != old_ctrl)
+-		writel(ctrl, priv->ioaddr + MAC_CTRL_REG);
++		writel(ctrl, priv->hw->pcsr + MAC_CTRL_REG);
+ 
+ 	if (priv->plat->set_clk_tx_rate) {
+ 		ret = priv->plat->set_clk_tx_rate(priv->plat->bsp_priv,
+@@ -966,7 +966,7 @@ static void stmmac_mac_link_up(struct phylink_config *config,
+ 				   phy_modes(interface), speed, ERR_PTR(ret));
+ 	}
+ 
+-	stmmac_mac_set(priv, priv->ioaddr, true);
++	stmmac_mac_set(priv, priv->hw->pcsr, true);
+ 	if (priv->dma_cap.eee)
+ 		stmmac_set_eee_pls(priv, priv->hw, true);
+ 
+@@ -3461,7 +3461,7 @@ static int stmmac_hw_setup(struct net_device *dev)
+ 	}
+ 
+ 	/* Enable the MAC Rx/Tx */
+-	stmmac_mac_set(priv, priv->ioaddr, true);
++	stmmac_mac_set(priv, priv->hw->pcsr, true);
+ 
+ 	/* Set the HW DMA mode and the COE */
+ 	stmmac_dma_operation_mode(priv);
+@@ -6867,7 +6867,7 @@ void stmmac_xdp_release(struct net_device *dev)
+ 	free_dma_desc_resources(priv, &priv->dma_conf);
+ 
+ 	/* Disable the MAC Rx/Tx */
+-	stmmac_mac_set(priv, priv->ioaddr, false);
++	stmmac_mac_set(priv, priv->hw->pcsr, false);
+ 
+ 	/* set trans_start so we don't get spurious
+ 	 * watchdogs during reset
+@@ -6956,7 +6956,7 @@ int stmmac_xdp_open(struct net_device *dev)
+ 	}
+ 
+ 	/* Enable the MAC Rx/Tx */
+-	stmmac_mac_set(priv, priv->ioaddr, true);
++	stmmac_mac_set(priv, priv->hw->pcsr, true);
+ 
+ 	/* Start Rx & Tx DMA Channels */
+ 	stmmac_start_all_dma(priv);
+@@ -7769,7 +7769,7 @@ int stmmac_suspend(struct device *dev)
+ 		stmmac_pmt(priv, priv->hw, priv->wolopts);
+ 		priv->irq_wake = 1;
+ 	} else {
+-		stmmac_mac_set(priv, priv->ioaddr, false);
++		stmmac_mac_set(priv, priv->hw->pcsr, false);
+ 		pinctrl_pm_select_sleep_state(priv->device);
+ 	}
+ 

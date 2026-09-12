@@ -1,0 +1,163 @@
+#!/bin/sh
+# Maintain the editable Linux source workspace and its checked-in patch queue.
+set -eu
+
+usage()
+{
+	cat <<EOF
+usage: $0 prepare
+       $0 export-patches
+       $0 status
+       $0 --help
+
+Prepare kernel/linux from the checked-in kernel patch queue, or export the
+committed kernel changes back to that queue.
+
+Commands:
+  prepare         create kernel/linux and import the checked-in patches
+  export-patches  replace the checked-in patches from kernel/linux commits
+  status          show the kernel workspace status and port commit count
+EOF
+}
+
+fail()
+{
+	echo "kernel-sources: $*" >&2
+	exit 1
+}
+
+except_case_sensitive()
+{
+	cat <<-'EOF'
+	/*
+	!/include/uapi/linux/netfilter/xt_CONNMARK.h
+	!/include/uapi/linux/netfilter/xt_connmark.h
+	!/include/uapi/linux/netfilter/xt_DSCP.h
+	!/include/uapi/linux/netfilter/xt_dscp.h
+	!/include/uapi/linux/netfilter/xt_MARK.h
+	!/include/uapi/linux/netfilter/xt_mark.h
+	!/include/uapi/linux/netfilter/xt_RATEEST.h
+	!/include/uapi/linux/netfilter/xt_rateest.h
+	!/include/uapi/linux/netfilter/xt_TCPMSS.h
+	!/include/uapi/linux/netfilter/xt_tcpmss.h
+	!/include/uapi/linux/netfilter_ipv4/ipt_ECN.h
+	!/include/uapi/linux/netfilter_ipv4/ipt_ecn.h
+	!/include/uapi/linux/netfilter_ipv4/ipt_TTL.h
+	!/include/uapi/linux/netfilter_ipv4/ipt_ttl.h
+	!/include/uapi/linux/netfilter_ipv6/ip6t_HL.h
+	!/include/uapi/linux/netfilter_ipv6/ip6t_hl.h
+	!/net/netfilter/xt_DSCP.c
+	!/net/netfilter/xt_dscp.c
+	!/net/netfilter/xt_HL.c
+	!/net/netfilter/xt_hl.c
+	!/net/netfilter/xt_RATEEST.c
+	!/net/netfilter/xt_rateest.c
+	!/net/netfilter/xt_TCPMSS.c
+	!/net/netfilter/xt_tcpmss.c
+	!/tools/memory-model/litmus-tests/Z6.0+pooncelock+poonceLock+pombonce.litmus
+	!/tools/memory-model/litmus-tests/Z6.0+pooncelock+pooncelock+pombonce.litmus
+	EOF
+}
+
+workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+kernel_tree=$workspace/kernel/linux
+patch_dir=$workspace/br2-external/board/dhb-ax/patches/linux
+defconfig=$workspace/br2-external/configs/dhb_ax_defconfig
+
+. "$workspace/scripts/lib.sh"
+
+require_kernel_workspace()
+{
+	[ "$(git -C "$kernel_tree" rev-parse --is-inside-work-tree \
+		2>/dev/null || true)" = true ] ||
+		fail "no prepared kernel workspace at $kernel_tree; run: $0 prepare"
+}
+
+prepare()
+{
+	[ ! -e "$kernel_tree" ] && [ ! -L "$kernel_tree" ] ||
+		fail "$kernel_tree already exists; remove it explicitly before preparing again"
+
+	upstream_tag=$(sed -n '
+		s/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\([0-9][0-9.]*\)"$/v\1/p
+	' "$defconfig")
+	[ -n "$upstream_tag" ] || fail "production defconfig must select a kernel version"
+	require_env_file "$workspace/local.env" DHB_AX_LINUX_REPOSITORY
+
+	git -C "$DHB_AX_LINUX_REPOSITORY" rev-parse --git-dir >/dev/null 2>&1 || {
+		echo "kernel-sources: no shared kernel repository at $DHB_AX_LINUX_REPOSITORY" >&2
+		echo "clone it with: git clone --bare https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git $DHB_AX_LINUX_REPOSITORY" >&2
+		exit 1
+	}
+
+	mkdir -p "$kernel_tree"
+	git clone --local --no-checkout --quiet \
+		"$DHB_AX_LINUX_REPOSITORY" "$kernel_tree"
+	except_case_sensitive |
+		git -C "$kernel_tree" sparse-checkout set --no-cone --stdin
+	git -C "$kernel_tree" -c checkout.workers=0 \
+		switch --quiet --create dhb-ax "$upstream_tag"
+	git -C "$kernel_tree" tag dhb-ax-base
+
+	set -- "$patch_dir"/*.patch
+	[ -f "$1" ] || fail "no kernel patches found in $patch_dir"
+	git -C "$kernel_tree" am --quiet --no-gpg-sign "$@"
+
+	count=$(git -C "$kernel_tree" rev-list --count dhb-ax-base..dhb-ax)
+	echo "prepared $kernel_tree with $count patches"
+}
+
+export_patches()
+{
+	require_kernel_workspace
+	branch=$(git -C "$kernel_tree" symbolic-ref --quiet --short HEAD) ||
+		fail "kernel workspace has a detached HEAD"
+	[ "$branch" = dhb-ax ] ||
+		fail "kernel workspace must be on branch dhb-ax, not $branch"
+	[ -z "$(git -C "$kernel_tree" status --porcelain)" ] ||
+		fail "kernel workspace has uncommitted changes"
+	git -C "$kernel_tree" show-ref --verify --quiet refs/tags/dhb-ax-base ||
+		fail "kernel workspace has no dhb-ax-base tag"
+	git -C "$kernel_tree" merge-base --is-ancestor dhb-ax-base dhb-ax ||
+		fail "dhb-ax-base is not an ancestor of dhb-ax"
+	count=$(git -C "$kernel_tree" rev-list --count dhb-ax-base..dhb-ax)
+	[ "$count" -gt 0 ] || fail "kernel workspace contains no port commits"
+
+	find "$patch_dir" -maxdepth 1 -type f -name '*.patch' -delete
+	git -C "$kernel_tree" format-patch --quiet --no-numbered --zero-commit \
+		--no-signature --output-directory="$patch_dir" \
+		dhb-ax-base..dhb-ax
+	echo "exported $count patches -> $patch_dir"
+}
+
+status()
+{
+	require_kernel_workspace
+	git -C "$kernel_tree" status --short --branch
+	count=$(git -C "$kernel_tree" rev-list --count dhb-ax-base..HEAD)
+	echo "$count commits since dhb-ax-base"
+}
+
+[ "$#" -eq 1 ] || {
+	usage >&2
+	exit 2
+}
+
+case $1 in
+prepare)
+	prepare
+	;;
+export-patches)
+	export_patches
+	;;
+status)
+	status
+	;;
+-h | --help)
+	usage
+	;;
+*)
+	usage >&2
+	exit 2
+	;;
+esac

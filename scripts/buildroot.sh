@@ -75,6 +75,12 @@ if [ ! -f "$buildroot_src/Makefile" ]; then
 	exit 1
 fi
 
+case $build_config in
+main | minimal)
+	"$repo/scripts/kernel-sources" status >/dev/null
+	;;
+esac
+
 # menuconfig and friends need a terminal; everything else does not, and
 # allocating one breaks the script when stdout is a pipe.  Note that
 # dhb_ax_defconfig is *not* interactive, so match the curses targets by name

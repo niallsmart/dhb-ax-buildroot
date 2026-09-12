@@ -1,0 +1,2 @@
+# Mail patches contain unified-diff whitespace that the outer repository would misidentify as errors.
+br2-external/board/dhb-ax/patches/linux/*.patch -whitespace
