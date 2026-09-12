@@ -3,12 +3,10 @@
 + migrate kernel configuration to defconfig files
 * replace local.env with .env / .env.local (that is more canonical?)
 * remove the Justfile
-* consolidate kernel and Buildroot sources under vendor/ or upstream/?
+* consolidate kernel and Buildroot sources under sources/, vendor/ or upstream/?
 
 # Stage and Boot tooling
 
-+ `usb reset` issued twice, once for kernel, once for roots
-+ compress kernel with XZ instead
 * load addresses belong in a board-level config, not in boot profiles
 * boot profiles should be in profile/ not config/
 * remove check_console (runs on the Raspberry Pi)
@@ -21,11 +19,9 @@
 # Buildroot
 
 ## General
-+ consolidate to a single Buildroot profile?
-* rename bootstrap-sources.sh and remove version embedded in path* 
-* upgrade Buildroot from LTS (?)
+* rename bootstrap-sources.sh, upgrade Buildroot and remove version embedded in path
 * review/consolidate files in br2-external (Config.in, external.mk, post-build scripts, etc)
-* stage TFTP on local macOS
+* stage TFTP on local macOS (?)
 
 
 ## Worktree support
