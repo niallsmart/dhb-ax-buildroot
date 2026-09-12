@@ -1,14 +1,12 @@
 #!/bin/sh
-# Install the machine-local SSH identity shared by the production and
-# diagnostic images.
+# Install the machine-local SSH identity for the Buildroot image.
 set -eu
 
 target=${1:-$TARGET_DIR}
 local_ssh=${2:-}
 
 # The local key directory holds Dropbear-native host keys.  Copying them into
-# each image preserves the host identity across main-image upgrades and
-# diagnostic-image boots.
+# the image preserves the host identity across upgrades and initramfs boots.
 if [ -z "$local_ssh" ]; then
 	echo "post-build-ssh: local SSH input directory argument is missing" >&2
 	exit 1

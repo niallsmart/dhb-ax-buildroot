@@ -6,7 +6,7 @@
 # it cannot be used here.  Its LINUX_APPEND_DTB runs two loops over
 # LINUX_DTS_NAME: the `cat` loop takes $(basename ${dtb}), the mkimage loop
 # does not.  Our device trees live in a hisilicon/ subdirectory -- they have to,
-# because patch 0001 adds them to arch/arm/boot/dts/hisilicon/Makefile -- so
+# because patch 0001 adds it to arch/arm/boot/dts/hisilicon/Makefile -- so
 # LINUX_DTS_NAME carries that prefix and mkimage is asked to write
 # "uImage.hisilicon/hi3531-dhb-ax", a path whose directory does not exist:
 #
@@ -43,6 +43,18 @@ uimage=$images/uImage-$stem
 
 cat "$images/zImage" "$dtb" > "$appended"
 
+# The vendor U-Boot refuses a kernel payload whose destination range reaches
+# 0x80800000 ("kernel image will overwrite uboot"). The payload starts at
+# 0x80008000, leaving 0x7f8000 bytes for the appended zImage and DTB.
+max_payload=8355840
+min_margin=524288
+max_planned_payload=$((max_payload - min_margin))
+payload_size=$(wc -c < "$appended")
+if [ "$payload_size" -gt "$max_planned_payload" ]; then
+	echo "post-image: payload is $payload_size bytes; at least $min_margin bytes must remain below the $max_payload-byte vendor U-Boot ceiling" >&2
+	exit 1
+fi
+
 # Load and entry address both 0x80008000: this U-Boot passes ATAGs and
 # has no FDT commands, so the kernel must land where it expects.
 "$mkimage" -A arm -O linux -T kernel -C none \
@@ -51,11 +63,12 @@ cat "$images/zImage" "$dtb" > "$appended"
 	-d "$appended" \
 	"$uimage" > /dev/null
 
-echo "post-image: $(basename "$uimage")"
+margin=$((max_payload - payload_size))
+echo "post-image: $(basename "$uimage") ($margin-byte payload margin)"
 
 set -- "$TARGET_DIR"/lib/modules/*
 if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
-	echo "post-image: production rootfs must contain exactly one kernel module release" >&2
+	echo "post-image: rootfs must contain exactly one kernel module release" >&2
 	exit 1
 fi
 release=${1##*/}

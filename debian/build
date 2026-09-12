@@ -10,8 +10,8 @@ require_env_file "$workspace/local.env" \
 
 modules=$workspace/artifacts/buildroot/kernel-modules.tar
 if [ ! -r "$modules" ]; then
-	echo "no production kernel module archive at $modules" >&2
-	echo "build it first with: scripts/buildroot.sh --config main" >&2
+	echo "no kernel module archive at $modules" >&2
+	echo "build it first with: scripts/buildroot.sh" >&2
 	exit 1
 fi
 

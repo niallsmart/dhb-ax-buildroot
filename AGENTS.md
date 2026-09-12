@@ -41,7 +41,8 @@ Booting the Buildroot system requires coordination across these three areas:
 
 These tools consume profiles defined under `tools/configs/` which describe the source artifacts, staging method, boot parameters, etc. The most commonly used profiles are:
 
-* `minimal-tftp`: Boots the DVR to the minimal kernel and root filesystem (staged over TFTP)
+* `buildroot-tftp`: Boots the DVR to the kernel and root filesystem (staged over TFTP)
+* `buildroot-usb`: Boots the DVR to the kernel and initramfs from USB
 * `vendor`: Boots the DVR to the vendor Linux system
 * `uboot`: Boots the DVR to the U-Boot prompt
 
@@ -53,9 +54,9 @@ Here is an example of an end-to-end build. This example assumes the storage devi
 
 | Step | Command | Description |
 |---|---|---|
-| 1    | `./scripts/buildroot.sh --config minimal` | Invokes Buildroot using the `minimal` defconfig described in `br2-external/configs/dhb_ax_minimal_defconfig`. This defconfig packages the root filesystem as an initramfs. |
-| 2    | `./tools/dvr-stage minimal-tftp` | Stages the kernel image produced in step 1 to a TFTP server, as described in `tools/configs/minimal-tftp.toml`. |
-| 3    | `./tools/dvr-boot minimal-tftp` | Boots the DVR into the kernel staged in step 2. |
+| 1    | `./scripts/buildroot.sh` | Invokes Buildroot using the board defconfig described in `br2-external/configs/dhb_ax_defconfig`. This defconfig packages the root filesystem as an initramfs. |
+| 2    | `./tools/dvr-stage buildroot-tftp` | Stages the kernel image produced in step 1 to a TFTP server, as described in `tools/configs/buildroot-tftp.toml`. |
+| 3    | `./tools/dvr-boot buildroot-tftp` | Boots the DVR into the kernel staged in step 2. |
 
 
 ## Connecting to the DVR

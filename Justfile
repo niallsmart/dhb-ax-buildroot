@@ -10,7 +10,7 @@ bootstrap:
 build *args:
     scripts/buildroot.sh {{args}}
 
-# Clean the production Buildroot output.
+# Clean the Buildroot output.
 clean:
     scripts/buildroot.sh clean
 
@@ -26,6 +26,6 @@ boot profile="buildroot-usb-hdd" *args:
 stage profile="buildroot-usb-hdd" *args:
     tools/dvr-stage {{args}} {{profile}}
 
-# Destructively repartition the HDD and USB drive; requires the minimal initramfs.
+# Destructively repartition the HDD and USB drive; requires a Buildroot initramfs.
 prepare-storage *args:
     tools/dvr-prepare-storage {{args}}

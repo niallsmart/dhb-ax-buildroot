@@ -11,14 +11,12 @@ set -eu
 usage()
 {
 	cat <<EOF
-usage: $0 [--config NAME] [target ...]. # run buildroot target (or default)
-       $0 [--config NAME] --shell       # run shell
-       $0 --distclean                   # drops every build volume
+usage: $0 [--toolchain] [target ...] # run Buildroot target (or default)
+       $0 [--toolchain] --shell     # run shell
+       $0 --distclean              # drops every build volume
 
-Configurations:
-  main       production image (default)
-  toolchain  build and install the shared cross-toolchain SDK
-  minimal    UART diagnostic image
+The default builds dhb_ax_defconfig. Use --toolchain to build and install
+the shared cross-toolchain SDK (dhb_ax_toolchain_defconfig).
 
 EOF
 }
@@ -29,27 +27,15 @@ image=dhb-ax-buildroot:bookworm
 volume_dl=dhb-ax-br-dl
 volume_ccache=dhb-ax-br-ccache
 volume_sdk=dhb-ax-br-sdk
+volume_output=dhb-ax-br-output
 container_home=/home/br
-build_config=main
+toolchain=false
 
-if [ "${1:-}" = "--config" ]; then
-	if [ "$#" -lt 2 ]; then
-		usage > /dev/stderr
-		exit 2
-	fi
-	build_config=$2
-	shift 2
+if [ "${1:-}" = "--toolchain" ]; then
+	toolchain=true
+	volume_output=dhb-ax-br-toolchain-output
+	shift
 fi
-
-case $build_config in
-main|toolchain|minimal)
-	volume_output=dhb-ax-br-${build_config}-output
-	;;
-*)
-	usage > /dev/stderr
-	exit 2
-	;;
-esac
 
 # These options do not require local.env, so process them first.
 case "${1:-}" in
@@ -75,18 +61,22 @@ if [ ! -f "$buildroot_src/Makefile" ]; then
 	exit 1
 fi
 
-case $build_config in
-main | minimal)
+if ! "$toolchain"; then
 	"$repo/scripts/kernel-sources" status >/dev/null
-	;;
-esac
+fi
 
-# menuconfig and friends need a terminal; everything else does not, and
-# allocating one breaks the script when stdout is a pipe.  Note that
-# dhb_ax_defconfig is *not* interactive, so match the curses targets by name
+# menuconfig and friends require a terminal; --shell uses one when available.
+# dhb_ax_defconfig is not interactive, so match the curses targets by name
 # rather than by a "*config" glob.
 tty_flags=
+cmd=/work/scripts/buildroot-in-container.sh
 case "${1:-}" in
+--shell)
+	tty_flags=-i
+	[ -t 0 ] && tty_flags="-t $tty_flags"
+	cmd=/bin/bash
+	shift
+	;;
 *menuconfig | *nconfig | *xconfig | *gconfig)
 	if [ -t 0 ]; then
 		tty_flags=-it
@@ -97,28 +87,21 @@ case "${1:-}" in
 	;;
 esac
 
-if [ "${1:-}" = "--shell" ]; then
-	tty_flags=-i
-	[ -t 0 ] && tty_flags="-t $tty_flags"
-	cmd=/bin/bash
-	shift
-else
-	cmd=/work/scripts/buildroot-in-container.sh
-fi
-
 docker build \
 	--file "$repo/scripts/Dockerfile.buildroot" \
 	--tag "$image" \
 	"$repo/scripts"
 
-if [ "$build_config" = toolchain ]; then
+if "$toolchain"; then
 	sdk_mount="type=volume,source=$volume_sdk,target=$container_home/sdk"
 else
 	sdk_mount="type=volume,source=$volume_sdk,target=$container_home/sdk,readonly"
 fi
 
+mkdir -p "$repo/artifacts"
+
 docker run --rm $tty_flags \
-	--env "BUILD_CONFIG=$build_config" \
+	--env "BUILD_TOOLCHAIN=$toolchain" \
 	--env "GIT_CEILING_DIRECTORIES=/work" \
 	--mount "type=bind,source=$repo,target=/work,readonly" \
 	--mount "type=bind,source=$repo/artifacts,target=/work/artifacts" \

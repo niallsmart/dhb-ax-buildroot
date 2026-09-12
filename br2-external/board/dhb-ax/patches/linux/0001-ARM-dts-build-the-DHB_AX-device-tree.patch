@@ -1,27 +1,23 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Niall Smart <niall.smart@gmail.com>
 Date: Fri, 11 Sep 2026 08:31:13 -0400
-Subject: [PATCH] ARM: dts: build the DHB_AX device trees
+Subject: [PATCH] ARM: dts: build the DHB_AX device tree
 
-Both variants are built from the same source tree, so add both in one hunk:
-splitting them across two patches makes neither able to apply nor reverse-
-apply once the other is in the tree, which breaks repeat builds.
 ---
- arch/arm/boot/dts/hisilicon/Makefile | 4 +++-
- 1 file changed, 3 insertions(+), 1 deletion(-)
+ arch/arm/boot/dts/hisilicon/Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/arch/arm/boot/dts/hisilicon/Makefile b/arch/arm/boot/dts/hisilicon/Makefile
-index 5ce0512c0010..81d2d1a4f12c 100644
+index 5ce0512c0010..047f9ca044f5 100644
 --- a/arch/arm/boot/dts/hisilicon/Makefile
 +++ b/arch/arm/boot/dts/hisilicon/Makefile
-@@ -6,7 +6,9 @@ dtb-$(CONFIG_ARCH_HIP01) += \
+@@ -6,7 +6,8 @@ dtb-$(CONFIG_ARCH_HIP01) += \
  dtb-$(CONFIG_ARCH_HIP04) += \
  	hip04-d01.dtb
  dtb-$(CONFIG_ARCH_HISI) += \
 -	hi3519-demb.dtb
 +	hi3519-demb.dtb \
-+	hi3531-dhb-ax.dtb \
-+	hi3531-dhb-ax-minimal.dtb
++	hi3531-dhb-ax.dtb
  dtb-$(CONFIG_ARCH_HIX5HD2) += \
  	hisi-x5hd2-dkb.dtb
  dtb-$(CONFIG_ARCH_SD5203) += \
