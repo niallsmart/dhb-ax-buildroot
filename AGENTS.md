@@ -23,13 +23,13 @@ Buildroot runs in a Docker image through `scripts/buildroot.sh`.
 
 The canonical kernel patch queue for this port is maintained in `br2-external/board/dhb-ax/patches/linux/`
 
-For ease of development, Buildroot references the Git workspace located at `kernel/linux`, which it reads directly through `LINUX_OVERRIDE_SRCDIR`.
+For ease of development, Buildroot references kernel sources in the Git workspace `kernel/linux` (via `LINUX_OVERRIDE_SRCDIR`).
 
-Initialize this workspace using `scripts/kernel-sources prepare`. This command will clone the bare stable-kernel repository identified by `DHB_AX_LINUX_REPOSITORY` in `local.env`, and then import the canonical patch queue onto its `dhb-ax` branch, with `dhb-ax-base` identifying the pristine kernel revision.
+Initialize the workspace using `scripts/kernel-sources prepare`. This command will clone the upstream repository identified by `DHB_AX_LINUX_REPOSITORY` and then import the patch queue onto a new `dhb-ax` branch.
 
-After the workspace is prepared, you can make edits in that folder directly and build using the appropriate Buildroot target(s) (such as `linux-rebuild`).
+Once the workspace is prepared, you can make edits in that folder directly and build using the appropriate Buildroot target(s) (such as `linux-rebuild`).
 
-To commit verified changes, first commit in the workspace, and then use `scripts/kernel-sources export-patches` to regenerate the patch queue.
+To commit verified changes, first commit in the workspace. Use fixup commits for changes that correct or complete prior commits on `dhb-ax`. Once the commit history is correct, run an autosquash rebase, and then use `scripts/kernel-sources export-patches` to regenerate the patch queue.
 
 ### Staging and Deployment
 
