@@ -87,6 +87,13 @@ class Profile:
             for item in (self.kernel, self.rootfs)
         )
 
+    @property
+    def uses_usb(self) -> bool:
+        return any(
+            item is not None and item.source == "usb"
+            for item in (self.kernel, self.rootfs)
+        )
+
 
 def repository_root() -> Path:
     return Path(

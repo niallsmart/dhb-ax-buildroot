@@ -55,7 +55,3 @@ fi
 echo
 echo "ready:"
 printf '  %-34s %s\n' "buildroot $br_version" "$br_src"
-
-echo
-echo "build the shared SDK with: scripts/buildroot.sh --toolchain"
-echo "then build the image with: scripts/buildroot.sh"

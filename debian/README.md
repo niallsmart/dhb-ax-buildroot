@@ -15,6 +15,8 @@ The builder also requires `DHB_AX_DVR_ETHADDR` in `local.env`, plus the authoriz
 
 `build` creates an ARMv7 builder container from `Dockerfile`. The container runs `build-in-container.sh`, installs the packages in `packages.txt`, applies `overlay/`, adds the kernel modules and SSH material, and writes the results beneath `artifacts/debian/`.
 
+The builder prepares all artifacts in a temporary directory, then clears `artifacts/debian/` and copies in the completed set after a successful build.
+
 The generated files are:
 
 - `rootfs.cpio.xz`: root filesystem archive for HDD installation.

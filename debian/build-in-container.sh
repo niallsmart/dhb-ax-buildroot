@@ -9,14 +9,18 @@ modules=$workspace/artifacts/buildroot/kernel-modules.tar
 local_ssh=$workspace/artifacts/local/ssh
 overlay=$workspace/debian/overlay
 package_list=$workspace/debian/packages.txt
-rootfs=$(mktemp -d /tmp/dhb-ax-debian-rootfs.XXXXXX)
+build_dir=$(mktemp -d /tmp/dhb-ax-debian.XXXXXX)
+rootfs=$build_dir/rootfs
+images=$build_dir/images
 
 cleanup()
 {
-	rm -rf -- "$rootfs"
+	rm -rf -- "$build_dir"
 }
 trap cleanup EXIT
 trap 'exit 130' HUP INT TERM
+
+mkdir -p "$rootfs" "$images"
 
 fail()
 {
@@ -72,9 +76,8 @@ systemctl --root="$rootfs" enable \
 	ssh nftables systemd-networkd systemd-resolved systemd-timesyncd \
 	fstrim.timer >/dev/null
 
-install -d -m 0755 "$output"
 chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
-	LC_ALL=C sort > "$output/packages.txt"
+	LC_ALL=C sort > "$images/packages.txt"
 
 # systemd opens /dev/console before it mounts devtmpfs, and this archive is
 # unpacked into an empty ramfs when it serves as the initramfs root. Debian
@@ -87,7 +90,7 @@ chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
 (cd "$rootfs" && find . -print0 |
 	LC_ALL=C sort -z |
 	cpio --null --create --format=newc --quiet) |
-	xz -9 -C crc32 > "$output/rootfs.cpio.xz"
+	xz -9 -C crc32 > "$images/rootfs.cpio.xz"
 
 {
 	echo 'suite=trixie'
@@ -95,8 +98,11 @@ chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
 	echo "mmdebstrap=$(mmdebstrap --version | head -n 1)"
 	echo "kernel_release=$kernel_release"
 	echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-} > "$output/build-info.txt"
+} > "$images/build-info.txt"
 
-rm -f "$output/rootfs.cpio.gz" "$output/rootfs.tar" "$output/rootfs.tar.sha256"
+# Replace the published artifacts only after the build succeeds.
+rm -rf -- "$output"
+install -d -m 0755 "$output"
+cp "$images/"* "$output/"
 
 echo "Debian rootfs artifacts -> ${output#/work/}/"

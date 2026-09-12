@@ -1,53 +1,49 @@
-# Miscellaneous
+# General
 
-* Remove the GitHub action
-
-* Remove the Justfile
-
-* Get dvr-console.sh to show an error when picocom fails (e.g., because it's already running elsewhere)
-
-* Move TFTP to macos
-
-# Directory structure
-
-* Consolidate kernel and Buildroot sources under vendor/ or upstream/?
++ migrate kernel configuration to defconfig files
+* replace local.env with .env / .env.local (that is more canonical?)
+* remove the Justfile
+* consolidate kernel and Buildroot sources under vendor/ or upstream/?
 
 # Stage and Boot tooling
 
-* Fix profile naming and remove unused profiles.
-
-* The load addresses belong in a board-level hardware definition, not in each boot profile.
-
-* Print wall clock time after completion (boot, stage)
-
-* Implement dvr-tail (may require reworking dvr-boot's pipe-pane -- they can't bs shared)
-
-* The directory should be profile/ not config/ (too easily confused with Kconfg)
-
-* Remove check_console (runs on the Raspberry Pi and checks /proc/consoles for an active ttyAMA0 kernel console.)
-
-* A computed property such as profile.uses_tftp might simplify conditional guards
++ `usb reset` issued twice, once for kernel, once for roots
++ compress kernel with XZ instead
+* load addresses belong in a board-level config, not in boot profiles
+* boot profiles should be in profile/ not config/
+* remove check_console (runs on the Raspberry Pi)
+* computed property such as profile.uses_tftp might simplify guards
+* get dvr-console.sh to show an error when picocom fails (e.g., because it's already running outside `dvr` tmux)
+* lib.sh -> common.sh
+* fix profile naming and remove unused profiles
+* print wall clock time after completion (boot, stage)
 
 # Buildroot
 
+## General
++ consolidate to a single Buildroot profile?
+* rename bootstrap-sources.sh and remove version embedded in path* 
+* upgrade Buildroot from LTS (?)
+* review/consolidate files in br2-external (Config.in, external.mk, post-build scripts, etc)
+* stage TFTP on local macOS
+
+
 ## Worktree support
-* Fix SSH keys in artifacts folder
-* Fix console log
-* Copy downloaded files to save time
+* what are "elevated commands" and what project configuration did it create in `codex/benchmark-xz`
+* debug UV/Docker socket permission issues (maybe should have local UV cache?)
+* independent volumes
+* allow agents to prepare sources
+* fix console log (what is this?)
+* fix how SSH keys are handled (should not be in in artifacts/local)
+* reuse or copy buildroot tgz to save time on a new branch (maybe?)
 
-## Other
-* Stage TFTP on local macOS
-* Consolidate to a single profile?
-* Move to .env / .env.local (are they more canonical?)
-* Remove song and dance required to set the root password
-* Upgrade from LTS
-* Review/consolidate files in br2-external (Config.in, external.mk, post-build scripts, etc)
-* Does root-owned /work still make sense, or should it be $HOME/work?
+## Docker
 
-## Dockerfile
+* does root-owned /work still make sense, or should it be $HOME/work?
+* make --shell drop into ~/output?
+* replace the Debian package list with a shorthand version?
+* review some of the complications that have crept into Dockerfile (dtschema, LANG)
 
-* Replace the Debian package list with a shorthand version?
-* Review some of the complications that have crept into Dockerfile (dtschema, LANG)
 
 # Ethernet Driver
 

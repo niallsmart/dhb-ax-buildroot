@@ -487,8 +487,6 @@ def require_uboot_prompt(console, message):
 
 
 def load_usb_file(usb_device, target, load_address, console):
-    print("Scanning USB storage...")
-    run_uboot_command(console, "usb reset")
     print(f"Loading USB {usb_device}/{target}...")
     console.send(f" fatload usb {usb_device} {load_address} {target}\r")
     state, _ = console.wait(
@@ -673,6 +671,10 @@ def boot(profile, settings: LocalSettings, console, bootargs=()):
 
     if profile.uses_tftp:
         configure_uboot_network(settings, console)
+
+    if profile.uses_usb:
+        print("Scanning USB storage...")
+        run_uboot_command(console, "usb reset")
 
     extra = tuple(bootargs)
     if profile.rootfs.source in ("tftp", "usb"):
