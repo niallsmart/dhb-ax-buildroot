@@ -97,6 +97,8 @@ Prefer proven, off-the-shelf tools for general debugging, diagnostics and benchm
 
 Use the project’s maintained scripts and tools for builds, staging, deployment, booting, and device access. If the existing tooling is insufficint, explain why
 
+Do not create partial or temporary copies of the repository to exercise maintained workflows. Run them in the real workspace; if its current state prevents a safe test, stop and explain the constraint.
+
 If a maintained workflow fails because of missing files, worktree layout, environment configuration, permissions, container mounts, or another setup problem, then stop and report the exact failure.
 
 Running documented `--help`, status, inspection, lint, and other read-only diagnostic commands is allowed.

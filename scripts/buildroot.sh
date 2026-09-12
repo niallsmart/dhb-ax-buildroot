@@ -78,13 +78,7 @@ fi
 linux_override=
 case $build_config in
 main | minimal)
-	kernel_tree=$repo/kernel/linux
-	[ "$(git -C "$kernel_tree" rev-parse --is-inside-work-tree \
-		2>/dev/null || true)" = true ] || {
-		echo "no prepared kernel workspace at $kernel_tree" >&2
-		echo "run: ./scripts/kernel-sources prepare" >&2
-		exit 1
-	}
+	"$repo/scripts/kernel-sources" status >/dev/null
 	linux_override=/work/kernel/linux
 	;;
 esac
