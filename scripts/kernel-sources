@@ -22,7 +22,7 @@ EOF
 
 fail()
 {
-	echo "kernel-sources: $*" >&2
+	echo "$*" >&2
 	exit 1
 }
 
@@ -70,7 +70,7 @@ require_kernel_workspace()
 {
 	[ "$(git -C "$kernel_tree" rev-parse --is-inside-work-tree \
 		2>/dev/null || true)" = true ] ||
-		fail "no prepared kernel workspace at $kernel_tree; run: $0 prepare"
+		fail "kernel workspace is required; run: ./scripts/kernel-sources prepare"
 }
 
 prepare()
