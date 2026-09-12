@@ -60,8 +60,7 @@ except_case_sensitive()
 }
 
 workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-kernel_dir=$workspace/kernel
-kernel_tree=$kernel_dir/linux
+kernel_tree=$workspace/kernel/linux
 patch_dir=$workspace/br2-external/board/dhb-ax/patches/linux
 defconfig=$workspace/br2-external/configs/dhb_ax_defconfig
 
@@ -84,18 +83,19 @@ prepare()
 	' "$defconfig")
 	[ -n "$upstream_tag" ] || fail "production defconfig must select a kernel version"
 	require_env_file "$workspace/local.env" DHB_AX_LINUX_REPOSITORY
-	upstream=$DHB_AX_LINUX_REPOSITORY
 
-	git -C "$upstream" rev-parse --git-dir >/dev/null 2>&1 || {
-		echo "kernel-sources: no shared kernel repository at $upstream" >&2
-		echo "clone it with: git clone --bare https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git $upstream" >&2
+	git -C "$DHB_AX_LINUX_REPOSITORY" rev-parse --git-dir >/dev/null 2>&1 || {
+		echo "kernel-sources: no shared kernel repository at $DHB_AX_LINUX_REPOSITORY" >&2
+		echo "clone it with: git clone --bare https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git $DHB_AX_LINUX_REPOSITORY" >&2
 		exit 1
 	}
-	git -C "$upstream" rev-parse --verify --quiet "$upstream_tag^{commit}" \
-		>/dev/null || fail "$upstream contains no $upstream_tag tag"
+	git -C "$DHB_AX_LINUX_REPOSITORY" rev-parse --verify --quiet \
+		"$upstream_tag^{commit}" >/dev/null ||
+		fail "$DHB_AX_LINUX_REPOSITORY contains no $upstream_tag tag"
 
-	mkdir -p "$kernel_dir"
-	git clone --local --no-checkout --quiet "$upstream" "$kernel_tree"
+	mkdir -p "$kernel_tree"
+	git clone --local --no-checkout --quiet \
+		"$DHB_AX_LINUX_REPOSITORY" "$kernel_tree"
 	except_case_sensitive |
 		git -C "$kernel_tree" sparse-checkout set --no-cone --stdin
 	git -C "$kernel_tree" -c checkout.workers=0 \
