@@ -75,11 +75,9 @@ if [ ! -f "$buildroot_src/Makefile" ]; then
 	exit 1
 fi
 
-linux_override=
 case $build_config in
 main | minimal)
 	"$repo/scripts/kernel-sources" status >/dev/null
-	linux_override=/work/kernel/linux
 	;;
 esac
 
@@ -122,7 +120,6 @@ fi
 docker run --rm $tty_flags \
 	--env "BUILD_CONFIG=$build_config" \
 	--env "GIT_CEILING_DIRECTORIES=/work" \
-	--env "LINUX_OVERRIDE_SRCDIR=$linux_override" \
 	--mount "type=bind,source=$repo,target=/work,readonly" \
 	--mount "type=bind,source=$repo/artifacts,target=/work/artifacts" \
 	--mount "type=bind,source=$repo/br2-external,target=/work/br2-external" \

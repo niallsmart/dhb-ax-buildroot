@@ -46,8 +46,7 @@ mkdir -p "$artifacts"
 # harmless and keeps the two calls identical.
 br() {
 	make --silent -C "$buildroot" O="$output" BR2_EXTERNAL="$external" \
-		BR2_DL_DIR="$downloads" \
-		LINUX_OVERRIDE_SRCDIR="${LINUX_OVERRIDE_SRCDIR:-}" "$@"
+		BR2_DL_DIR="$downloads" "$@"
 }
 
 if [ "$#" -gt 0 ]; then
