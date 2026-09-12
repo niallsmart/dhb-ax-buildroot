@@ -89,9 +89,10 @@ def _create_private_log(path: Path) -> None:
 
 def ensure_console_log(session: str = TMUX_SESSION) -> Path:
     """Ensure the session has one persistent pipe writing to its shared log."""
-    if _tmux("has-session", "-t", session).returncode:
+    result = _tmux("has-session", "-t", session)
+    if result.returncode:
         raise ConsoleLogError(
-            f"no tmux session '{session}'; start it with: just dvr-console"
+            result.stdout.strip() or f"could not inspect tmux session '{session}'"
         )
 
     path = console_log_path()
