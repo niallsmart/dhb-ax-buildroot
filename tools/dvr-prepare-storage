@@ -1,7 +1,7 @@
 #!/bin/sh
 # Destructively prepare the known DHB_AX HDD and USB flash drive for Linux.
 #
-# Run this from the development host while the DVR is using the minimal
+# Run this from the development host while the DVR is using the Buildroot
 # initramfs. The strict hardware checks are intentional: /dev/sdX names alone
 # are not enough justification for erasing a disk.
 set -eu
@@ -11,14 +11,19 @@ repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 require_env_file "$repo/local.env" DHB_AX_DVR_IPADDR
 target=root@${DHB_AX_DVR_IPADDR}
 
-if [ "${1:-}" != "--destroy-all-data" ] || [ "$#" -ne 1 ]; then
-	echo "usage: $0 --destroy-all-data" >&2
+case ${1:-} in
+--check | --destroy-all-data) mode=$1 ;;
+*) mode= ;;
+esac
+if [ -z "$mode" ] || [ "$#" -ne 1 ]; then
+	echo "usage: $0 --check | --destroy-all-data" >&2
 	echo "" >&2
-	echo "This erases the 250 GB Samsung SSD and 8 GB Corsair USB drive." >&2
+	echo "--check runs preflight without changing storage." >&2
+	echo "--destroy-all-data erases the 250 GB Samsung SSD and 8 GB Corsair USB drive." >&2
 	exit 2
 fi
 
-ssh -o BatchMode=yes "$target" sh -s <<'REMOTE'
+ssh -o BatchMode=yes "$target" sh -s -- "$mode" <<'REMOTE'
 set -eu
 
 fail()
@@ -62,11 +67,9 @@ hdd=$(find_device 488397168 0 /10080000.sata/ SamsungSSD860)
 usb=$(find_device 15728640 1 /100b0000.usb/ FlashVoyager)
 [ "$hdd" != "$usb" ] || fail "HDD and USB resolved to the same device"
 
-[ "$(hostname)" = minimal ] ||
-	fail "the DVR is not the minimal bootstrap image; refusing to alter local storage"
 awk '$2 == "/" && $3 == "rootfs" { found = 1 }
 	END { exit !found }' /proc/mounts ||
-	fail "the DVR root is not the minimal initramfs; refusing to alter local storage"
+	fail "the DVR root is not an initramfs; refusing to alter local storage"
 
 for dev in "$hdd" "$usb"; do
 	if grep -q "^$dev" /proc/mounts; then
@@ -79,6 +82,10 @@ done
 
 echo "HDD: $hdd ($(cat /sys/class/block/${hdd##*/}/device/model), $(cat /sys/class/block/${hdd##*/}/size) sectors)"
 echo "USB: $usb ($(cat /sys/class/block/${usb##*/}/device/model), $(cat /sys/class/block/${usb##*/}/size) sectors)"
+if [ "$1" = "--check" ]; then
+	echo "Storage preparation preflight passed."
+	exit 0
+fi
 echo "Erasing both partition tables and all filesystem signatures..."
 
 sfdisk --lock=yes --wipe=always --wipe-partitions=always "$hdd" <<'HDD_TABLE'

@@ -2,7 +2,7 @@
 #
 # Build and install it with:
 #
-#   scripts/buildroot.sh --config toolchain
+#   scripts/buildroot.sh --toolchain
 #
 # After changing toolchain options, clean this configuration and every image
 # configuration that consumes the SDK before rebuilding them.

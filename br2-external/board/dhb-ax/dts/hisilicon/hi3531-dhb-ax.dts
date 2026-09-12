@@ -102,9 +102,7 @@
 };
 
 /*
- * The outer cache is described in the .dtsi but left disabled there, so that
- * turning it off is a one-line device-tree change on either board rather than
- * a kernel rebuild.
+ * Enable the SoC's L2 cache for this board.
  */
 &l2 {
 	status = "okay";

@@ -81,7 +81,7 @@ prepare()
 	upstream_tag=$(sed -n '
 		s/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\([0-9][0-9.]*\)"$/v\1/p
 	' "$defconfig")
-	[ -n "$upstream_tag" ] || fail "production defconfig must select a kernel version"
+	[ -n "$upstream_tag" ] || fail "defconfig must select a kernel version"
 	require_env_file "$workspace/local.env" DHB_AX_LINUX_REPOSITORY
 
 	git -C "$DHB_AX_LINUX_REPOSITORY" rev-parse --git-dir >/dev/null 2>&1 || {

@@ -124,13 +124,9 @@ set -eu
 
 partuuid=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
 label=$2
-[ "$(hostname)" = minimal ] || {
-	echo 'dvr-stage: the DVR is not the minimal initramfs' >&2
-	exit 1
-}
 awk '$2 == "/" && $3 == "rootfs" { found = 1 }
 	END { exit !found }' /proc/mounts || {
-	echo 'dvr-stage: the DVR root is not the minimal initramfs' >&2
+	echo 'dvr-stage: the DVR root is not an initramfs' >&2
 	exit 1
 }
 root_part=$(blkid -t "PARTUUID=$partuuid" -o device)
@@ -296,7 +292,7 @@ echo "Formatting $root_part as $label..."
 mke2fs -F -t ext4 -L "$label" -m 0 "$root_part"
 mkdir -p "$root_mount"
 mount -t ext4 "$root_part" "$root_mount"
-gunzip -c | (cd "$root_mount" && cpio -idmu)
+xz -dc | (cd "$root_mount" && cpio -idmu)
 [ -x "$root_mount/sbin/init" ] || {
 	echo 'dvr-stage: installed rootfs has no executable /sbin/init' >&2
 	exit 1

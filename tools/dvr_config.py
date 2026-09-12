@@ -230,12 +230,12 @@ def _kernel(data: Mapping[str, Any], repo_root: Path) -> Kernel:
     )
 
 
-def _production_kernel_release(repo_root: Path) -> str:
+def _kernel_release(repo_root: Path) -> str:
     defconfig = repo_root / "br2-external" / "configs" / "dhb_ax_defconfig"
     try:
         lines = defconfig.read_text(encoding="utf-8").splitlines()
     except OSError as error:
-        raise ProfileError(f"cannot read production defconfig: {defconfig}") from error
+        raise ProfileError(f"cannot read defconfig: {defconfig}") from error
     prefix = 'BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="'
     values = [
         line.removeprefix(prefix).removesuffix('"')
@@ -243,7 +243,7 @@ def _production_kernel_release(repo_root: Path) -> str:
         if line.startswith(prefix) and line.endswith('"')
     ]
     if len(values) != 1 or not KERNEL_RELEASE.fullmatch(values[0]):
-        raise ProfileError("production defconfig must select one safe kernel release")
+        raise ProfileError("defconfig must select one safe kernel release")
     return values[0]
 
 
@@ -280,7 +280,7 @@ def _rootfs(data: Mapping[str, Any], repo_root: Path) -> Rootfs:
             expected_os_id
         ):
             raise ProfileError("HDD roots require a safe rootfs.expected_os_id")
-        kernel_release = _production_kernel_release(repo_root)
+        kernel_release = _kernel_release(repo_root)
         if not isinstance(artifact, str) or not artifact:
             raise ProfileError("HDD roots require rootfs.artifact")
         if not isinstance(device, str) or not PARTUUID.fullmatch(device):

@@ -81,13 +81,13 @@ chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
 # leaves no device nodes behind, so the node has to be here.
 [ -c "$rootfs/dev/console" ] || mknod -m 0600 "$rootfs/dev/console" c 5 1
 
-# newc, gzipped: U-Boot loads this to RAM as the initramfs root, and
+# newc, XZ-compressed: U-Boot loads this to RAM as the initramfs root, and
 # tools/dvr-stage streams the same archive onto the HDD partition. newc
 # carries no extended attributes or ACLs; no package installed here sets either.
 (cd "$rootfs" && find . -print0 |
 	LC_ALL=C sort -z |
 	cpio --null --create --format=newc --quiet) |
-	gzip -9 > "$output/rootfs.cpio.gz"
+	xz -9 -C crc32 > "$output/rootfs.cpio.xz"
 
 {
 	echo 'suite=trixie'
@@ -97,6 +97,6 @@ chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\n' |
 	echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$output/build-info.txt"
 
-rm -f "$output/rootfs.tar" "$output/rootfs.tar.sha256"
+rm -f "$output/rootfs.cpio.gz" "$output/rootfs.tar" "$output/rootfs.tar.sha256"
 
 echo "Debian rootfs artifacts -> ${output#/work/}/"
