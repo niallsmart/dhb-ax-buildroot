@@ -1,0 +1,32 @@
+#!/bin/bash
+#
+# runs on the raspberry pi
+#
+# ask the remote DVR shell to lend us its UART, then proxy SSH bytes.
+#
+set -eu
+exec 3<>/dev/serial0
+flock -n 3 || { echo 'DVR UART is already in use' >&2; exit 1; }
+saved_tty=$(stty -g <&3)
+relay=
+cleanup() {
+    if [[ -n $relay ]]; then
+        kill "$relay" 2>/dev/null || true
+        wait "$relay" 2>/dev/null || true
+    fi
+    stty "$saved_tty" <&3
+}
+trap cleanup EXIT
+trap 'exit 1' TERM
+stty raw -echo -ixon -ixoff -crtscts cs8 -parenb -cstopb clocal 115200 <&3
+
+printf '/usr/sbin/dvr-serial-serve\r' >&3
+# Discard the 26 echoed command characters, leaving the line ending.
+timeout --foreground 5 dd bs=1 count=26 <&3 >/dev/null 2>&1
+# Forward the line ending and the start of the SSH greeting before relaying input.
+# Five bytes cover LF, CRLF or CRCRLF plus at least two greeting bytes.
+timeout --foreground 5 dd bs=1 count=5 <&3 2>/dev/null
+# forward the remaining traffic with socat.
+socat -b 1024 STDIO FD:3 <&0 &
+relay=$!
+wait "$relay"
