@@ -1,9 +1,33 @@
-#!/bin/sh
-# Mac ProxyCommand: keep stdin/stdout available for the user ssh connection.
+#!/bin/bash
+# 
+# macOS-side proxy for the UART ssh/sshd
+#
 set -eu
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 . "$repo/scripts/lib.sh"
 require_env_file "$repo/local.env" DHB_AX_PI_IPADDR
-trap '' HUP # Let the final disconnect drain before the proxy ssh exits.
-ssh -T -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 \
-    "$DHB_AX_PI_IPADDR" 'exec ~/.local/bin/dvr-serial-uart'
+
+if [[ ${1:-} == --reset ]]; then
+    # Stop the sender first, then let the DVR helper clean up its sshd and UART.
+    ssh -o BatchMode=yes "$DHB_AX_PI_IPADDR" 'pkill -TERM -f "^/bin/bash .*/dvr-serial-uart$" || test $? = 1'
+    ssh -o BatchMode=yes dvr 'killall -q -TERM dvr-serial-serve || true'
+    ssh -O exit dvr-serial || true
+    exit
+fi
+#
+# when the UART ssh process ends normally, it sends a disconnect message, and then immediately
+# sends the proxy SIGHUP. normally that signal terminates the proxy `ssh` process, which can
+# cause the disconnect message to be lost before it's been proxied to the UART sshd.
+# 
+# since the UART sshd otherwise receives no indication that the client has gone (since it's
+# reading a UART there is no EOF) that connection would be stalled until keep-alive fails.
+# 
+# so, we ignore HUP here so that the proxy ssh process can transmit the UART ssh disconnect
+# message end-to-end and clearly end this UART ssh connection
+#
+trap '' HUP 
+
+exec ssh -o BatchMode=yes -o ServerAliveInterval=5 -o ServerAliveCountMax=3 \
+    "$DHB_AX_PI_IPADDR" 'exec ~/.local/bin/dvr-serial-uart' \
+    < <(tee "$HOME/uart-proxy.stdin") \
+> >(tee "$HOME/uart-proxy.stdout")

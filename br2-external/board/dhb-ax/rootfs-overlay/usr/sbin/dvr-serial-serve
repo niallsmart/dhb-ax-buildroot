@@ -3,7 +3,7 @@
 set -eu
 exec 2>>/run/dvr-serial.log
 [ -t 0 ] && [ -t 1 ] || exit 2
-exec 3<&0
+exec 3<&0 # BusyBox ash gives background commands /dev/null even with <&0.
 saved_tty=$(stty -g)
 server=
 cleanup() {
@@ -11,16 +11,16 @@ cleanup() {
     set +e
     if [ -n "$server" ]; then kill "$server" 2>/dev/null; wait "$server" 2>/dev/null; fi
     # Linux TCFLSH=0x540b, TCIOFLUSH=2: discard ciphertext, then drain late bytes.
-    timeout 1 socat -u -T 0.2 STDIN,ioctl-int=0x540b:2 /dev/null <&3
-    stty "$saved_tty" <&3
+    socat -u -T 0.2 STDIN,ioctl-int=0x540b:2 /dev/null
+    stty "$saved_tty"
     echo "7 4 1 7" > /proc/sys/kernel/printk
     echo N > /sys/module/printk/parameters/ignore_loglevel
 }
 trap cleanup EXIT
-trap 'exit 1' HUP INT TERM
+trap 'exit 1' TERM
 printf N > /sys/module/printk/parameters/ignore_loglevel
 echo 0 > /proc/sys/kernel/printk
-stty raw -echo -ixon -ixoff -crtscts cs8 -parenb -cstopb clocal 115200 <&3
+stty raw -echo -ixon -ixoff -crtscts cs8 -parenb -cstopb clocal 115200
 
 # Inetd mode uses the UART directly; no listener or transport relay.
 /usr/sbin/sshd -i -e -o ClientAliveInterval=10 -o ClientAliveCountMax=3 \
