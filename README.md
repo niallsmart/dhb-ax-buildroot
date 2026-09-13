@@ -6,8 +6,6 @@ The Hi3531 has no upstream support. This port names the SoC `hisilicon,hi3531` a
 
 This repository contains the maintained Linux and Buildroot implementation, along with a [Debian root filesystem](debian/README.md) using the Buildroot kernel.
 
-An experimental [SSH transport over the serial console](doc/serial-ssh.md) provides command execution through the Pi when DVR networking is unavailable.
-
 ## Hardware Guide
 
 The [DHB_AX hardware guide](https://github.com/niallsmart/dhb-ax-guide/blob/main/doc/README.md) was created as a technical reference for the SoC and board and should be useful to other porting efforts.
