@@ -4,3 +4,6 @@ CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-t1 -T1 -A1 -b -R -O search -O staticroutes"
 
 # Show the initramfs root filesystem in df during USB and TFTP boots.
 # CONFIG_FEATURE_SKIP_ROOTFS is not set
+
+# Enable the timeout command.
+CONFIG_TIMEOUT=y
