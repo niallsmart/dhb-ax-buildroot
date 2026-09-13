@@ -5,7 +5,7 @@ set -eu
 target=${1:-$TARGET_DIR}
 local_ssh=${2:-}
 
-# The local key directory holds Dropbear-native host keys.  Copying them into
+# The local key directory holds OpenSSH host keys.  Copying them into
 # the image preserves the host identity across upgrades and initramfs boots.
 if [ -z "$local_ssh" ]; then
 	echo "post-build-ssh: local SSH input directory argument is missing" >&2
@@ -13,9 +13,9 @@ if [ -z "$local_ssh" ]; then
 fi
 
 host_keys="
-dropbear_rsa_host_key
-dropbear_ecdsa_host_key
-dropbear_ed25519_host_key
+ssh_host_rsa_key
+ssh_host_ecdsa_key
+ssh_host_ed25519_key
 "
 for file in $host_keys authorized_keys; do
 	if [ ! -f "$local_ssh/$file" ]; then
@@ -28,14 +28,9 @@ install -d -m 0700 "$target/root/.ssh"
 install -m 0600 "$local_ssh/authorized_keys" \
 	"$target/root/.ssh/authorized_keys"
 
-# Buildroot installs /etc/dropbear as a symlink to a runtime directory. Use a
-# real directory so the machine-local host keys are part of the image.
-if [ -L "$target/etc/dropbear" ]; then
-	rm "$target/etc/dropbear"
-fi
-install -d -m 0700 "$target/etc/dropbear"
+install -d -m 0755 "$target/etc/ssh"
 for file in $host_keys; do
-	install -m 0600 "$local_ssh/$file" "$target/etc/dropbear/$file"
+	install -m 0600 "$local_ssh/$file" "$target/etc/ssh/$file"
 done
 
-echo "post-build-ssh: installed Dropbear host and root authorized keys"
+echo "post-build-ssh: installed OpenSSH host and root authorized keys"
