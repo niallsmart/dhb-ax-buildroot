@@ -8,10 +8,13 @@ repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 require_env_file "$repo/local.env" DHB_AX_PI_IPADDR
 export DVR_BOOT_REPO_ROOT="$repo"
 
+console="ssh -tt $DHB_AX_PI_IPADDR 'exec 3<>/dev/serial0; flock -n 3 || { echo \"DVR UART is already in use\" >&2; exit 1; }; exec picocom --nolock -b 115200 --omap crcrlf /dev/serial0' || exec \"\$SHELL\""
+
 if ! tmux has-session -t dvr 2>/dev/null; then
 	tmux start-server \; set-option -g history-limit 100000 \; \
-		new-session -d -s dvr \
-		"ssh -tt $DHB_AX_PI_IPADDR 'picocom -b 115200 --omap crcrlf /dev/serial0'"
+		new-session -d -s dvr "$console"
+elif [ "${TMUX_PANE:-}" = "$(tmux display-message -p -t dvr '#{pane_id}')" ]; then
+	exec tmux respawn-pane -k -t dvr "$console"
 fi
 
 python3 "$repo/tools/dvr_console_log.py" ensure >/dev/null
