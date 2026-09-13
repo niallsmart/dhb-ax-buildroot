@@ -1,6 +1,5 @@
 # General
 
-- [x] improve agent instructions
 - [ ] migrate kernel configuration to defconfig files
 - [ ] replace local.env with .env / .env.local (that is more canonical?)
 - [ ] remove the Justfile
@@ -8,9 +7,6 @@
 
 # Stage and Boot tooling
 
-- [x] support temporary kernel boot arguments
-- [x] scan usb once per boot
-- [x] preserve tmux console inspection errors
 - [ ] load addresses belong in a board-level config, not in boot profiles
 - [ ] boot profiles should be in profile/ not config/
 - [ ] remove check_console (runs on the Raspberry Pi)
@@ -19,29 +15,24 @@
 - [ ] lib.sh -> common.sh
 - [ ] fix profile naming and remove unused profiles
 - [ ] print wall clock time after completion (boot, stage)
+- [x] support temporary kernel boot arguments
+- [x] scan usb once per boot
+- [x] preserve tmux console inspection errors
 
 # Buildroot
 
 ## General
 
-- [x] include iperf3 for board testing
+- [ ] rename bootstrap-sources.sh, upgrade Buildroot and remove version embedded in path
+- [ ] review/consolidate files in br2-external (Config.in, external.mk, post-build scripts, etc)
+- [ ] stage TFTP on local macOS (?)
 - [x] replace artifacts after a successful build
 - [x] consolidate on dhb_ax_defconfig
 - [x] compress the kernel and rootfs with xz
 - [x] add git patch editing workflow
-- [x] disable forced module unloading
-- [x] remove build hints from bootstrap output
-- [x] update the development task list
-- [x] apply build enhancements
-- [ ] rename bootstrap-sources.sh, upgrade Buildroot and remove version embedded in path
-- [ ] review/consolidate files in br2-external (Config.in, external.mk, post-build scripts, etc)
-- [ ] stage TFTP on local macOS (?)
 
 
 ## Worktree support
-- [x] autologin root on the serial console
-- [x] share the dvr console log across worktrees
-- [x] accept terminal escapes in the kernel probe
 - [ ] what are "elevated commands" and what project configuration did it create in `codex/benchmark-xz`
 - [ ] debug UV/Docker socket permission issues (maybe should have local UV cache?)
 - [ ] independent volumes
@@ -49,6 +40,9 @@
 - [ ] fix console log (what is this?)
 - [ ] fix how SSH keys are handled (should not be in in artifacts/local)
 - [ ] reuse or copy buildroot tgz to save time on a new branch (maybe?)
+- [x] autologin root on the serial console
+- [x] share the dvr console log across worktrees
+- [x] accept terminal escapes in the kernel probe
 
 ## Docker
 
@@ -57,6 +51,10 @@
 - [ ] replace the Debian package list with a shorthand version?
 - [ ] review some of the complications that have crept into Dockerfile (dtschema, LANG)
 
+
+# UART Driver
+
+- [ ] Investigate PL011 receive overruns (workaround: `devmem 0x20080034 32 0x02`)
 
 # Ethernet Driver
 
