@@ -1,0 +1,9 @@
+#!/bin/sh
+# Mac ProxyCommand: keep stdin/stdout available for the user ssh connection.
+set -eu
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+. "$repo/scripts/lib.sh"
+require_env_file "$repo/local.env" DHB_AX_PI_IPADDR
+trap '' HUP # Let the final disconnect drain before the proxy ssh exits.
+ssh -T -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 \
+    "$DHB_AX_PI_IPADDR" 'exec ~/.local/bin/dvr-serial-uart'

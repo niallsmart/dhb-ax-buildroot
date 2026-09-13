@@ -1,0 +1,26 @@
+#!/bin/bash
+# Pi: ask the idle DVR shell to lend us its UART, then forward SSH bytes.
+set -eu
+trap '' HUP
+exec 3<>/dev/serial0
+flock -n 3 || { echo 'DVR UART is already in use' >&2; exit 1; }
+saved_tty=$(stty -g <&3)
+relay=
+cleanup() {
+    if [[ -n $relay ]]; then
+        kill "$relay" 2>/dev/null || true
+        wait "$relay" 2>/dev/null || true
+    fi
+    stty "$saved_tty" <&3
+}
+trap cleanup EXIT
+trap 'exit 1' INT TERM
+stty raw -echo -ixon -ixoff -crtscts cs8 -parenb -cstopb clocal 115200 <&3
+
+# Restore DVR echo even if the helper is missing or fails to start.
+printf '(s=$(stty -g); stty -echo; printf "\\n"; /usr/sbin/dvr-serial-serve; stty "$s")\r' >&3
+# Allow terminal setup to finish before sending binary data. SSH handles the greeting.
+sleep 1
+socat -b 1024 STDIO FD:3 <&0 &
+relay=$!
+wait "$relay"
