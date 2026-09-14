@@ -18,13 +18,13 @@ BR2_CCACHE_DIR="$(HOME)/ccache"
 BR2_CCACHE_INITIAL_SETUP="--max-size=10G"
 BR2_PACKAGE_OVERRIDE_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/local.mk"
 
-# linux.config is a complete kernel configuration; Buildroot runs olddefconfig
-# over it.
+# linux_defconfig stores non-default kernel settings; Buildroot expands it
+# with olddefconfig and applies its required settings.
 BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.18.42"
 BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
-BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/linux.config"
+BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_DHB_AX_PATH)/board/dhb-ax/linux_defconfig"
 
 # The vendor U-Boot loads a legacy uImage with an appended DTB. post-image.sh
 # appends the DTB and runs mkimage because Buildroot's uImage target cannot use

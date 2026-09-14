@@ -134,12 +134,12 @@ def preflight(profile, settings: LocalSettings):
         "-p",
         "-t",
         TMUX_SESSION,
-        "#{pane_current_command} #{pane_dead}",
+        "#{pane_dead}",
         capture=True,
     )
-    if pane.returncode or pane.stdout.strip() != "ssh 0":
+    if pane.returncode or pane.stdout.strip() != "0":
         fail(
-            f"tmux session '{TMUX_SESSION}' is not a live SSH console "
+            f"tmux session '{TMUX_SESSION}' does not have a live pane "
             f"({pane.stdout.strip()})",
             3,
         )

@@ -35,3 +35,9 @@ Boot `buildroot-usb` or `buildroot-tftp` first so the HDD root is unmounted, the
 ```
 
 Storage initialization remains in `tools/dvr-prepare-storage` because it defines the complete HDD and USB layout shared by all operating systems.
+
+## Docker kernel support
+
+The maintained kernel configuration includes support for rootful Docker with cgroup v2, OverlayFS, bridge/veth networking and published ports through Docker's iptables backend using `iptables-nft`. OverlayFS, bridge networking and the required xtables compatibility extensions are modules; NAT and the resource controllers are built in. Legacy iptables and legacy cgroup controllers remain disabled. CPU quotas are supported, but CPU-set pinning, rootless containers and Swarm are outside this configuration's target.
+
+Docker is not installed by the current package list. When provisioning it, ensure `iptables` and `ip6tables` use their nft variants; this is distinct from Docker's native nftables backend. Use the matching kernel module archive and persistent ext4 storage for container data. Verify module loading, container DNS/outbound traffic, published ports, and CPU/memory limits on the DVR after rebuilding and booting. The configuration has passed Kconfig checks, but Docker runtime operation has not yet been tested on this board.
