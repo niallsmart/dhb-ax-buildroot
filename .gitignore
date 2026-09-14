@@ -38,3 +38,7 @@ pcb/
 *.raw
 
 scratch/
+
+# Generated kernel configuration review files
+linux-defconfig-review.xlsx*
+~$linux-defconfig-review.xlsx
