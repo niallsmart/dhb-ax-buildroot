@@ -3,11 +3,12 @@
 		{
 			"name": "buildroot",
 			"path": "."
-		},
-		{
-			"name": "guide",
-			"path": "../dhb-ax-guide"
 		}
+		// },
+		// {
+		// 	"name": "guide",
+		// 	"path": "../dhb-ax-guide"
+		// }
 	],
 	"settings": {
 		"gitlens.currentLine.enabled": false,
