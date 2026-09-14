@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "recommendations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "config": { "type": "string", "pattern": "^CONFIG_[A-Za-z0-9_]+$" },
+          "description": { "type": "string" },
+          "recommended_setting": { "type": "string" },
+          "rationale": { "type": "string" }
+        },
+        "required": ["config", "description", "recommended_setting", "rationale"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["recommendations"],
+  "additionalProperties": false
+}
